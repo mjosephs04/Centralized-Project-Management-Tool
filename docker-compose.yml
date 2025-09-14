@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: todd-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: todd
+      MYSQL_USER: todd_user
+      MYSQL_PASSWORD: todd_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command: --default-authentication-plugin=mysql_native_password
+
+  backend:
+    build: .
+    container_name: todd-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql+pymysql://root:password@db:3306/todd
+      SECRET_KEY: your-secret-key-change-me
+      JWT_SECRET_KEY: your-jwt-secret-key-change-me
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+    volumes:
+      - ./src:/app/src
+
+volumes:
+  mysql_data:
