@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1 \
     FLASK_ENV=production \
     PORT=8080
 
-COPY requirements.txt .
+COPY ../requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir gunicorn
 
