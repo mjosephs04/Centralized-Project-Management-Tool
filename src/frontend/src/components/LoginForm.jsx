@@ -1,13 +1,19 @@
 import React, {useState} from 'react';
+import axios from 'axios';
 import {Typography} from '@mui/material'
 import {FaUser, FaLock} from 'react-icons/fa'
 import '../styles/components/LoginForm.css'
+import { useNavigate } from 'react-router-dom';
 
 const LoginForm = () => {
     const [formData, setFormData] = useState({
-        email: '',
+        emailAddress: '',
         password: '',
     });
+
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const navigate = useNavigate();
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -17,10 +23,23 @@ const LoginForm = () => {
         }));;
     }
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        const email = [...formData]
-        console.log("Logging in with:", {email});
+        setError('');
+        setSuccess('');
+
+        try{
+            const res = await axios.post('http://localhost:8080/api/auth/login', formData);
+            
+            localStorage.setItem('accessToken', res.data.accessToken);
+
+            setSuccess("Login Successful!");
+            console.log("Logged in user:", res.data.user);
+            navigate('/blank')
+        } catch (err) {
+            console.error(err);
+            setError(err.response?.data?.error || 'Login Failed');
+        }
     };
 
 
@@ -29,13 +48,17 @@ const LoginForm = () => {
             <Typography variant="h5" component="h2" gutterBottom align="center" fontSize={40} fontWeight={'bold'}>
                 Login
             </Typography>
+
+            {error && <p className="error">{error}</p>}
+            {success && <p className="success">{success}</p>}
+
             <form className="login-form" onSubmit={handleSubmit}>
                 <div className="input-box">
                     <input 
                         type="text" 
-                        name="email"
+                        name="emailAddress"
                         placeholder='Email Address' 
-                        value={formData.email}
+                        value={formData.emailAddress}
                         onChange={handleChange} 
                         required 
                     />
