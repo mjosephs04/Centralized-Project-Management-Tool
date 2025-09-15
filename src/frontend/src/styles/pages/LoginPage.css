@@ -1,0 +1,51 @@
+.login-page {
+   height: 100vh;
+   width: 100vw;
+   background-image: url('../../imgs/OnePager.svg');
+   background-size: cover;
+   background-position: center;
+   background-repeat: no-repeat;
+   display: flex;
+   justify-content: center;
+   align-items: center;
+   padding: 0;
+   overflow: hidden;
+   box-sizing: border-box;
+}
+
+.form-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.top-right {
+    position: absolute;
+    top: 20px;
+    right: 50px;
+    z-index:10;
+}
+
+.create-account {
+    width: 120%;
+    height: 60px;
+    margin-top: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 40px;
+    font-size: 20px;
+    font-weight: 600;
+    color: white;
+    cursor: pointer;
+
+    background: rgba(249,72,72,0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+
+    transition: all 0.3s ease;
+  }
+
+  .create-account:hover {
+    background: white;
+    color: #333;
+    border-color: white;
+  }
