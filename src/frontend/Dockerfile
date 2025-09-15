@@ -4,7 +4,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Install deps
-COPY src/frontend/package*.json ./
+COPY ./package*.json ./
 RUN npm ci
 
 # Build
