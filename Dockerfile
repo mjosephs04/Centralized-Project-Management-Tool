@@ -14,6 +14,6 @@ ENV FLASK_APP=src.backend.app
 ENV FLASK_ENV=development
 ENV DATABASE_URL=mysql+pymysql://root:password@db:3306/todd
 
-EXPOSE 5000
+EXPOSE 8080
 
 CMD ["python", "-m", "src.backend.app"]
