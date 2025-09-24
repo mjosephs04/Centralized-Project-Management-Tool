@@ -6,11 +6,11 @@ ENV PYTHONUNBUFFERED=1 \
     FLASK_ENV=production \
     PORT=8080
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r ./src/backend/requirements.txt && \
+# Copy only the requirements first (better for Docker layer caching)
+COPY src/backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir gunicorn
 
-# If your backend lives at src/backend, still copy the whole tree so imports work
 COPY src/ ./src/
 
 EXPOSE 8080
