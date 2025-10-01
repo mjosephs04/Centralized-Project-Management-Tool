@@ -6,6 +6,7 @@ from .config import Config
 from .models import db
 from .auth import auth_bp
 from .projects import projects_bp
+from .workorders import workorders_bp
 
 
 def create_app() -> Flask:
@@ -37,6 +38,7 @@ def create_app() -> Flask:
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(projects_bp)
+    app.register_blueprint(workorders_bp)
 
     @app.get("/api/health")
     def health():
