@@ -35,7 +35,7 @@ const LoginForm = () => {
 
             setSuccess("Login Successful!");
             console.log("Logged in user:", res.data.user);
-            navigate('/blank')
+            navigate('/projects')
         } catch (err) {
             console.error(err);
             setError(err.response?.data?.error || 'Login Failed');

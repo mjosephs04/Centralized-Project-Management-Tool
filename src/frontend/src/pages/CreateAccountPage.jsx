@@ -10,7 +10,7 @@ const CreateAccountPage = () => {
     return (
         <div className="create-account-page">
             <div className="login-button-wrapper">
-                <button className="login-button" onClick={() => navigate('/')}>
+                <button className="login-button" onClick={() => navigate('/login')}>
                     Login
                 </button>
             </div>
