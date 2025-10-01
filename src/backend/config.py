@@ -11,10 +11,10 @@ class Config:
     JWT_HEADER_TYPE = "Bearer"
     JWT_IDENTITY_CLAIM = "sub"
 
-    ENV = os.getenv("ENV", "local")
+    ENV = os.getenv("ENV")
 
     if ENV == "production":
-        SQLALCHEMY_DATABASE_URI = "mysql+pymysql://root:password@34.27.104.45:3306/CAPSTONE"
+        SQLALCHEMY_DATABASE_URI = "mysql+pymysql://mysql:password@34.27.104.45:3306/CAPSTONE"
     else:  # local dev
         SQLALCHEMY_DATABASE_URI = "mysql+pymysql://root:password@localhost:3306/CAPSTONE"  # default local
 
