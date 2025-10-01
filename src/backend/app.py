@@ -43,8 +43,8 @@ def create_app() -> Flask:
         return jsonify({"status": "ok"})
 
     # Initialize database tables at startup
-    # with app.app_context():
-    #     db.create_all()
+    with app.app_context():
+        db.create_all()
 
     return app
 
