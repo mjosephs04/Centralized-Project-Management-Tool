@@ -9,8 +9,8 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import select
 
-from models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus
-from progress import compute_work_order_rollup, compute_schedule_stats, compute_earned_value, to_decimal, normalize_weights
+from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, ProjectMember
+from .progress import compute_work_order_rollup, compute_schedule_stats, compute_earned_value, to_decimal, normalize_weights
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/api/projects")
 
@@ -23,7 +23,7 @@ def test_endpoint():
 
 def require_project_manager():
     """Decorator to ensure only project managers can access certain endpoints"""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     if not user or user.role != UserRole.PROJECT_MANAGER:
         return jsonify({"error": "Only project managers can perform this action"}), 403
@@ -80,7 +80,7 @@ def create_project():
             return jsonify({"error": "Invalid estimated budget format"}), 400
     
     # Get current user as project manager
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     
     project = Project(
         name=payload["name"],
@@ -113,7 +113,7 @@ def delete_project(project_id):
         return jsonify({"error": "Project not found"}), 404
     
     # Check if the current user is the project manager of this project
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     if project.projectManagerId != user_id:
         return jsonify({"error": "You can only delete projects you manage"}), 403
     
@@ -146,7 +146,7 @@ def get_project(project_id):
 @jwt_required()
 def get_my_projects():
     """Get projects managed by the current user (for project managers)"""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     
     if user.role == UserRole.PROJECT_MANAGER:
@@ -275,7 +275,7 @@ def get_dashboard_progress():
             stmt = stmt.where(Project.status == status)
 
         if manager_only:
-            user_id = get_jwt_identity()
+            user_id = int(get_jwt_identity())
             stmt = stmt.where(Project.projectManagerId == user_id)
 
         projects: List[Project] = db.session.execute(stmt).scalars().all()
@@ -369,3 +369,136 @@ def get_project_progress_detail(project_id: int):
         return jsonify({"error": str(ve)}), 400
     except Exception as e:
         return jsonify({"error": f"Unexpected error: {e}"}), 500
+
+
+def is_project_member(user_id: int, project_id: int) -> bool:
+    """Check if a user is a member of a project (either as project manager or as a member)"""
+    # Check if user is the project manager
+    project = Project.query.get(project_id)
+    if project and project.projectManagerId == user_id:
+        return True
+    
+    # Check if user is a project member
+    membership = ProjectMember.query.filter_by(projectId=project_id, userId=user_id).first()
+    return membership is not None
+
+
+@projects_bp.get("/<int:project_id>/members")
+@jwt_required()
+def get_project_members(project_id: int):
+    """Get all members of a project (project manager + assigned members)"""
+    user_id = int(get_jwt_identity())
+    
+    # Check if project exists
+    project = Project.query.get(project_id)
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    # Check if current user is a member of the project
+    if not is_project_member(int(user_id), project_id):
+        return jsonify({"error": "You must be a member of this project to view its members"}), 403
+    
+    # Get project manager
+    project_manager = project.projectManager
+    members = []
+    
+    if project_manager:
+        manager_data = project_manager.to_dict()
+        manager_data["role"] = "project_manager"
+        manager_data["joinedAt"] = project.createdAt.isoformat() if project.createdAt else None
+        members.append(manager_data)
+    
+    # Get project members
+    project_members = ProjectMember.query.filter_by(projectId=project_id).all()
+    for member in project_members:
+        member_data = member.user.to_dict()
+        member_data["role"] = "member"
+        member_data["joinedAt"] = member.joinedAt.isoformat() if member.joinedAt else None
+        members.append(member_data)
+    
+    return jsonify({"members": members}), 200
+
+
+@projects_bp.post("/<int:project_id>/members")
+@jwt_required()
+def add_project_member(project_id: int):
+    """Add a user as a member to a project (only project managers can do this)"""
+    # Check if user is a project manager
+    auth_error = require_project_manager()
+    if auth_error:
+        return auth_error
+    
+    # Check if project exists
+    project = Project.query.get(project_id)
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    # Check if current user is the project manager of this project
+    user_id = int(get_jwt_identity())
+    if project.projectManagerId != user_id:
+        return jsonify({"error": "You can only add members to projects you manage"}), 403
+    
+    payload = request.get_json(silent=True) or request.form.to_dict() or {}
+    
+    # Required field
+    if not payload.get("userId"):
+        return jsonify({"error": "userId is required"}), 400
+    
+    try:
+        member_user_id = int(payload["userId"])
+    except ValueError:
+        return jsonify({"error": "userId must be a valid integer"}), 400
+    
+    # Check if user exists
+    user = User.query.get(member_user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    # Check if user is already a member or project manager
+    if project.projectManagerId == member_user_id:
+        return jsonify({"error": "User is already the project manager"}), 400
+    
+    existing_member = ProjectMember.query.filter_by(projectId=project_id, userId=member_user_id).first()
+    if existing_member:
+        return jsonify({"error": "User is already a member of this project"}), 400
+    
+    # Add member
+    project_member = ProjectMember(
+        projectId=project_id,
+        userId=member_user_id
+    )
+    
+    db.session.add(project_member)
+    db.session.commit()
+    
+    return jsonify({"message": "Member added successfully", "member": project_member.to_dict()}), 201
+
+
+@projects_bp.delete("/<int:project_id>/members/<int:member_id>")
+@jwt_required()
+def remove_project_member(project_id: int, member_id: int):
+    """Remove a user from a project (only project managers can do this)"""
+    # Check if user is a project manager
+    auth_error = require_project_manager()
+    if auth_error:
+        return auth_error
+    
+    # Check if project exists
+    project = Project.query.get(project_id)
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    # Check if current user is the project manager of this project
+    user_id = int(get_jwt_identity())
+    if project.projectManagerId != user_id:
+        return jsonify({"error": "You can only remove members from projects you manage"}), 403
+    
+    # Find the membership
+    project_member = ProjectMember.query.filter_by(projectId=project_id, userId=member_id).first()
+    if not project_member:
+        return jsonify({"error": "User is not a member of this project"}), 404
+    
+    db.session.delete(project_member)
+    db.session.commit()
+    
+    return jsonify({"message": "Member removed successfully"}), 200

@@ -3,7 +3,7 @@ from datetime import date
 from decimal import Decimal, getcontext
 from typing import Dict, Any, Optional
 
-from models import db, Project, WorkOrder, WorkOrderStatus, ProjectStatus
+from .models import db, Project, WorkOrder, WorkOrderStatus, ProjectStatus
 
 # precision for Decimal math
 getcontext().prec = 28

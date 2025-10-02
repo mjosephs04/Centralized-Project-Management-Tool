@@ -173,3 +173,30 @@ class WorkOrder(db.Model):
         }
 
 
+class ProjectMember(db.Model):
+    __tablename__ = "project_members"
+
+    id = db.Column(db.Integer, primary_key=True)
+    projectId = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # Metadata
+    joinedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    project = db.relationship('Project', backref=db.backref('members', lazy=True))
+    user = db.relationship('User', backref=db.backref('project_memberships', lazy=True))
+    
+    # Ensure unique user-project combinations
+    __table_args__ = (db.UniqueConstraint('projectId', 'userId', name='unique_project_user'),)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "projectId": self.projectId,
+            "userId": self.userId,
+            "user": self.user.to_dict() if self.user else None,
+            "joinedAt": self.joinedAt.isoformat() if self.joinedAt else None,
+        }
+
+
