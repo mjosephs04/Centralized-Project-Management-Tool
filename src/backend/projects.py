@@ -9,8 +9,8 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import select
 
-from models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus
-from progress import compute_work_order_rollup, compute_schedule_stats, compute_earned_value, to_decimal, normalize_weights
+from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus
+from .progress import compute_work_order_rollup, compute_schedule_stats, compute_earned_value, to_decimal, normalize_weights
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/api/projects")
 

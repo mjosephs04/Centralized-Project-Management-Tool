@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaPlusCircle, FaMinusCircle } from 'react-icons/fa';
+import { projectsAPI } from '../services/api';
 
 const ProjectCreationForm = ({ onCreate }) => {
     const navigate = useNavigate(); 
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState(null);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -12,14 +15,11 @@ const ProjectCreationForm = ({ onCreate }) => {
         startDate: '',
         endDate: '',
         estimatedBudget: '',
-        status: 'on track',
+        status: 'planning',
         priority: 'medium',
         crewMembers: [''],
     });
-
-    // We are not using this state, but it's here from your original code.
-    // You could use it to show a confirmation message.
-    const [submittedData, setSubmittedData] = useState(null);
+    
 
     const handleChange = (e, index = null) => {
         const { name, value } = e.target;
@@ -41,17 +41,31 @@ const ProjectCreationForm = ({ onCreate }) => {
         setFormData({ ...formData, crewMembers: newCrew });
     };
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        const cleanedData = {
-            ...formData,
-            crewMembers: formData.crewMembers.filter((m) => m.trim() !== ''),
-            estimatedBudget: formData.estimatedBudget || null,
-        };
-        setSubmittedData(cleanedData); // Set for local display if needed
-        if (onCreate) {
-            onCreate(cleanedData);
-        }
+    const handleSubmit = async (e) => {
+       e.preventDefault();
+       setIsSubmitting(true);
+       setError(null);
+
+       try {
+            const projectData = {
+                name: formData.name,
+                description: formData.description,
+                location: formData.location,
+                startDate: formData.startDate,
+                endDate: formData.endDate,
+                estimatedBudget: formData.estimatedBudget ? parseFloat(formData.estimatedBudget) : null,
+                status: formData.status.toLowerCase(),
+                priority: formData.priority.toLowerCase(),
+            };
+            
+            const createdProject = await projectsAPI.createProject(projectData);
+            navigate(`/projects/${createdProject.id}`);
+       } catch (err) {
+            setError(err.response?.data?.error || err.message);
+            console.error('Error creating project:', err);
+       } finally {
+            setIsSubmitting(false);
+       }
     };
 
     const handleCancel = () => {
@@ -196,6 +210,14 @@ const ProjectCreationForm = ({ onCreate }) => {
         halfWidthGroup: {
             flex: 1,
         },
+        errorBanner: {
+            padding: '1rem',
+            backgroundColor: '#fee2e2',
+            color: '#991b1b',
+            borderRadius: '8px',
+            marginBottom: '1rem',
+            border: '1px solid #fca5a5',
+        }
     };
 
     const [focusedInput, setFocusedInput] = useState(null);
@@ -212,14 +234,24 @@ const ProjectCreationForm = ({ onCreate }) => {
 
     return (
         <div style={styles.pageContainter}>
+            {error && (
+                <div style={styles.errorBanner}>
+                    Error: {error}
+                </div>
+            )}
             <div style={styles.headerContainer}>
                 <h2 style={styles.formTitle}>Project Details</h2>
                 <div style={styles.actionButtons}>
                     <button
                         type="submit"
                         form="project-form"
-                        style={styles.createButton}
-                    >Create</button>
+                        style={{
+                            ...styles.createButton,
+                            opacity: isSubmitting ? 0.6 : 1,
+                            cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                        }}
+                        disabled={isSubmitting}
+                    >{isSubmitting ? 'Creating...' : 'Create'}</button>
                     <button
                         type="button"
                         style={styles.cancelButton}

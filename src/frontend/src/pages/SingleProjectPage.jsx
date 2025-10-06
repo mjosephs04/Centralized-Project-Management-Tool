@@ -1,7 +1,12 @@
-import React, {useState} from "react";
+import React, {useState, useEffect} from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import UserNavbar from "../components/UserNavbar";
 import { FaArrowLeft } from "react-icons/fa";
+import OverviewTab from '../components/ProjectTabs/OverviewTab'
+import { projectsAPI } from "../services/api";
+import TeamTab from "../components/ProjectTabs/TeamTab";
+import CalendarTab from "../components/ProjectTabs/CalendarTab";
+import WorkOrdersTab from "../components/ProjectTabs/WorkOrders";
 
 const styleSheet = document.styleSheets[0];
 if (!document.querySelector('#tabAnimation')) {
@@ -36,21 +41,58 @@ const SingleProjectPage = ({ projects }) => {
     const { projectId } = useParams();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('overview');
+    const [project, setProject] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-    const project = projects.find(p =>
-        (p.id && p.id.toString() === projectId) ||
-        p.name.toLowerCase().replace(/\s+/g, '-') === projectId
-    );
+    useEffect(() => {
+        fetchProject();
+    }, [projectId]);
 
-    if (!project) {
+    const fetchProject = async () => {
+        try {
+            setLoading(true);
+            const data = await projectsAPI.getProject(projectId);
+            setProject(data);
+        } catch (err) {
+            setError(err.message);
+            console.error('Error fetching projects', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleUpdateProject = async (updatedData) => {
+        try {
+            const updated = await projectsAPI.updateProject(projectId, updatedData);
+            setProject(updated);
+        } catch (err) {
+            console.error('Error updating project:', err);
+            alert('Failed to update project: ' + err.message);
+        }
+    };
+
+    if (loading) {
         return (
             <>
                 <UserNavbar />
                 <div style={styles.pageContainer}>
-                    <p>Project not found.</p>
+                    <p>Loading project...</p>
                 </div>
             </>
         );
+    }
+
+    if (error || !project) {
+        return (
+            <>
+                <UserNavbar />
+                <div style={styles.pageContainer}>
+                    <p>Project notu found.</p>
+                    <button onClick={() => navigate('/projects')}>Return to Dashboard</button>
+                </div>
+            </>
+        )
     }
 
     const tabs = [
@@ -64,15 +106,15 @@ const SingleProjectPage = ({ projects }) => {
     const renderTabContent = () => {
         switch(activeTab) {
             case 'overview':
-                return <p>Overview content goes here...</p>;
+                return <OverviewTab project={project} onUpdate={handleUpdateProject} />;
             case 'metrics':
                 return <p>Metrics content goes here...</p>;
             case 'team':
-                return <p>Team content goes here...</p>
+                return <TeamTab project={project} onUpdate={handleUpdateProject} />;
             case 'calendar':
-                return <p>Calendar goes here...</p>
+                return <CalendarTab project={project} />
             case 'workorders':
-                return <p>Work Orders goes here...</p>
+                return <WorkOrdersTab project={project} />
             default:
                 return <p>Nothing to show here...</p>
         }
@@ -127,7 +169,7 @@ const SingleProjectPage = ({ projects }) => {
 
 const styles = {
     pageContainer: {
-        padding: '1rem 4rem',
+        padding: '1rem 2.5rem',
         fontFamily: 'sans-serif',
         borderBottom: '1.5px solid rgba(54, 69, 79, 0.8)',
     },
@@ -155,7 +197,7 @@ const styles = {
         whiteSpace: 'nonwrap',
         position: 'absolute',
         zIndex: 1,
-        left: 10,
+        left: '2.5rem',
     },
     titleSection: {
         width: '100%',
@@ -183,8 +225,7 @@ const styles = {
         margin: 0,
     },
     contentContainer: {
-        margin: '0 auto',
-        padding: '3rem 4rem',
+        padding: '3rem 2.5rem',
         backgroundColor: 'rgba(20, 48, 136, 0.7)',
         minHeight: '100px'
     },
@@ -249,8 +290,7 @@ const styles = {
         animation: 'slideIn 0.3s ease',
     },
     tabContent: {
-        width: '100%',
-        padding: '3rem 4rem',
+        padding: '3rem 2.5rem',
         backgroundColor: '#f8f0fa',
         minHeight: 'calc(100vh - 500px)',
         animation: 'fadeIn 0.4s ease',
