@@ -1,24 +1,35 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import LoginForm from "../components/LoginForm";
-import '../styles/pages/LoginPage.css'
+import backgroundImg from '../imgs/OnePager.svg'; 
+import '../styles/pages/LoginPage.css';
 
 const LoginPage = () => {
     const navigate = useNavigate();
-    
+
     return (
-        <div className="login-page"> 
+        <div
+            className="login-page"
+            style={{
+                backgroundImage: `url(${backgroundImg})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                backgroundRepeat: "no-repeat",
+            }}
+        >
             <div className="top-right">
-                <button 
+                <button
                     className="create-account"
                     onClick={() => navigate('/create-account')}
-                >Create Account</button>
+                >
+                    Create Account
+                </button>
             </div>
             <div className="form-wrapper">
                 <LoginForm />
             </div>
         </div>
-    )
+    );
 };
 
 export default LoginPage;
