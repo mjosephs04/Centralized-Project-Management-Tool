@@ -8,7 +8,7 @@ const getAuthToken = () => {
 };
 
 const apiClient = axios.create({
-  baseURL: process.env.ISPROD ? PROD_API_URL : LOCAL_API_URL,
+  baseURL: process.env.REACT_APP_ISPROD ? PROD_API_URL : LOCAL_API_URL,
   headers: {
     "Content-Type": "application/json",
   },
@@ -34,7 +34,7 @@ export const projectsAPI = {
   },
 
   createProject: async (projectData) => {
-    console.log("isProd: " + process.env.ISPROD)
+    console.log("isProd: " + process.env.REACT_APP_ISPROD)
     const response = await apiClient.post("/projects/", projectData);
     return response.data.project;
   },
