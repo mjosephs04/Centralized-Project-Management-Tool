@@ -34,6 +34,7 @@ export const projectsAPI = {
   },
 
   createProject: async (projectData) => {
+    console.log("isProd: " + process.env.ISPROD)
     const response = await apiClient.post("/projects/", projectData);
     return response.data.project;
   },
