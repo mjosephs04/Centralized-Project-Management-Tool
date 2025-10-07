@@ -2,15 +2,16 @@ import React, { useState, useEffect } from "react";
 import { Link } from 'react-router-dom';
 import UserNavbar from "../components/UserNavbar";
 import ProjectCard from "../components/ProjectCard";
-import { projectsAPI } from "../services/api";
+import { projectsAPI, authAPI } from "../services/api";
 
 const ProjectsPage = () => {
     const [projects, setProjects] = useState([]);
+    const [userRole, setUserRole] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        fetchProjects();
+        fetchInitialData();
     }, []);
 
     const fetchProjects = async () => {
@@ -26,15 +27,34 @@ const ProjectsPage = () => {
         }
     }
 
+    const fetchInitialData = async () => {
+        try {
+            setLoading(true);
+            // fetch user role
+            const me = await authAPI.me();
+            setUserRole(me?.role || null);
+            // then fetch projects
+            const data = await projectsAPI.getProjects();
+            setProjects(data);
+        } catch (err) {
+            setError(err.message);
+            console.error('Error loading data:', err);
+        } finally {
+            setLoading(false);
+        }
+    }
+
     return (
         <>
             <UserNavbar />
             <div style={styles.pageContainer}>
                 <div style={styles.header}>
                     <h2 style={styles.pageTitle}>Ongoing Projects</h2>
-                    <Link to="/projects/create" style={styles.createButtonLink}>
-                        Create New Project
-                    </Link>
+                    {userRole !== 'worker' && (
+                        <Link to="/projects/create" style={styles.createButtonLink}>
+                            Create New Project
+                        </Link>
+                    )}
                 </div>
             </div>
 
@@ -56,7 +76,7 @@ const ProjectsPage = () => {
             ) : (
                 <div style={styles.projectsGrid}>
                     {projects.map((project) => (
-                        <ProjectCard key={project.id} project={project} />
+                        <ProjectCard key={project.id} project={project} userRole={userRole} />
                     ))}
                 </div>
             )}
