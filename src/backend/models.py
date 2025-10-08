@@ -200,3 +200,45 @@ class ProjectMember(db.Model):
         }
 
 
+class ProjectInvitation(db.Model):
+    __tablename__ = "project_invitations"
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), nullable=False, index=True)
+    projectId = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    invitedBy = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # Invitation token for secure registration
+    token = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    
+    # Invitation status
+    status = db.Column(db.String(20), default="pending", nullable=False)  # pending, accepted, expired, cancelled
+    
+    # Timestamps
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    expiresAt = db.Column(db.DateTime, nullable=False)
+    acceptedAt = db.Column(db.DateTime, nullable=True)
+    
+    # Relationships
+    project = db.relationship('Project', backref=db.backref('invitations', lazy=True))
+    inviter = db.relationship('User', backref=db.backref('sent_invitations', lazy=True))
+    
+    # Ensure unique email-project combinations for pending invitations
+    __table_args__ = (db.UniqueConstraint('email', 'projectId', 'status', name='unique_pending_invitation'),)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "email": self.email,
+            "projectId": self.projectId,
+            "project": self.project.to_dict() if self.project else None,
+            "invitedBy": self.invitedBy,
+            "inviter": self.inviter.to_dict() if self.inviter else None,
+            "token": self.token,
+            "status": self.status,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+            "expiresAt": self.expiresAt.isoformat() if self.expiresAt else None,
+            "acceptedAt": self.acceptedAt.isoformat() if self.acceptedAt else None,
+        }
+
+

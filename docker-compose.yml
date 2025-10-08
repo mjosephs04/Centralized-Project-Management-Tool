@@ -21,10 +21,10 @@ services:
     build: .
     container_name: todd-backend
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       DATABASE_URL: mysql+pymysql://root:password@db:3306/todd
-      SECRET_KEY: your-secret-key-change-me
-      JWT_SECRET_KEY: your-jwt-secret-key-change-me
     ports:
       - "8080:8080"
     depends_on:
