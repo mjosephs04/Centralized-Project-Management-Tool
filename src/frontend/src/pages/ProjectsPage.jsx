@@ -71,7 +71,12 @@ const ProjectsPage = () => {
                 </div>
             ) : projects.length === 0 ? (
                 <div style={styles.centerContent}>
-                    <p>No projects underway!</p>
+                    <p>
+                        {userRole === 'worker' 
+                            ? "You are not assigned to any projects yet." 
+                            : "No projects underway!"
+                        }
+                    </p>
                 </div>
             ) : (
                 <div style={styles.projectsGrid}>

@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const LOCAL_API_URL = "http://localhost:8080/api";
-const PROD_API_URL = "https://centralized-project-management-tool-backend-710408068302.us-south1.run.app"
+const PROD_API_URL = "https://centralized-project-management-tool-backend-710408068302.us-south1.run.app";
 
 const getAuthToken = () => {
   return localStorage.getItem("accessToken");
@@ -34,7 +34,7 @@ export const projectsAPI = {
   },
 
   createProject: async (projectData) => {
-    console.log("isProd: " + process.env.REACT_APP_ISPROD)
+    console.log("isProd: " + process.env.REACT_APP_ISPROD);
     const response = await apiClient.post("/projects/", projectData);
     return response.data.project;
   },
@@ -66,9 +66,22 @@ export const workOrdersAPI = {
     return response.data.workorder;
   },
 
+  workerUpdate: async (workOrderId, updates) => {
+    const response = await apiClient.patch(`/workorders/${workOrderId}/worker-update`, updates);
+    return response.data.workorder;
+  },
+
   deleteWorkOrder: async (workOrderId) => {
     await apiClient.delete(`/workorders/${workOrderId}`);
     return true;
+  },
+};
+
+export const usersAPI = {
+  // Uses GET /api/auth/workers
+  getWorkers: async () => {
+    const response = await apiClient.get("/auth/workers");
+    return response.data.users; // [{ id, firstName, lastName, emailAddress, phoneNumber }, ...]
   },
 };
 

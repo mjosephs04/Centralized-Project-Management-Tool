@@ -88,3 +88,24 @@ def who_am_i():
     return jsonify({"user": user.to_dict()}), 200
 
 
+@auth_bp.get("/workers")
+@jwt_required()
+def get_all_workers():
+    """
+    Return all users with role=worker.
+    Example request: GET /api/auth/workers
+    Requires Authorization header with Bearer token.
+    """
+    try:
+        # Query all users who are workers
+        workers = User.query.filter_by(role=UserRole.WORKER).all()
+
+        # Serialize users (exclude password hash in to_dict)
+        worker_data = [w.to_dict() for w in workers]
+
+        return jsonify({"users": worker_data}), 200
+
+    except Exception as e:
+        # Catch unexpected errors to avoid breaking the response
+        print(f"[ERROR] Failed to fetch workers: {e}")
+        return jsonify({"error": "Failed to retrieve worker list"}), 500

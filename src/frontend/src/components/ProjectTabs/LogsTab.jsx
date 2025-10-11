@@ -4,7 +4,6 @@ const LogsTab = ({ project }) => {
     return (
         <div style={styles.container}>
             <h2 style={styles.title}>Project Activity Logs</h2>
-            <p style={styles.subtitle}>Coming soon</p>
             <div style={styles.placeholderBox}>
                 <p style={styles.placeholderText}>
                     This tab will display an audit trail of project changes such as updated dates,
