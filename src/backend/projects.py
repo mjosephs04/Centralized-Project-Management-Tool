@@ -119,7 +119,7 @@ def delete_project(project_id):
     
     # Check if the current user is the project manager of this project
     user_id = get_jwt_identity()
-    if project.projectManagerId != user_id:
+    if project.projectManagerId != int(user_id):
         return jsonify({"error": "You can only delete projects you manage"}), 403
     
     db.session.delete(project)
