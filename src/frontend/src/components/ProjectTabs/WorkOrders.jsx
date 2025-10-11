@@ -121,9 +121,6 @@ const WorkOrdersTab = ({ project }) => {
             ) : workOrders.length === 0 ? (
                 <div style={styles.emptyState}>
                     <p style={styles.emptyText}>No Work Orders Yet</p>
-                    <button style={styles.createButton} onClick={() => setShowCreate(true)}>
-                        <FaPlus /> Create First Work Order
-                    </button>
                 </div>
             ) : (
                 <div style={styles.tableContainer}>
@@ -313,7 +310,7 @@ const styles = {
         alignItems: 'center',
         gap: '0.5rem',
         padding: '0.7rem 1.5rem',
-        backgroundColor: '#0052D4',
+        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
         color: 'white',
         border: 'none',
         borderRadius: '8px',
@@ -476,7 +473,7 @@ const styles = {
     },
     submitBtn: {
         padding: '0.75rem 1.5rem',
-        backgroundColor: '#0052D4',
+        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
         color: 'white',
         border: 'none',
         borderRadius: '8px',

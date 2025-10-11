@@ -40,7 +40,7 @@ if (!document.querySelector('#tabAnimation')) {
 const SingleProjectPage = ({ projects }) => {
     const { projectId } = useParams();
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState('overview');
+    const [activeTab, setActiveTab] = useState('calendar');
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -72,6 +72,10 @@ const SingleProjectPage = ({ projects }) => {
         }
     };
 
+    const handleDelete = () => {
+        navigate('/projects', { state: { projectDeleted: true }});
+    };
+
     if (loading) {
         return (
             <>
@@ -96,17 +100,17 @@ const SingleProjectPage = ({ projects }) => {
     }
 
     const tabs = [
+        { id: 'calendar', label: 'Calendar'},
         { id: 'overview', label: 'Overview' },
         { id: 'metrics', label: 'Metrics'},
         { id: 'team', label: 'Team'},
-        { id: 'calendar', label: 'Calendar'},
         { id: 'workorders', label: 'Work Orders'},
     ];
 
     const renderTabContent = () => {
         switch(activeTab) {
             case 'overview':
-                return <OverviewTab project={project} onUpdate={handleUpdateProject} />;
+                return <OverviewTab project={project} onUpdate={handleUpdateProject} onDelete={handleDelete} />;
             case 'metrics':
                 return <p>Metrics content goes here...</p>;
             case 'team':
@@ -226,7 +230,7 @@ const styles = {
     },
     contentContainer: {
         padding: '3rem 2.5rem',
-        backgroundColor: 'rgba(20, 48, 136, 0.7)',
+        background: 'linear-gradient(90deg,rgb(35, 115, 243) 0%, #4facfe 100%)',
         minHeight: '100px'
     },
     descriptionSection: {
@@ -252,7 +256,7 @@ const styles = {
     },
     tabContainer: {
         width: '100%',
-        background: 'rgba(20, 48, 136, 0.7)',
+        background: 'linear-gradient(90deg,rgb(35, 115, 243) 0%, #4facfe 100%)',
         minHeight: 'calc(100vh - 400px)',
     },
     tabNav: {
