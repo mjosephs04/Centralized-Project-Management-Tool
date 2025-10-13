@@ -140,9 +140,9 @@ const SingleProjectPage = ({ projects }) => {
 
     // Worker-specific tabs (no Metrics, but includes read-only Team)
     const workerTabs = [
+        { id: 'calendar', label: 'Calendar'},
         { id: 'overview', label: 'Overview' },
         { id: 'team', label: 'Team' },
-        { id: 'calendar', label: 'Calendar'},
         { id: 'workorders', label: 'Work Orders'},
         { id: 'logs', label: 'Logs'},
     ];
