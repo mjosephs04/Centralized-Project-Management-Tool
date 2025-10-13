@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import LoginForm from "../components/LoginForm";
-import backgroundImg from '../imgs/OnePager.svg'; 
+import backgroundImg from '../imgs/NewOnePager.svg'; 
 import '../styles/pages/LoginPage.css';
 
 const LoginPage = () => {

@@ -1,158 +1,91 @@
-import React, { useRef, useState } from "react";
-import { Typography, Snackbar, Alert, Slide } from "@mui/material";
-import { FaUser, FaLock } from "react-icons/fa";
-import "../styles/components/LoginForm.css";
-import { useNavigate } from "react-router-dom";
-import { authAPI } from '../services/api';
-
-function TransitionDown(props) {
-  return <Slide {...props} direction="down" />;
-}
+import React, {useState} from 'react';
+import axios from 'axios';
+import {Typography} from '@mui/material'
+import {FaUser, FaLock} from 'react-icons/fa'
+import '../styles/components/LoginForm.css'
+import { useNavigate } from 'react-router-dom';
 
 const LoginForm = () => {
-  const [formData, setFormData] = useState({
-    emailAddress: "",
-    password: "",
-  });
+    const [formData, setFormData] = useState({
+        emailAddress: '',
+        password: '',
+    });
 
-  const [toast, setToast] = useState({
-    open: false,
-    message: "",
-    severity: "info", // 'success' | 'error' | 'warning' | 'info'
-  });
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const navigate = useNavigate();
 
-  const navigate = useNavigate();
-  const formRef = useRef(null);
-
-  const openToast = (message, severity = "info") =>
-    setToast({ open: true, message, severity });
-
-  const closeToast = (_, reason) => {
-    if (reason === "clickaway") return;
-    setToast((t) => ({ ...t, open: false }));
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    // HTML5 form validation
-    if (!formRef.current.checkValidity()) {
-      formRef.current.reportValidity();
-      return;
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData((prev) => ({
+            ...prev,
+            [name]: value,
+        }));;
     }
 
-    try {
-      const payload = {
-        emailAddress: formData.emailAddress.trim(),
-        password: formData.password,
-      }
-      const res = await authAPI.login(payload);
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
 
-      localStorage.setItem("accessToken", res.data.accessToken);
-      openToast("Login Successful!", "success");
-      navigate("/projects");
-    } catch (err) {
-      console.error(err);
-      const msg = err.response?.data?.error || "Login Failed";
-      openToast(msg, "error");
-    }
-  };
+        try{
+            const res = await axios.post('http://localhost:8080/api/auth/login', formData);
+            
+            localStorage.setItem('accessToken', res.data.accessToken);
 
-  return (
-    <>
-      <div className="wrapper">
-        <Typography
-          variant="h5"
-          component="h2"
-          gutterBottom
-          align="center"
-          fontSize={40}
-          fontWeight={"bold"}
-        >
-          Login
-        </Typography>
+            setSuccess("Login Successful!");
+            console.log("Logged in user:", res.data.user);
+            navigate('/projects')
+        } catch (err) {
+            console.error(err);
+            setError(err.response?.data?.error || 'Login Failed');
+        }
+    };
 
-        <form className="login-form" ref={formRef} onSubmit={handleSubmit} noValidate>
-          <div className="input-box">
-            <input
-              type="email"
-              name="emailAddress"
-              placeholder="Email Address"
-              value={formData.emailAddress}
-              onChange={handleChange}
-              required
-              title="Enter a valid email address"
-            />
-            <span className="input-icon">
-              <FaUser />
-            </span>
-          </div>
 
-          <div className="input-box">
-            <input
-              type="password"
-              name="password"
-              placeholder="Password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              minLength={6}
-              title="At least 6 characters"
-            />
-            <span className="input-icon">
-              <FaLock />
-            </span>
-          </div>
+    return (
+        <div className="wrapper">
+            <Typography variant="h5" component="h2" gutterBottom align="center" fontSize={40} fontWeight={'bold'}>
+                Login
+            </Typography>
 
-          <button type="submit" className="btn">
-            Sign In
-          </button>
+            {error && <p className="error">{error}</p>}
+            {success && <p className="success">{success}</p>}
 
-          <div className="forgot-password">
-            <button
-              type="button"
-              onClick={() => navigate("/forgot-password")}
-              className="forgot-btn"
-            >
-              Forgot Password?
-            </button>
-          </div>
-        </form>
-      </div>
+            <form className="login-form" onSubmit={handleSubmit}>
+                <div className="input-box">
+                    <input 
+                        type="text" 
+                        name="emailAddress"
+                        placeholder='Email Address' 
+                        value={formData.emailAddress}
+                        onChange={handleChange} 
+                        required 
+                    />
+                    <span className="input-icon"><FaUser /></span>
+                </div>
+                <div className='input-box'>
+                    <input 
+                    type="password" 
+                    name="password"
+                    placeholder='Password' 
+                    value={formData.password}
+                    onChange={handleChange} 
+                    required 
+                />
+                    <span className="input-icon"><FaLock /></span>
+                </div>
+                <button
+                    type="submit"
+                    className='btn'
+                > Sign In </button>
+                <div className="forgot-password">
+                    <button type="button">Forgot Password?</button>
+                </div>
 
-      {/* Centered Snackbar with slide-down transition */}
-      <Snackbar
-        open={toast.open}
-        autoHideDuration={3500}
-        onClose={closeToast}
-        anchorOrigin={{ vertical: "top", horizontal: "center" }}
-        TransitionComponent={TransitionDown}
-      >
-        <Alert
-          onClose={closeToast}
-          severity={toast.severity}
-          variant="filled"
-          sx={{
-            width: "100%",
-            textAlign: "center",
-            fontWeight: "bold",
-            borderRadius: "8px",
-            boxShadow: 3,
-          }}
-        >
-          {toast.message}
-        </Alert>
-      </Snackbar>
-    </>
-  );
+            </form>
+        </div>
+    )
 };
 
 export default LoginForm;

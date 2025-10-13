@@ -3,10 +3,22 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { workOrdersAPI } from "../../services/api";
+import { FaPlus, FaTimes } from "react-icons/fa";
 
 const CalendarTab = ({ project }) => {
     const [workOrders, setWorkOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [showCreate, setShowCreate] = useState(false);
+        const [formData, setFormData] = useState({
+            name: '',
+            description: '',
+            location: '',
+            startDate: '',
+            endDate: '',
+            priority: 3,
+            estimatedBudget: '',
+            status: 'pending',
+        });
     const events =[];
 
     useEffect(() => {
@@ -24,6 +36,52 @@ const CalendarTab = ({ project }) => {
             setLoading(false);
         }
     };
+
+    const handleCreateWorkOrder = async (e) => {
+            e.preventDefault();
+            try {
+                const workOrderData = {
+                    name: formData.name,
+                    startDate: formData.startDate,
+                    endDate: formData.endDate,
+                    priority: parseInt(formData.priority),
+                    status: formData.status,
+                    projectId: project.id,
+                };
+    
+                if (formData.description && formData.description.trim() !== '') {
+                    workOrderData.description = formData.description;
+                }
+        
+                if (formData.location && formData.location.trim() !== '') {
+                    workOrderData.location = formData.location;
+                }
+        
+                if (formData.estimatedBudget && formData.estimatedBudget !== '') {
+                    workOrderData.estimatedBudget = parseFloat(formData.estimatedBudget);
+                }
+    
+                console.log('Sending work order data:', workOrderData); // Debug log
+    
+                await workOrdersAPI.createWorkOrder(workOrderData);
+    
+                await fetchWorkOrders();
+                setShowCreate(false);
+                setFormData({
+                    name: '',
+                    description: '',
+                    location: '',
+                    startDate: '',
+                    endDate: '',
+                    priority: 3,
+                    estimatedBudget: '',
+                    status: 'pending',
+                });
+            } catch (err) {
+                console.error('Error creating work order:', err);
+                alert('Failed to create work order: ' + err.message);
+            }
+        };
 
     if (project.startDate) {
         events.push({
@@ -49,9 +107,9 @@ const CalendarTab = ({ project }) => {
 
     workOrders.forEach(wo => {
         const getPriorityColor = (priority) => {
-            if (priority >= 4) return '#ef4444';
+            if (priority >= 4) return '#dc2626';
             if (priority === 3) return '#f59e0b';
-            return '#10b981'; 
+            return '#8b5cf6'; 
         };
 
         events.push({
@@ -80,6 +138,9 @@ const CalendarTab = ({ project }) => {
         <div style={styles.container}>
             <div style={styles.header}>
                 <h2 style={styles.title}>Project Calendar</h2>
+                <button style={styles.createButton} onClick={() => setShowCreate(true)}>
+                    <FaPlus /> Create Work Order
+                </button>
             </div>
 
             <div style={styles.legend}>
@@ -105,90 +166,199 @@ const CalendarTab = ({ project }) => {
                 </div>
             </div>
 
-            <div style={styles.calendarCard}>
-                <FullCalendar
-                    plugins={[dayGridPlugin, interactionPlugin]}
-                    initialView="dayGridMonth"
-                    events={events}
-                    eventClick={handleEventClick}
-                    headerToolbar={{
-                        left: 'prev,next today',
-                        center: 'title',
-                        right: 'dayGridMonth,dayGridWeek'
-                    }}
-                    height="auto"
-                    eventDisplay="block"
-                    displayEventTime={false}
-                    eventTextColor="#ffffff"
-                    eventBorderColor="transparent"
-                    eventBackgroundColor="#0052D4"
-                    dayMaxEvents={3}
-                    moreLinkClick="popover"
-                    buttonText={{
-                        today: 'Today',
-                        month: 'Month',
-                        week: 'Week'
-                    }}
-                    style={styles.calendar}
-                />
-            </div>
+            <div style={styles.mainContent}>
+                <div style={styles.calendarCard}>
+                    <FullCalendar
+                        plugins={[dayGridPlugin, interactionPlugin]}
+                        initialView="dayGridMonth"
+                        events={events}
+                        eventClick={handleEventClick}
+                        headerToolbar={{
+                            left: 'prev,next today',
+                            center: 'title',
+                            right: 'dayGridMonth,dayGridWeek'
+                        }}
+                        height="auto"
+                        eventDisplay="block"
+                        displayEventTime={false}
+                        eventTextColor="#ffffff"
+                        eventBorderColor="transparent"
+                        eventBackgroundColor="#0052D4"
+                        dayMaxEvents={3}
+                        moreLinkClick="popover"
+                        buttonText={{
+                            today: 'Today',
+                            month: 'Month',
+                            week: 'Week'
+                        }}
+                        style={styles.calendar}
+                    />
+                </div>
 
-            <div style={styles.milestonesSection}>
-                <h3 style={styles.milestonesTitle}>Project Milestones</h3>
-                <div style={styles.milestonesList}>
-                    {project.startDate && (
-                        <div style={styles.milestoneItem}>
-                            <div style={{...styles.milestoneMarker, backgroundColor: '#10b981'}}></div>
-                            <div style={styles.milestoneContent}>
-                                <div style={styles.milestoneName}>Project Start Date</div>
-                                <div style={styles.milestoneDate}>{project.startDate}</div>
+                <div style={styles.milestonesSection}>
+                    <h3 style={styles.milestonesTitle}>Project Milestones</h3>
+                    <div style={styles.milestonesList}>
+                        {project.startDate && (
+                            <div style={styles.milestoneItem}>
+                                <div style={{...styles.milestoneMarker, backgroundColor: '#10b981'}}></div>
+                                <div style={styles.milestoneContent}>
+                                    <div style={styles.milestoneName}>Project Start Date</div>
+                                    <div style={styles.milestoneDate}>{project.startDate}</div>
+                                </div>
                             </div>
-                        </div>
-                    )}
-                    {project.endDate && (
-                        <div style={styles.milestoneItem}>
-                            <div style={{...styles.milestoneMarker, backgroundColor: '#ef4444'}}></div>
-                            <div style={styles.milestoneContent}>
-                                <div style={styles.milestoneName}>Project Schedueled End Date</div>
-                                <div style={styles.milestoneDate}>{project.endDate}</div>
+                        )}
+                        {project.endDate && (
+                            <div style={styles.milestoneItem}>
+                                <div style={{...styles.milestoneMarker, backgroundColor: '#ef4444'}}></div>
+                                <div style={styles.milestoneContent}>
+                                    <div style={styles.milestoneName}>Project Schedueled End Date</div>
+                                    <div style={styles.milestoneDate}>{project.endDate}</div>
+                                </div>
                             </div>
-                        </div>
-                    )}
-                    {workOrders.length > 0 && (
-                        <>
-                            <h4 style={styles.sectionSubtitle}>Work Orders ({workOrders.length})</h4>
-                            {workOrders.map(wo => (
-                                <div key={wo.id} style={styles.milestoneItem}>
-                                    <div style={{
-                                        ...styles.milestoneMarker,
-                                        backgroundColor: wo.priority >= 4 ? '#dc2626' : wo.priority === 3 ? '#f59e0b' : '#8b5cf6'
-                                    }}></div>
-                                    <div style={styles.milestoneContent}>
-                                        <div style={styles.milestoneName}>{wo.name}</div>
-                                        <div style={styles.milestoneDate}>
-                                            {wo.startDate} ➟ {wo.endDate}
+                        )}
+                        {workOrders.length > 0 && (
+                            <>
+                                <h4 style={styles.sectionSubtitle}>Work Orders ({workOrders.length})</h4>
+                                {workOrders.map(wo => (
+                                    <div key={wo.id} style={styles.milestoneItem}>
+                                        <div style={{
+                                            ...styles.milestoneMarker,
+                                            backgroundColor: wo.priority >= 4 ? '#dc2626' : wo.priority === 3 ? '#f59e0b' : '#8b5cf6'
+                                        }}></div>
+                                        <div style={styles.milestoneContent}>
+                                            <div style={styles.milestoneName}>{wo.name}</div>
+                                            <div style={styles.milestoneDate}>
+                                                {wo.startDate} ➟ {wo.endDate}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
-                        </>
-                    )}
-                    {events.length === 0 && (
-                        <p style={styles.noMilestones}>No milestones set for this project yet.</p>
-                    )}
+                                ))}
+                            </>
+                        )}
+                        {events.length === 0 && (
+                            <p style={styles.noMilestones}>No milestones set for this project yet.</p>
+                        )}
+                    </div>
                 </div>
             </div>
+            {showCreate && (
+                <div style={styles.creatorOverlay} onClick={() => setShowCreate(false)}>
+                    <div style={styles.creator} onClick={(e) => e.stopPropagation()}>
+                        <div style={styles.creatorHeader}>
+                            <h3 style={styles.creatorTitle}>Create Work Order</h3>
+                            <button style={styles.closeButton} onClick={() => setShowCreate(false)}>
+                                <FaTimes />
+                            </button>
+                        </div>
+                        <form onSubmit={handleCreateWorkOrder} style={styles.form}>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Name *</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={formData.name}
+                                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                                    style={styles.input}
+                                />
+                            </div>
+
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Description</label>
+                                <textarea
+                                    value={formData.description}
+                                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                                    style={{...styles.input, ...styles.textArea}}
+                                />
+                            </div>
+
+                            <div style={styles.formRow}>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Location</label>
+                                    <input
+                                        type="text"
+                                        value={formData.location}
+                                        onChange={(e) => setFormData({...formData, location: e.target.value})}
+                                        style={styles.input}
+                                    />
+                                </div>
+
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Priority</label>
+                                    <select
+                                        required
+                                        value={formData.priority}
+                                        onChange={(e) => setFormData({...formData, priority: parseInt(e.target.value)})}
+                                        style={styles.input}
+                                    >
+                                        <option value="1">Very Low</option>
+                                        <option value="2">Low</option>
+                                        <option value="3">Medium</option>
+                                        <option value="4">High</option>
+                                        <option value="5">Critical</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style={styles.formRow}>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Start Date</label>
+                                    <input
+                                        type="date"
+                                        required
+                                        value={formData.startDate}
+                                        onChange={(e) => setFormData({...formData, startDate: e.target.value})}
+                                        style={styles.input}
+                                    />
+                                </div>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>End Date</label>
+                                    <input
+                                        type="date"
+                                        required
+                                        value={formData.endDate}
+                                        onChange={(e) => setFormData({...formData, endDate: e.target.value})}
+                                        style={styles.input}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Estimated Budget</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={formData.estimatedBudget}
+                                    onChange={(e) => setFormData({...formData, estimatedBudget: e.target.value})}
+                                    style={styles.input}
+                                    placeholder="0.00"
+                                />
+                            </div>
+
+                            <div style={styles.creatorActions}>
+                                <button type="button" style={styles.cancelBtn} onClick={() => setShowCreate(false)}>
+                                    Cancel
+                                </button>
+                                <button type="submit" style={styles.submitBtn}>
+                                    Create Work Order
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
 const styles = {
     container: {
-        maxWidth: '1400px',
+        maxWidth: '1800px',
         margin: '0 auto',
     },
     header: {
-        marginBottom: '2rem'
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '2rem',
     },
     title: {
         fontSize: '1.8rem',
@@ -217,21 +387,32 @@ const styles = {
         height: '12px',
         borderRadius: '50%',
     },
+    mainContent: {
+        display: 'flex',
+        gap: '1.5rem',
+        alignItems: 'flex-start',
+    },
     calendarCard: {
+        flex: '1 1 65%',
         backgroundColor: 'white',
         borderRadius: '12px',
         padding: '1.5rem',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
         marginBottom: '2rem',
+        height: '575px'
     },
     calendar: {
         fontFamily: 'sans-serif',
     },
     milestonesSection: {
+        flex: '0 0 35%',
         backgroundColor: 'white',
         borderRadius: '12px',
         padding: '1.5rem',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)'
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+        maxHeight: '575px',
+        display: 'flex',
+        flexDirection: 'column',
     },
     milestonesTitle: {
         fontSize: '1.2rem',
@@ -239,11 +420,14 @@ const styles = {
         color: '#2c3e50',
         marginBottom: '1rem',
         marginTop: 0,
+        flexShrink: 0,
     },
     milestonesList: {
         display: 'flex',
         flexDirection: 'column',
         gap: '1rem',
+        overflowY: 'auto',
+        paddingRight: '0.5rem',
     },
     milestoneItem: {
         display: 'flex',
@@ -252,6 +436,7 @@ const styles = {
         padding: '1rem',
         backgroundColor: '#f8fafc',
         borderRadius: '8px',
+        flexShrink: 0,
     },
     milestoneMarker: {
         width: '12px',
@@ -261,6 +446,7 @@ const styles = {
     },
     milestoneContent: {
         flex: 1,
+        minWidth: 0,
     },
     milestoneName: {
         fontWeight: '600',
@@ -283,6 +469,119 @@ const styles = {
         color: '#4b5563',
         marginTop: '1rem',
         marginBottom: '0.5rem',
+        flexShrink: 0,
+    },
+    creatorOverlay: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+    },
+    creator: {
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        width: '90%',
+        maxWidth: '600px',
+        maxHeight: '90vh',
+        overflow: 'auto',
+    },
+    creatorHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '1.5rem',
+        borderBottom: '1px solid #e5e7eb',
+    },
+    creatorTitle: {
+        fontSize: '1.5rem',
+        fontWeight: '600',
+        color: '#2c3e50',
+        margin: 0,
+    },
+    closeButton: {
+        background: 'none',
+        border: 'none',
+        fontSize: '1.5rem',
+        color: '#6b7280',
+        cursor: 'pointer',
+        padding: '0.25rem',
+    },
+    form: {
+        padding: '1.5rem',
+    },
+    formGroup: {
+        marginBottom: '1.5rem',
+        flex: 1,
+    },
+    formRow: {
+        display: 'flex',
+        gap: '1rem',
+    },
+    label: {
+        display: 'block',
+        marginBottom: '0.5rem',
+        fontWeight: '600',
+        color: '#374151',
+        fontSize: '0.875rem',
+    },
+    input: {
+        width: '100%',
+        padding: '0.75rem',
+        border: '1px solid #d1d5db',
+        borderRadius: '6px',
+        fontSize: '1rem',
+        outline: 'none',
+        transition: 'border-color 0.2s',
+    },
+    textArea: {
+        minHeight: '100px',
+        resize: 'vertical',
+    },
+    creatorActions: {
+        display: 'flex',
+        gap: '1rem',
+        justifyContent: 'flex-end',
+        marginTop: '2rem',
+    },
+    cancelBtn: {
+        padding: '0.75rem 1.5rem',
+        backgroundColor: '#e5e7eb',
+        color: '#374151',
+        border: 'none',
+        borderRadius: '8px',
+        fontSize: '0.95rem',
+        fontWeight: '600',
+        cursor: 'pointer',
+    },
+    submitBtn: {
+        padding: '0.75rem 1.5rem',
+        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+        color: 'white',
+        border: 'none',
+        borderRadius: '8px',
+        fontSize: '0.95rem',
+        fontWeight: '600',
+        cursor: 'pointer',
+    },
+    createButton: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        padding: '0.7rem 1.5rem',
+        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+        color: 'white',
+        border: 'none',
+        borderRadius: '8px',
+        fontSize: '0.95rem',
+        fontWeight: '600',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s',
     },
 };
 

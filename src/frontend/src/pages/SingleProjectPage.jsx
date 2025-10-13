@@ -8,6 +8,7 @@ import TeamTab from "../components/ProjectTabs/TeamTab";
 import CalendarTab from "../components/ProjectTabs/CalendarTab";
 import WorkOrdersTab from "../components/ProjectTabs/WorkOrders";
 import LogsTab from "../components/ProjectTabs/LogsTab";
+import Footer from "../components/Footer";
 
 const styleSheet = document.styleSheets[0];
 if (!document.querySelector('#tabAnimation')) {
@@ -41,14 +42,15 @@ if (!document.querySelector('#tabAnimation')) {
 const SingleProjectPage = ({ projects }) => {
     const { projectId } = useParams();
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState('overview');
+    const [activeTab, setActiveTab] = useState('calendar');
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [userRole, setUserRole] = useState(null);
 
     useEffect(() => {
-        fetchInitialData();
+        fetchProject();
+        fetchInitialData()
     }, [projectId]);
 
     const fetchProject = async () => {
@@ -89,6 +91,10 @@ const SingleProjectPage = ({ projects }) => {
         }
     };
 
+    const handleDelete = () => {
+        navigate('/projects', { state: { projectDeleted: true }});
+    };
+
     if (loading) {
         return (
             <>
@@ -113,10 +119,10 @@ const SingleProjectPage = ({ projects }) => {
     }
 
     const managerTabs = [
+        { id: 'calendar', label: 'Calendar'},
         { id: 'overview', label: 'Overview' },
         { id: 'metrics', label: 'Metrics'},
         { id: 'team', label: 'Team'},
-        { id: 'calendar', label: 'Calendar'},
         { id: 'workorders', label: 'Work Orders'},
         { id: 'logs', label: 'Logs'},
     ];
@@ -134,7 +140,7 @@ const SingleProjectPage = ({ projects }) => {
     const renderTabContent = () => {
         switch(activeTab) {
             case 'overview':
-                return <OverviewTab project={project} onUpdate={handleUpdateProject} userRole={userRole} />;
+                return <OverviewTab project={project} onUpdate={handleUpdateProject} userRole={userRole} onDelete={handleDelete} />;
             case 'metrics':
                 return <p>Metrics content goes here...</p>;
             case 'team':
@@ -256,7 +262,7 @@ const styles = {
     },
     contentContainer: {
         padding: '3rem 2.5rem',
-        backgroundColor: 'rgba(20, 48, 136, 0.7)',
+        background: 'linear-gradient(90deg,rgb(35, 115, 243) 0%, #4facfe 100%)',
         minHeight: '100px'
     },
     descriptionSection: {
@@ -282,7 +288,7 @@ const styles = {
     },
     tabContainer: {
         width: '100%',
-        background: 'rgba(20, 48, 136, 0.7)',
+        background: 'linear-gradient(90deg,rgb(35, 115, 243) 0%, #4facfe 100%)',
         minHeight: 'calc(100vh - 400px)',
     },
     tabNav: {
