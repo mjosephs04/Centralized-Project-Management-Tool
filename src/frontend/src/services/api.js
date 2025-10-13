@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const LOCAL_API_URL = "http://localhost:8080/api";
-const PROD_API_URL = "https://centralized-project-management-tool-backend-710408068302.us-south1.run.app"
+const PROD_API_URL = "https://centralized-project-management-tool-backend-710408068302.us-south1.run.app/api"
 
 const getAuthToken = () => {
   return localStorage.getItem("accessToken");
