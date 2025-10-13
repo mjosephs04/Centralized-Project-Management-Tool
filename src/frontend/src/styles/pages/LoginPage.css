@@ -1,7 +1,7 @@
 .login-page {
    height: 100vh;
    width: 100vw;
-   background-image: url('../../imgs/OnePager.svg');
+   background-image: url('../../imgs/NewOnePager.svg');
    background-size: cover;
    background-position: center;
    background-repeat: no-repeat;
@@ -37,7 +37,7 @@
     color: white;
     cursor: pointer;
 
-    background: rgba(249,72,72,0.6);
+    background: #6a97c4;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
 
@@ -45,7 +45,7 @@
   }
 
   .create-account:hover {
-    background: white;
-    color: #333;
+    background: #27496b;
+    color: white;
     border-color: white;
   }

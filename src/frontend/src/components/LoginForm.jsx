@@ -62,7 +62,7 @@ const LoginForm = () => {
                         onChange={handleChange} 
                         required 
                     />
-                    <span className="input-icon"><FaUser /></span>
+                    <span className="input-icon"><FaUser color="#6a97c4"/></span>
                 </div>
                 <div className='input-box'>
                     <input 
@@ -73,7 +73,7 @@ const LoginForm = () => {
                     onChange={handleChange} 
                     required 
                 />
-                    <span className="input-icon"><FaLock /></span>
+                    <span className="input-icon"><FaLock color="#6a97c4"/></span>
                 </div>
                 <button
                     type="submit"

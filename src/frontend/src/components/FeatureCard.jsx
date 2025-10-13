@@ -39,7 +39,7 @@ const styles = {
     display: "block", // make the whole card area clickable
   },
   card: {
-    background: "#0b1220",
+    background: "#27496b",
     border: "1px solid #243047",
     borderRadius: 16,
     padding: 16,
@@ -63,7 +63,7 @@ const styles = {
     height: 28,
     borderRadius: 8,
     background:
-      "linear-gradient(180deg, rgba(198,88,122,0.35), rgba(166,69,98,0.35))",
+      "#6a97c4",
     display: "grid",
     placeItems: "center",
   },

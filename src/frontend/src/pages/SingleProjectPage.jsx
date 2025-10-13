@@ -7,6 +7,7 @@ import { projectsAPI } from "../services/api";
 import TeamTab from "../components/ProjectTabs/TeamTab";
 import CalendarTab from "../components/ProjectTabs/CalendarTab";
 import WorkOrdersTab from "../components/ProjectTabs/WorkOrders";
+import Footer from "../components/Footer";
 
 const styleSheet = document.styleSheets[0];
 if (!document.querySelector('#tabAnimation')) {
