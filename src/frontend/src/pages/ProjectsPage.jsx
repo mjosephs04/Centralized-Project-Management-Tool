@@ -4,11 +4,12 @@ import { FaChevronLeft, FaChevronRight, FaPlus, FaFilter, FaSortAmountDown, FaSe
 import { Snackbar, Alert } from '@mui/material';
 import UserNavbar from "../components/UserNavbar";
 import ProjectCard from "../components/ProjectCard";
-import { projectsAPI } from "../services/api";
+import { projectsAPI, authAPI } from "../services/api";
 
 const ProjectsPage = () => {
     const [projects, setProjects] = useState([]);
     const [filteredProjects, setFilteredProjects] = useState([]);
+    const [userRole, setUserRole] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -32,6 +33,7 @@ const ProjectsPage = () => {
     const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
+        fetchInitialData();
         fetchProjects();
 
         if (location.state?.projectDeleted) {
@@ -188,6 +190,23 @@ const ProjectsPage = () => {
         setSnackbarOpen(false);
     }
 
+    const fetchInitialData = async () => {
+        try {
+            setLoading(true);
+            // fetch user role
+            const me = await authAPI.me();
+            setUserRole(me?.role || null);
+            // then fetch projects
+            const data = await projectsAPI.getProjects();
+            setProjects(data);
+        } catch (err) {
+            setError(err.message);
+            console.error('Error loading data:', err);
+        } finally {
+            setLoading(false);
+        }
+    }
+
     return (
         <>
             <UserNavbar />
@@ -218,10 +237,12 @@ const ProjectsPage = () => {
                             <FaFilter style={styles.buttonIcon} />
                             Filters {hasActiveFilters() && `(${Object.values(filters).filter(v => v).length})`}
                         </button>
+                        {userRole !== 'worker' && (
                         <Link to="/projects/create" style={styles.createButton}>
                             <FaPlus style={styles.buttonIcon} />
                             New Project
                         </Link>
+                        )}
                     </div>
                 </div>
 
@@ -408,7 +429,7 @@ const ProjectsPage = () => {
                 <Alert
                     onClose={handleSnackbarClose}
                     severity="success"
-                    sx={{ 
+                    sx={{
                         width: '100%',
                         background: 'rgba(255, 255, 255, 0.85)',
                         backdropFilter: 'blur(10px)',
@@ -664,85 +685,9 @@ const styles = {
         border: 'none',
         borderRadius: '8px',
         cursor: 'pointer',
-        fontSize: '0.95rem',
-        fontWeight: '600',
-        transition: 'background 0.3s'
-    },
-    sortContainer: {
-        display: 'flex',
-        gap: '1.5rem',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        padding: '1rem 2rem',
-        borderRadius: '16px',
-        marginBottom: '2rem',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
-    },
-    sortGroup: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.75rem',
-    },
-    sortLabel: {
-        fontSize: '0.95rem',
-        fontWeight: '600',
-        color: '#4a5568',
-    },
-    sortSelect: {
-        padding: '0.6rem 1rem',
-        borderRadius: '8px',
-        border: '2px solid #e2e8f0',
-        fontSize: '0.95rem',
-        fontWeight: '500',
-        color: '#2c3e50',
-        backgroundColor: 'white',
-        cursor: 'pointer',
-        outline: 'none',
-        transition: 'border-color 0.3s',
-        minWidth: '150px',
-    },
-    searchContainer: {
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        padding: '1rem 1.5rem',
-        borderRadius: '16px',
-        marginBottom: '2rem',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
-    },
-    searchIcon: {
-        position: 'absolute',
-        left: '2rem',
-        fontSize: '1.1rem',
-        color: '#9ca3af',
-        pointerEvents: 'none',
-    },
-    searchInput: {
-        flex: 1,
-        padding: '0.75rem 1rem 0.75rem 3rem',
-        borderRadius: '10px',
-        border: '2px solid #e2e8f0',
+        fontWeight: 'bold',
         fontSize: '1rem',
-        outline: 'none',
-        transition: 'border-color 0.3s',
-        backgroundColor: 'white',
-    },
-    clearSearchButton: {
-        position: 'absolute',
-        right: '2rem',
-        background: 'none',
-        border: 'none',
-        fontSize: '1.2rem',
-        color: '#9ca3af',
-        cursor: 'pointer',
-        padding: '0.5rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: '50%',
-        transition: 'all 0.2s',
-    },
+    }
 };
 
 export default ProjectsPage;

@@ -3,10 +3,11 @@ import { useParams, useNavigate } from "react-router-dom";
 import UserNavbar from "../components/UserNavbar";
 import { FaArrowLeft } from "react-icons/fa";
 import OverviewTab from '../components/ProjectTabs/OverviewTab'
-import { projectsAPI } from "../services/api";
+import { projectsAPI, authAPI } from "../services/api";
 import TeamTab from "../components/ProjectTabs/TeamTab";
 import CalendarTab from "../components/ProjectTabs/CalendarTab";
 import WorkOrdersTab from "../components/ProjectTabs/WorkOrders";
+import LogsTab from "../components/ProjectTabs/LogsTab";
 import Footer from "../components/Footer";
 
 const styleSheet = document.styleSheets[0];
@@ -45,9 +46,11 @@ const SingleProjectPage = ({ projects }) => {
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [userRole, setUserRole] = useState(null);
 
     useEffect(() => {
         fetchProject();
+        fetchInitialData()
     }, [projectId]);
 
     const fetchProject = async () => {
@@ -58,6 +61,21 @@ const SingleProjectPage = ({ projects }) => {
         } catch (err) {
             setError(err.message);
             console.error('Error fetching projects', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchInitialData = async () => {
+        try {
+            setLoading(true);
+            const me = await authAPI.me();
+            setUserRole(me?.role || null);
+            const data = await projectsAPI.getProject(projectId);
+            setProject(data);
+        } catch (err) {
+            setError(err.message);
+            console.error('Error loading project page', err);
         } finally {
             setLoading(false);
         }
@@ -100,18 +118,29 @@ const SingleProjectPage = ({ projects }) => {
         )
     }
 
-    const tabs = [
+    const managerTabs = [
         { id: 'calendar', label: 'Calendar'},
         { id: 'overview', label: 'Overview' },
         { id: 'metrics', label: 'Metrics'},
         { id: 'team', label: 'Team'},
         { id: 'workorders', label: 'Work Orders'},
+        { id: 'logs', label: 'Logs'},
     ];
+
+    // Worker-specific tabs (no Metrics/Team)
+    const workerTabs = [
+        { id: 'overview', label: 'Overview' },
+        { id: 'calendar', label: 'Calendar'},
+        { id: 'workorders', label: 'Work Orders'},
+        { id: 'logs', label: 'Logs'},
+    ];
+
+    const tabs = userRole === 'worker' ? workerTabs : managerTabs;
 
     const renderTabContent = () => {
         switch(activeTab) {
             case 'overview':
-                return <OverviewTab project={project} onUpdate={handleUpdateProject} onDelete={handleDelete} />;
+                return <OverviewTab project={project} onUpdate={handleUpdateProject} userRole={userRole} onDelete={handleDelete} />;
             case 'metrics':
                 return <p>Metrics content goes here...</p>;
             case 'team':
@@ -119,7 +148,9 @@ const SingleProjectPage = ({ projects }) => {
             case 'calendar':
                 return <CalendarTab project={project} />
             case 'workorders':
-                return <WorkOrdersTab project={project} />
+                return <WorkOrdersTab project={project} userRole={userRole} />
+            case 'logs':
+                return <LogsTab project={project} />
             default:
                 return <p>Nothing to show here...</p>
         }

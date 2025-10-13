@@ -2,10 +2,11 @@ import React, { useEffect, useState } from "react";
 import { FaPlus, FaEdit, FaTrash, FaTimes } from "react-icons/fa";
 import { workOrdersAPI } from "../../services/api";
 
-const WorkOrdersTab = ({ project }) => {
+const WorkOrdersTab = ({ project, userRole }) => {
     const [workOrders, setWorkOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showCreate, setShowCreate] = useState(false);
+    const [formErrors, setFormErrors] = useState({});
     const [formData, setFormData] = useState({
         name: '',
         description: '',
@@ -33,8 +34,27 @@ const WorkOrdersTab = ({ project }) => {
         }
     };
 
+    const validateForm = () => {
+        const errors = {};
+        if (!formData.name || formData.name.trim() === '') {
+            errors.name = 'Name is required';
+        }
+        if (!formData.startDate) {
+            errors.startDate = 'Start date is required';
+        }
+        if (!formData.endDate) {
+            errors.endDate = 'End date is required';
+        }
+        if (formData.startDate && formData.endDate && formData.startDate >= formData.endDate) {
+            errors.dateOrder = 'End date must be after start date';
+        }
+        setFormErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
+
     const handleCreateWorkOrder = async (e) => {
         e.preventDefault();
+        if (!validateForm()) return;
         try {
             const workOrderData = {
                 name: formData.name,
@@ -75,7 +95,8 @@ const WorkOrdersTab = ({ project }) => {
             });
         } catch (err) {
             console.error('Error creating work order:', err);
-            alert('Failed to create work order: ' + err.message);
+            const backendMsg = err.response?.data?.error || err.message;
+            alert('Failed to create work order: ' + backendMsg);
         }
     };
 
@@ -111,9 +132,11 @@ const WorkOrdersTab = ({ project }) => {
         <div style={styles.container}>
             <div style={styles.header}>
                 <h2 style={styles.title}>Work Orders</h2>
-                <button style={styles.createButton} onClick={() => setShowCreate(true)}>
-                    <FaPlus /> Create Work Order
-                </button>
+                {userRole !== 'worker' && (
+                    <button style={styles.createButton} onClick={() => setShowCreate(true)}>
+                        <FaPlus /> Create Work Order
+                    </button>
+                )}
             </div>
 
             {loading ? (
@@ -121,6 +144,11 @@ const WorkOrdersTab = ({ project }) => {
             ) : workOrders.length === 0 ? (
                 <div style={styles.emptyState}>
                     <p style={styles.emptyText}>No Work Orders Yet</p>
+                    {userRole !== 'worker' && (
+                        <button style={styles.createButton} onClick={() => setShowCreate(true)}>
+                            <FaPlus /> Create First Work Order
+                        </button>
+                    )}
                 </div>
             ) : (
                 <div style={styles.tableContainer}>
@@ -180,7 +208,7 @@ const WorkOrdersTab = ({ project }) => {
                 </div>
             )}
 
-            {showCreate && (
+            {userRole !== 'worker' && showCreate && (
                 <div style={styles.creatorOverlay} onClick={() => setShowCreate(false)}>
                     <div style={styles.creator} onClick={(e) => e.stopPropagation()}>
                         <div style={styles.creatorHeader}>
@@ -199,6 +227,7 @@ const WorkOrdersTab = ({ project }) => {
                                     onChange={(e) => setFormData({...formData, name: e.target.value})}
                                     style={styles.input}
                                 />
+                                {formErrors.name && <div style={styles.error}>{formErrors.name}</div>}
                             </div>
 
                             <div style={styles.formGroup}>
@@ -247,6 +276,7 @@ const WorkOrdersTab = ({ project }) => {
                                         onChange={(e) => setFormData({...formData, startDate: e.target.value})}
                                         style={styles.input}
                                     />
+                                    {formErrors.startDate && <div style={styles.error}>{formErrors.startDate}</div>}
                                 </div>
                                 <div style={styles.formGroup}>
                                     <label style={styles.label}>End Date</label>
@@ -257,6 +287,8 @@ const WorkOrdersTab = ({ project }) => {
                                         onChange={(e) => setFormData({...formData, endDate: e.target.value})}
                                         style={styles.input}
                                     />
+                                    {formErrors.endDate && <div style={styles.error}>{formErrors.endDate}</div>}
+                                    {formErrors.dateOrder && <div style={styles.error}>{formErrors.dateOrder}</div>}
                                 </div>
                             </div>
 
@@ -480,6 +512,12 @@ const styles = {
         fontSize: '0.95rem',
         fontWeight: '600',
         cursor: 'pointer',
+    },
+    error: {
+        marginTop: '0.25rem',
+        color: '#b91c1c',
+        fontSize: '0.85rem',
+        fontWeight: '600',
     },
 };
 

@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 
-const ProjectCard = ({ project }) => {
+const ProjectCard = ({ project, userRole }) => {
     const projectId = project.id || project.name.toLowerCase().replace(/\s+/g, '-');
 
     const formattedBudget = new Intl.NumberFormat('en-US', {
@@ -22,10 +22,12 @@ const ProjectCard = ({ project }) => {
                     {project.description || 'No description provided.'}
                 </p>
                 <div style={styles.cardDetails}>
-                    <div style={styles.detailItem}>
-                        <span style={styles.detailLabel}>Budget</span>
-                        <span style={styles.detailValue}>{formattedBudget}</span>
-                    </div>
+                    {userRole !== 'worker' && (
+                        <div style={styles.detailItem}>
+                            <span style={styles.detailLabel}>Budget</span>
+                            <span style={styles.detailValue}>{formattedBudget}</span>
+                        </div>
+                    )}
                     <div style={styles.detailItem}>
                         <span style={styles.detailLabel}>Start Date</span>
                         <span style={styles.detailsValue}>{new Date(project.startDate).toLocaleDateString()}</span>
