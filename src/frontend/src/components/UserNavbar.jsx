@@ -64,15 +64,17 @@ const UserNavbar = () => {
                     onMouseEnter={() => setIsHovered({ ...isHovered, mail: true})}
                     onMouseLeave={() => setIsHovered({ ...isHovered, mail: false})}
                 />
-                <FaUserCircle
-                    size={26}
-                    style={{
-                        ...styles.icon,
-                        ...(isHovered.profile ? styles.iconHover : null)
-                    }}
-                    onMouseEnter={() => setIsHovered({ ...isHovered, profile: true})}
-                    onMouseLeave={() => setIsHovered({ ...isHovered, profile: false})}
-                />
+                <Link to="/profile">
+                    <FaUserCircle
+                        size={26}
+                        style={{
+                            ...styles.icon,
+                            ...(isHovered.profile ? styles.iconHover : null)
+                        }}
+                        onMouseEnter={() => setIsHovered({ ...isHovered, profile: true })}
+                        onMouseLeave={() => setIsHovered({ ...isHovered, profile: false })}
+                    />
+                </Link>
             </div>
         </nav>
     );

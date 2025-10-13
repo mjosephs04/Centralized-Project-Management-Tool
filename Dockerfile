@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Copy only the requirements first (better for Docker layer caching)
 COPY src/backend/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt && \
+RUN pip install --no-cache-dir -r src/backend/requirements.txt && \
     pip install --no-cache-dir gunicorn
 
 COPY src/ ./src/

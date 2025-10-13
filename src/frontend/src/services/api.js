@@ -8,7 +8,7 @@ const getAuthToken = () => {
 };
 
 const apiClient = axios.create({
-  baseURL: process.env.REACT_APP_ISPROD ? PROD_API_URL : LOCAL_API_URL,
+  baseURL: LOCAL_API_URL,
   headers: {
     "Content-Type": "application/json",
   },
@@ -77,4 +77,12 @@ export const authAPI = {
     const response = await apiClient.get("/auth/me");
     return response.data.user;
   },
+  register: async (payload) => {
+    const response = await apiClient.post("/auth/register", payload)
+    return response.status;
+  },
+  login: async (payload) => {
+    const response = await apiClient.post("/auth/login", payload)
+    return response;
+  }
 };
