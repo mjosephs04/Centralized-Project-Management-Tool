@@ -14,7 +14,7 @@ export default function NavBar({
         <div style={styles.brandDot} aria-hidden />
         <div>
           <div style={styles.brandTop}>LSGS</div>
-          <div style={styles.brandSub}>Pariveda</div>
+          <div style={styles.brandSub}>One Pager</div>
         </div>
       </div>
 
@@ -53,10 +53,10 @@ function NavItem({ to, label, active }) {
 
 /* ----- styles ----- */
 const COLORS = {
-  blue: "#143088",
-  blueDark: "#0b1f64",
+  blue: "#6a97c4",
+  blueDark: "#27496b",
   text: "#e6edf7",
-  pillGrad: "linear-gradient(180deg, #c6587a 0%, #b64c6c 70%, #a64562 100%)",
+  pillGrad: "linear-gradient(#27496b 100%)",
 };
 
 const styles = {
@@ -79,8 +79,8 @@ const styles = {
     width: 14,
     height: 14,
     borderRadius: 14,
-    background: "#ff5e57",
-    boxShadow: "0 0 18px rgba(255,94,87,0.9)",
+    background: "#27496b",
+    boxShadow: "0 0 18px rgba(106, 151, 196, 0.9)",
   },
   brandTop: { fontWeight: 900, fontSize: 24, letterSpacing: 1, color: COLORS.text },
   brandSub: { marginTop: -4, fontWeight: 700, opacity: 0.9, color: COLORS.text },

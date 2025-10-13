@@ -104,10 +104,10 @@ function Emoji({ children }) {
 
 /* ----------------- styles ----------------- */
 const COLORS = {
-  blue: "#143088",
-  blueDark: "#0b1f64",
-  text: "#e6edf7",
-  pillGrad: "linear-gradient(180deg, #c6587a 0%, #b64c6c 70%, #a64562 100%)",
+  blue: "#white",
+  blueDark: "#gray",
+  text: "rgb(52, 56, 58)",
+  pillGrad: "linear-gradient(90deg, #6a97c4 100%)",
 };
 
 const styles = {
@@ -130,7 +130,7 @@ const styles = {
     height: "95vmin",
     borderRadius: "50%",
     background:
-      "radial-gradient(60% 60% at 50% 55%, rgba(221,88,80,0.9) 0%, rgba(174,71,111,0.7) 45%, rgba(20,48,136,0) 70%)",
+      "radial-gradient(60% 60% at 50% 55%, rgba(39, 73, 107, 0.9) 0%, rgba(106, 151, 196, 0.7) 45%, rgba(39, 73, 107, 0) 70%)",
     filter: "saturate(115%)",
     opacity: 0.25,
     pointerEvents: "none",
@@ -156,7 +156,7 @@ const styles = {
   },
   ctaBtn: {
     background: COLORS.pillGrad,
-    color: COLORS.text,
+    color: "white",
     padding: "12px 18px",
     borderRadius: 999,
     border: "none",
@@ -167,7 +167,7 @@ const styles = {
   ghostBtn: {
     background: "transparent",
     color: COLORS.text,
-    border: "1px solid rgba(255,255,255,0.55)",
+    border: "1px solid rgba(0,0,0,0.55)",
     padding: "12px 18px",
     borderRadius: 999,
     fontWeight: 800,
@@ -175,7 +175,7 @@ const styles = {
   },
 
   section: { padding: "24px", maxWidth: 1100, margin: "24px auto" },
-  h2: { fontSize: 28, marginBottom: 12, fontWeight: 800 },
+  h2: { fontSize: 28, marginBottom: 12, fontWeight: 800, color: "rgb(52, 56, 58)" },
   grid3: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",

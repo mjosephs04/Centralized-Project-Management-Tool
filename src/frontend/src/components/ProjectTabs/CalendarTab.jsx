@@ -107,9 +107,9 @@ const CalendarTab = ({ project }) => {
 
     workOrders.forEach(wo => {
         const getPriorityColor = (priority) => {
-            if (priority >= 4) return '#ef4444';
+            if (priority >= 4) return '#dc2626';
             if (priority === 3) return '#f59e0b';
-            return '#10b981'; 
+            return '#8b5cf6'; 
         };
 
         events.push({

@@ -82,7 +82,7 @@
   .forgot-password button {
     background: none;
     border: none;
-    color: #ffffffcc;
+    color: #27496b;
     font-size: 20px;
     cursor: pointer;
     padding: 0;
@@ -90,6 +90,6 @@
   }
 
   .forgot-password button:hover {
-    color: lightskyblue;
+    color: white;
     text-decoration: underline;
   }
