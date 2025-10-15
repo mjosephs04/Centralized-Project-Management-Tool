@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const LOCAL_API_URL = "http://localhost:8080/api";
-const PROD_API_URL = "https://centralized-project-management-tool-backend-710408068302.us-south1.run.app";
+const PROD_API_URL = "https://centralized-project-management-tool-backend-710408068302.us-south1.run.app/api"
 
 const getAuthToken = () => {
   return localStorage.getItem("accessToken");
@@ -34,7 +34,7 @@ export const projectsAPI = {
   },
 
   createProject: async (projectData) => {
-    console.log("isProd: " + process.env.REACT_APP_ISPROD);
+    console.log("isProd: " + process.env.REACT_APP_ISPROD)
     const response = await apiClient.post("/projects/", projectData);
     return response.data.project;
   },
@@ -90,4 +90,12 @@ export const authAPI = {
     const response = await apiClient.get("/auth/me");
     return response.data.user;
   },
+  register: async (payload) => {
+    const response = await apiClient.post("/auth/register", payload)
+    return response.status;
+  },
+  login: async (payload) => {
+    const response = await apiClient.post("/auth/login", payload)
+    return response;
+  }
 };

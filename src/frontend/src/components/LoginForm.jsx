@@ -50,107 +50,93 @@ const LoginForm = () => {
     }
 
     try {
-      const res = await axios.post("http://localhost:8080/api/auth/login", {
-        emailAddress: formData.emailAddress.trim(),
-        password: formData.password,
-      });
+          const res = await axios.post("http://localhost:8080/api/auth/login", {
+            emailAddress: formData.emailAddress.trim(),
+            password: formData.password,
+          });
+        localStorage.setItem('accessToken', res.data.accessToken);
 
-      localStorage.setItem("accessToken", res.data.accessToken);
-      openToast("Login Successful!", "success");
-      navigate("/projects");
-    } catch (err) {
-      console.error(err);
-      const msg = err.response?.data?.error || "Login Failed";
-      openToast(msg, "error");
-    }
-  };
+            setSuccess("Login Successful!");
+            console.log("Logged in user:", res.data.user);
+            navigate('/projects')
+        } catch (err) {
+            console.error(err);
+            setError(err.response?.data?.error || 'Login Failed');
+        }
+    };
 
-  return (
-    <>
-      <div className="wrapper">
-        <Typography
-          variant="h5"
-          component="h2"
-          gutterBottom
-          align="center"
-          fontSize={40}
-          fontWeight={"bold"}
-        >
-          Login
-        </Typography>
 
-        <form className="login-form" ref={formRef} onSubmit={handleSubmit} noValidate>
-          <div className="input-box">
-            <input
-              type="email"
-              name="emailAddress"
-              placeholder="Email Address"
-              value={formData.emailAddress}
-              onChange={handleChange}
-              required
-              title="Enter a valid email address"
-            />
-            <span className="input-icon">
-              <FaUser />
-            </span>
-          </div>
+    return (
+        <div className="wrapper">
+            <Typography variant="h5" component="h2" gutterBottom align="center" fontSize={40} fontWeight={'bold'}>
+                Login
+            </Typography>
 
-          <div className="input-box">
-            <input
-              type="password"
-              name="password"
-              placeholder="Password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              minLength={6}
-              title="At least 6 characters"
-            />
-            <span className="input-icon">
-              <FaLock />
-            </span>
-          </div>
+            {error && <p className="error">{error}</p>}
+            {success && <p className="success">{success}</p>}
 
-          <button type="submit" className="btn">
-            Sign In
-          </button>
+            <form className="login-form" onSubmit={handleSubmit}>
+                <div className="input-box">
+                    <input
+                        type="text"
+                        name="emailAddress"
+                        placeholder='Email Address'
+                        value={formData.emailAddress}
+                        onChange={handleChange}
+                        required
+                    />
+                    <span className="input-icon"><FaUser /></span>
+                </div>
+                <div className='input-box'>
+                    <input
+                    type="password"
+                    name="password"
+                    placeholder='Password'
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                />
+                    <span className="input-icon"><FaLock /></span>
+                </div>
+                <button
+                    type="submit"
+                    className='btn'
+                > Sign In </button>
+                <div className="forgot-password">
+                    <button
+                        type="button"
+                        onClick={() => navigate("/forgot-password")}
+                        className="forgot-btn"
+                    >
+                        Forgot Password?
+                    </button>
+                </div>
 
-          <div className="forgot-password">
-            <button
-              type="button"
-              onClick={() => navigate("/forgot-password")}
-              className="forgot-btn"
+          {/* Centered Snackbar with slide-down transition */}
+          <Snackbar
+            open={toast.open}
+            autoHideDuration={3500}
+            onClose={closeToast}
+            anchorOrigin={{ vertical: "top", horizontal: "center" }}
+            TransitionComponent={TransitionDown}
+          >
+            <Alert
+              onClose={closeToast}
+              severity={toast.severity}
+              variant="filled"
+              sx={{
+                width: "100%",
+                textAlign: "center",
+                fontWeight: "bold",
+                borderRadius: "8px",
+                boxShadow: 3,
+              }}
             >
-              Forgot Password?
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Centered Snackbar with slide-down transition */}
-      <Snackbar
-        open={toast.open}
-        autoHideDuration={3500}
-        onClose={closeToast}
-        anchorOrigin={{ vertical: "top", horizontal: "center" }}
-        TransitionComponent={TransitionDown}
-      >
-        <Alert
-          onClose={closeToast}
-          severity={toast.severity}
-          variant="filled"
-          sx={{
-            width: "100%",
-            textAlign: "center",
-            fontWeight: "bold",
-            borderRadius: "8px",
-            boxShadow: 3,
-          }}
-        >
-          {toast.message}
-        </Alert>
-      </Snackbar>
-    </>
+              {toast.message}
+            </Alert>
+          </Snackbar>
+        </>
+    </div>
   );
 };
 

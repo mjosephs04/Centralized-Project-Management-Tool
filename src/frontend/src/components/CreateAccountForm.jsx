@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import axios from "axios";
 import "../styles/components/CreateAccount.css";
 import { Snackbar, Alert, Slide } from "@mui/material";
+import {authAPI as authApi, projectsAPI} from "../services/api";
 
 function TransitionDown(props) {
   return <Slide {...props} direction="down" />;
@@ -100,7 +101,8 @@ const CreateAccountForm = () => {
         ...(formData.role === "worker" && { workerType: formData.workerType }), // "contractor" | "crew_member"
       };
 
-      await axios.post("http://localhost:8080/api/auth/register", payload);
+      // TODO handle errors here
+      await authApi.register(payload);
 
       openToast("Account created successfully!", "success");
       setFormData({
