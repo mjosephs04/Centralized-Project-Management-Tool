@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: mysql:8.0
@@ -11,26 +9,35 @@ services:
       MYSQL_USER: todd_user
       MYSQL_PASSWORD: todd_password
     ports:
-      - "3307:3306"
+      - "3307:3306"  # host:container (so you can connect from Workbench on 127.0.0.1:3307)
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # If you really have an init.sql, keep this line. Otherwise remove it to avoid mount errors.
+      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -ppassword || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   backend:
     build: .
     container_name: todd-backend
     restart: unless-stopped
     environment:
+      # IMPORTANT: use the service name 'db' as the hostname here
       DATABASE_URL: mysql+pymysql://root:password@db:3306/todd
       SECRET_KEY: your-secret-key-change-me
       JWT_SECRET_KEY: your-jwt-secret-key-change-me
     ports:
       - "8080:8080"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     volumes:
       - ./src:/app/src
 
 volumes:
   mysql_data:
+  

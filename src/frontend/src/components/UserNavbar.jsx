@@ -9,7 +9,9 @@ const styles = {
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: '1rem 2.5rem',
-        background: 'linear-gradient(90deg, #000000, #6a97c4)',
+        background: 'linear-gradient(90deg, #000000, #0052D4)',
+        borderBottomLeftRadius: '25px',
+        borderBottomRightRadius: '25px',
         position: 'sticky',
         top: 0,
         width: '100%',
@@ -69,8 +71,8 @@ const UserNavbar = () => {
                             ...styles.icon,
                             ...(isHovered.profile ? styles.iconHover : null)
                         }}
-                        onMouseEnter={() => setIsHovered({ ...isHovered, profile: true })}
-                        onMouseLeave={() => setIsHovered({ ...isHovered, profile: false })}
+                        onMouseEnter={() => setIsHovered({ ...isHovered, profile: true})}
+                        onMouseLeave={() => setIsHovered({ ...isHovered, profile: false})}
                     />
                 </Link>
             </div>

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
 import UserNavbar from "../components/UserNavbar";
 import {authAPI} from "../services/api";
+import { useNavigate } from "react-router-dom";
 
 const ProfilePage = () => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
         fetchProfile();
@@ -24,12 +26,18 @@ const ProfilePage = () => {
         }
     };
 
+    const handleLogout = () => {
+        localStorage.removeItem("accessToken");
+        navigate("/login");
+    };
+
     return (
         <>
             <UserNavbar />
             <div style={styles.pageContainer}>
                 <div style={styles.header}>
                     <h2 style={styles.pageTitle}>My Profile</h2>
+                    <button onClick={handleLogout} style={styles.logoutButton}>Logout</button>
                 </div>
 
                 {loading ? (
@@ -130,6 +138,17 @@ const styles = {
         cursor: "pointer",
         fontWeight: "bold",
         fontSize: "1rem",
+    },
+    logoutButton: {
+        backgroundColor: "#dc2626",
+        color: "white",
+        border: "none",
+        borderRadius: "8px",
+        padding: "0.8rem 1.5rem",
+        cursor: "pointer",
+        fontWeight: "bold",
+        fontSize: "1rem",
+        transition: "background-color 0.2s ease-in-out",
     },
 };
 

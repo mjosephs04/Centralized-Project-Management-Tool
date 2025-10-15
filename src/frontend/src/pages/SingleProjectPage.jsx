@@ -5,10 +5,10 @@ import { FaArrowLeft } from "react-icons/fa";
 import OverviewTab from '../components/ProjectTabs/OverviewTab'
 import { projectsAPI, authAPI } from "../services/api";
 import TeamTab from "../components/ProjectTabs/TeamTab";
+import TeamViewTab from "../components/ProjectTabs/TeamViewTab";
 import CalendarTab from "../components/ProjectTabs/CalendarTab";
-import WorkOrdersTab from "../components/ProjectTabs/WorkOrders";
+import WorkOrdersTab from "../components/ProjectTabs/WorkOrderTabs/WorkOrders";
 import LogsTab from "../components/ProjectTabs/LogsTab";
-import Footer from "../components/Footer";
 
 const styleSheet = document.styleSheets[0];
 if (!document.querySelector('#tabAnimation')) {
@@ -49,8 +49,7 @@ const SingleProjectPage = ({ projects }) => {
     const [userRole, setUserRole] = useState(null);
 
     useEffect(() => {
-        fetchProject();
-        fetchInitialData()
+        fetchInitialData();
     }, [projectId]);
 
     const fetchProject = async () => {
@@ -59,7 +58,13 @@ const SingleProjectPage = ({ projects }) => {
             const data = await projectsAPI.getProject(projectId);
             setProject(data);
         } catch (err) {
-            setError(err.message);
+            if (err.response?.status === 403) {
+                setError("Access denied. You don't have permission to view this project.");
+            } else if (err.response?.status === 404) {
+                setError("Project not found.");
+            } else {
+                setError(err.message);
+            }
             console.error('Error fetching projects', err);
         } finally {
             setLoading(false);
@@ -74,7 +79,13 @@ const SingleProjectPage = ({ projects }) => {
             const data = await projectsAPI.getProject(projectId);
             setProject(data);
         } catch (err) {
-            setError(err.message);
+            if (err.response?.status === 403) {
+                setError("Access denied. You don't have permission to view this project.");
+            } else if (err.response?.status === 404) {
+                setError("Project not found.");
+            } else {
+                setError(err.message);
+            }
             console.error('Error loading project page', err);
         } finally {
             setLoading(false);
@@ -111,7 +122,7 @@ const SingleProjectPage = ({ projects }) => {
             <>
                 <UserNavbar />
                 <div style={styles.pageContainer}>
-                    <p>Project notu found.</p>
+                    <p>Project not found.</p>
                     <button onClick={() => navigate('/projects')}>Return to Dashboard</button>
                 </div>
             </>
@@ -127,10 +138,11 @@ const SingleProjectPage = ({ projects }) => {
         { id: 'logs', label: 'Logs'},
     ];
 
-    // Worker-specific tabs (no Metrics/Team)
+    // Worker-specific tabs (no Metrics, but includes read-only Team)
     const workerTabs = [
-        { id: 'overview', label: 'Overview' },
         { id: 'calendar', label: 'Calendar'},
+        { id: 'overview', label: 'Overview' },
+        { id: 'team', label: 'Team' },
         { id: 'workorders', label: 'Work Orders'},
         { id: 'logs', label: 'Logs'},
     ];
@@ -140,11 +152,13 @@ const SingleProjectPage = ({ projects }) => {
     const renderTabContent = () => {
         switch(activeTab) {
             case 'overview':
-                return <OverviewTab project={project} onUpdate={handleUpdateProject} userRole={userRole} onDelete={handleDelete} />;
+                return <OverviewTab project={project} onUpdate={handleUpdateProject} onDelete={handleDelete} userRole={userRole} />;
             case 'metrics':
                 return <p>Metrics content goes here...</p>;
             case 'team':
-                return <TeamTab project={project} onUpdate={handleUpdateProject} />;
+                return userRole === 'worker' 
+                    ? <TeamViewTab project={project} />
+                    : <TeamTab project={project} onUpdate={handleUpdateProject} userRole={userRole} />;
             case 'calendar':
                 return <CalendarTab project={project} />
             case 'workorders':

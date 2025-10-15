@@ -8,7 +8,7 @@ const getAuthToken = () => {
 };
 
 const apiClient = axios.create({
-  baseURL: LOCAL_API_URL,
+  baseURL: process.env.REACT_APP_ISPROD ? PROD_API_URL : LOCAL_API_URL,
   headers: {
     "Content-Type": "application/json",
   },
@@ -66,9 +66,22 @@ export const workOrdersAPI = {
     return response.data.workorder;
   },
 
+  workerUpdate: async (workOrderId, updates) => {
+    const response = await apiClient.patch(`/workorders/${workOrderId}/worker-update`, updates);
+    return response.data.workorder;
+  },
+
   deleteWorkOrder: async (workOrderId) => {
     await apiClient.delete(`/workorders/${workOrderId}`);
     return true;
+  },
+};
+
+export const usersAPI = {
+  // Uses GET /api/auth/workers
+  getWorkers: async () => {
+    const response = await apiClient.get("/auth/workers");
+    return response.data.users; // [{ id, firstName, lastName, emailAddress, phoneNumber }, ...]
   },
 };
 

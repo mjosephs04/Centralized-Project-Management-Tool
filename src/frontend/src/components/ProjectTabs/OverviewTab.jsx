@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { FaEdit, FaSave, FaTimes, FaMapMarkerAlt, FaCalendarAlt, FaDollarSign, FaFlag, FaChartLine, FaTrashAlt } from "react-icons/fa";
 import { projectsAPI } from "../../services/api";
 
-const OverviewTab = ({ project, onUpdate, onDelete }) => {
+const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [password, setPassword] = useState('');
@@ -177,39 +177,45 @@ const OverviewTab = ({ project, onUpdate, onDelete }) => {
                     )}
                 </div>
 
-                <div style={styles.card}>
-                    <div style={styles.cardHeader}>
-                        <FaDollarSign style={styles.icon} />
-                        <span style={styles.label}>Allocated Budget</span>
+                {userRole !== 'worker' && (
+                    <div style={styles.card}>
+                        <div style={styles.cardHeader}>
+                            <FaDollarSign style={styles.icon} />
+                            <span style={styles.label}>Allocated Budget</span>
+                        </div>
+                        {isEditing ? (
+                            <input
+                                type='text'
+                                value={editedData.allocatedBudget}
+                                onChange={(e) => setEditedData({...editedData, allocatedBudget: e.target.value})}
+                                style={styles.input}
+                                placeholder="$0.00"
+                            />
+                        ) : (
+                            <p style={styles.value}>{project.estimatedBudget || 'Not specified'}</p>
+                        )}
                     </div>
-                    {isEditing ? (
-                        <input
-                            type='text'
-                            value={editedData.allocatedBudget}
-                            onChange={(e) => setEditedData({...editedData, allocatedBudget: e.target.value})}
-                            style={styles.input}
-                            placeholder="$0.00"
-                        />
-                    ) : (
-                        <p style={styles.value}>{project.estimatedBudget || 'Not specified'}</p>
-                    )}
-                </div>
+                )}
 
-                <div style={styles.card}>
-                    <div style={styles.cardHeader}>
-                        <FaDollarSign style={styles.icon} />
-                        <span style={styles.label}>Current Cost</span>
+                {userRole !== 'worker' && (
+                    <div style={styles.card}>
+                        <div style={styles.cardHeader}>
+                            <FaDollarSign style={styles.icon} />
+                            <span style={styles.label}>Current Cost</span>
+                        </div>
+                        <p style={styles.value}>Not specified will be introduced with database update and work orders.</p>
                     </div>
-                    <p style={styles.value}>Not specified will be introduced with database update and work orders.</p>
-                </div>
+                )}
 
-                <div style={styles.card}>
-                    <div style={styles.cardHeader}>
-                        <FaDollarSign style={styles.icon} />
-                        <span style={styles.label}>Estimated Cost</span>
+                {userRole !== 'worker' && (
+                    <div style={styles.card}>
+                        <div style={styles.cardHeader}>
+                            <FaDollarSign style={styles.icon} />
+                            <span style={styles.label}>Estimated Cost</span>
+                        </div>
+                        <p style={styles.value}>Not specified, will be added with algorithm introduction.</p>
                     </div>
-                    <p style={styles.value}>Not specified, will be added with algorithm introduction.</p>
-                </div>
+                )}
 
                 <div style={styles.card}>
                     <div style={styles.cardHeader}>

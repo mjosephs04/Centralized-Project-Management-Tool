@@ -240,6 +240,84 @@ def update_workorder(workorder_id):
     return jsonify({"workorder": workorder.to_dict()}), 200
 
 
+@workorders_bp.post("/<int:workorder_id>/complete")
+@jwt_required()
+def complete_workorder(workorder_id):
+    """Allow any authenticated user to mark a work order as completed.
+    Sets status to completed and actualEndDate to today."""
+    workorder = WorkOrder.query.get(workorder_id)
+    if not workorder:
+        return jsonify({"error": "Work order not found"}), 404
+
+    workorder.status = WorkOrderStatus.COMPLETED
+    workorder.actualEndDate = date.today()
+
+    # Ensure date consistency; if planned end before start, keep as is
+    db.session.commit()
+    return jsonify({"workorder": workorder.to_dict()}), 200
+
+
+@workorders_bp.post("/<int:workorder_id>/start")
+@jwt_required()
+def start_workorder(workorder_id):
+    """Allow any authenticated user to set actualStartDate to today and move to in_progress."""
+    workorder = WorkOrder.query.get(workorder_id)
+    if not workorder:
+        return jsonify({"error": "Work order not found"}), 404
+
+    workorder.actualStartDate = date.today()
+    workorder.status = WorkOrderStatus.IN_PROGRESS
+    db.session.commit()
+    return jsonify({"workorder": workorder.to_dict()}), 200
+
+
+@workorders_bp.patch("/<int:workorder_id>/worker-update")
+@jwt_required()
+def worker_update_workorder(workorder_id):
+    """Limited update endpoint for workers: allow description, location, priority, status, actualCost."""
+    workorder = WorkOrder.query.get(workorder_id)
+    if not workorder:
+        return jsonify({"error": "Work order not found"}), 404
+
+    payload = request.get_json(silent=True) or request.form.to_dict() or {}
+
+    if "description" in payload:
+        workorder.description = payload["description"]
+
+    if "location" in payload:
+        workorder.location = payload["location"]
+
+    if "priority" in payload:
+        try:
+            priority = int(payload["priority"])
+            if priority < 1 or priority > 5:
+                return jsonify({"error": "Priority must be between 1 and 5"}), 400
+            workorder.priority = priority
+        except ValueError:
+            return jsonify({"error": "Priority must be a number between 1 and 5"}), 400
+
+    if "status" in payload:
+        try:
+            workorder.status = WorkOrderStatus(payload["status"].lower())
+        except ValueError:
+            return jsonify({"error": "Invalid status. Must be pending, in_progress, on_hold, completed, or cancelled"}), 400
+
+    if "actualCost" in payload:
+        if payload["actualCost"] == "" or payload["actualCost"] is None:
+            workorder.actualCost = None
+        else:
+            try:
+                actual_cost = float(payload["actualCost"])
+                if actual_cost < 0:
+                    return jsonify({"error": "Actual cost must be positive"}), 400
+                workorder.actualCost = actual_cost
+            except ValueError:
+                return jsonify({"error": "Invalid actual cost format"}), 400
+
+    db.session.commit()
+    return jsonify({"workorder": workorder.to_dict()}), 200
+
+
 @workorders_bp.delete("/<int:workorder_id>")
 @jwt_required()
 def delete_workorder(workorder_id):

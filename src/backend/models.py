@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+import json
 from datetime import datetime
 
 from flask_sqlalchemy import SQLAlchemy
@@ -91,6 +92,9 @@ class Project(db.Model):
     estimatedBudget = db.Column(DECIMAL(15, 2), nullable=True)
     actualCost = db.Column(DECIMAL(15, 2), nullable=True)
     
+    # Team members (stored as JSON array of user IDs)
+    crewMembers = db.Column(db.Text, nullable=True)  # JSON string of user IDs
+    
     # Relationships
     projectManagerId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     projectManager = db.relationship('User', backref=db.backref('managed_projects', lazy=True))
@@ -98,6 +102,19 @@ class Project(db.Model):
     # Metadata
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    def get_crew_members(self) -> list:
+        """Get crew members as a list of user IDs"""
+        if not self.crewMembers:
+            return []
+        try:
+            return json.loads(self.crewMembers)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def set_crew_members(self, member_ids: list):
+        """Set crew members from a list of user IDs"""
+        self.crewMembers = json.dumps(member_ids) if member_ids else None
 
     def to_dict(self) -> dict:
         return {
@@ -115,6 +132,7 @@ class Project(db.Model):
             "actualCost": float(self.actualCost) if self.actualCost else None,
             "projectManagerId": self.projectManagerId,
             "projectManager": self.projectManager.to_dict() if self.projectManager else None,
+            "crewMembers": self.get_crew_members(),
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
         }

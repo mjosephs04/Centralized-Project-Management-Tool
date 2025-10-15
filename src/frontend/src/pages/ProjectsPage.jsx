@@ -8,8 +8,8 @@ import { projectsAPI, authAPI } from "../services/api";
 
 const ProjectsPage = () => {
     const [projects, setProjects] = useState([]);
-    const [filteredProjects, setFilteredProjects] = useState([]);
     const [userRole, setUserRole] = useState(null);
+    const [filteredProjects, setFilteredProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -34,7 +34,6 @@ const ProjectsPage = () => {
 
     useEffect(() => {
         fetchInitialData();
-        fetchProjects();
 
         if (location.state?.projectDeleted) {
             setSnackbarMessage('Project deleted successfully');
@@ -212,6 +211,14 @@ const ProjectsPage = () => {
             <UserNavbar />
             <div style={styles.pageContainer}>
                 <div style={styles.header}>
+
+                    <h2 style={styles.pageTitle}>Ongoing Projects</h2>
+                    {userRole !== 'worker' && (
+                        <Link to="/projects/create" style={styles.createButtonLink}>
+                            Create New Project
+                        </Link>
+                    )}
+
                     <div>
                         <h1 style={styles.pageTitle}>Project Dashboard</h1>
                         <p style={styles.subtitle}>Manage And Track All Ongoing Projects</p>
@@ -238,12 +245,13 @@ const ProjectsPage = () => {
                             Filters {hasActiveFilters() && `(${Object.values(filters).filter(v => v).length})`}
                         </button>
                         {userRole !== 'worker' && (
-                        <Link to="/projects/create" style={styles.createButton}>
-                            <FaPlus style={styles.buttonIcon} />
-                            New Project
-                        </Link>
+                            <Link to="/projects/create" style={styles.createButton}>
+                                <FaPlus style={styles.buttonIcon} />
+                                New Project
+                            </Link>
                         )}
                     </div>
+
                 </div>
 
                 <div style={styles.searchContainer}>
@@ -366,10 +374,12 @@ const ProjectsPage = () => {
                     <div style={styles.emptyState}>
                         <div style={styles.emptyIcon}>📋</div>
                         <h3 style={styles.emptyTitle}>
-                            {hasActiveFilters() ? 'No Projects Match Filters' : 'No Projects Yet'}
+                            {hasActiveFilters() ? 'No Projects Match Filters' :
+                             userRole === 'worker' ? 'You are not assigned to any projects yet.' : 'No Projects Yet'}
                         </h3>
                         <p style={styles.emptyText}>
-                            {hasActiveFilters() ? 'Try adjusting your filters to see more results' : 'Get started by creating your first project'}
+                            {hasActiveFilters() ? 'Try adjusting your filters to see more results' :
+                             userRole === 'worker' ? 'Contact your project manager to get assigned to projects.' : 'Get started by creating your first project'}
                         </p>
                         {hasActiveFilters() && (
                             <button onClick={clearFilters} style={styles.clearButton}>
@@ -420,6 +430,29 @@ const ProjectsPage = () => {
                 )}
             </div>
 
+            { loading ? (
+                <div style={styles.centerContent}>
+                    <p>Loading projects...</p>
+                </div>
+            ) : error ? (
+                <div style={styles.centerContent}>
+                    <p style={styles.errorText}>Error Loading projects: {error}</p>
+                    <button onClick={fetchProjects} style={styles.retryButton}>
+                        Retry
+                    </button>
+                </div>
+            ) : projects.length === 0 ? (
+                <div style={styles.centerContent}>
+                    <p>No projects underway!</p>
+                </div>
+            ) : (
+                <div style={styles.projectsGrid}>
+                    {projects.map((project) => (
+                        <ProjectCard key={project.id} project={project} userRole={userRole} />
+                    ))}
+                </div>
+            )}
+
             <Snackbar
                 open={snackbarOpen}
                 autoHideDuration={6000}
@@ -429,7 +462,7 @@ const ProjectsPage = () => {
                 <Alert
                     onClose={handleSnackbarClose}
                     severity="success"
-                    sx={{
+                    sx={{ 
                         width: '100%',
                         background: 'rgba(255, 255, 255, 0.85)',
                         backdropFilter: 'blur(10px)',
@@ -685,9 +718,85 @@ const styles = {
         border: 'none',
         borderRadius: '8px',
         cursor: 'pointer',
-        fontWeight: 'bold',
+        fontSize: '0.95rem',
+        fontWeight: '600',
+        transition: 'background 0.3s'
+    },
+    sortContainer: {
+        display: 'flex',
+        gap: '1.5rem',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        padding: '1rem 2rem',
+        borderRadius: '16px',
+        marginBottom: '2rem',
+        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
+    },
+    sortGroup: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+    },
+    sortLabel: {
+        fontSize: '0.95rem',
+        fontWeight: '600',
+        color: '#4a5568',
+    },
+    sortSelect: {
+        padding: '0.6rem 1rem',
+        borderRadius: '8px',
+        border: '2px solid #e2e8f0',
+        fontSize: '0.95rem',
+        fontWeight: '500',
+        color: '#2c3e50',
+        backgroundColor: 'white',
+        cursor: 'pointer',
+        outline: 'none',
+        transition: 'border-color 0.3s',
+        minWidth: '150px',
+    },
+    searchContainer: {
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        padding: '1rem 1.5rem',
+        borderRadius: '16px',
+        marginBottom: '2rem',
+        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
+    },
+    searchIcon: {
+        position: 'absolute',
+        left: '2rem',
+        fontSize: '1.1rem',
+        color: '#9ca3af',
+        pointerEvents: 'none',
+    },
+    searchInput: {
+        flex: 1,
+        padding: '0.75rem 1rem 0.75rem 3rem',
+        borderRadius: '10px',
+        border: '2px solid #e2e8f0',
         fontSize: '1rem',
-    }
+        outline: 'none',
+        transition: 'border-color 0.3s',
+        backgroundColor: 'white',
+    },
+    clearSearchButton: {
+        position: 'absolute',
+        right: '2rem',
+        background: 'none',
+        border: 'none',
+        fontSize: '1.2rem',
+        color: '#9ca3af',
+        cursor: 'pointer',
+        padding: '0.5rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '50%',
+        transition: 'all 0.2s',
+    },
 };
 
 export default ProjectsPage;
