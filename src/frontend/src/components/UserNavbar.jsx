@@ -9,7 +9,9 @@ const styles = {
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: '1rem 2.5rem',
-        background: 'linear-gradient(90deg, #000000, #6a97c4)',
+        background: 'linear-gradient(90deg, #000000, #0052D4)',
+        borderBottomLeftRadius: '25px',
+        borderBottomRightRadius: '25px',
         position: 'sticky',
         top: 0,
         width: '100%',
@@ -62,15 +64,17 @@ const UserNavbar = () => {
                     onMouseEnter={() => setIsHovered({ ...isHovered, mail: true})}
                     onMouseLeave={() => setIsHovered({ ...isHovered, mail: false})}
                 />
-                <FaUserCircle
-                    size={26}
-                    style={{
-                        ...styles.icon,
-                        ...(isHovered.profile ? styles.iconHover : null)
-                    }}
-                    onMouseEnter={() => setIsHovered({ ...isHovered, profile: true})}
-                    onMouseLeave={() => setIsHovered({ ...isHovered, profile: false})}
-                />
+                <Link to="/profile">
+                    <FaUserCircle
+                        size={26}
+                        style={{
+                            ...styles.icon,
+                            ...(isHovered.profile ? styles.iconHover : null)
+                        }}
+                        onMouseEnter={() => setIsHovered({ ...isHovered, profile: true})}
+                        onMouseLeave={() => setIsHovered({ ...isHovered, profile: false})}
+                    />
+                </Link>
             </div>
         </nav>
     );
