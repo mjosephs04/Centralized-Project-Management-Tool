@@ -16,6 +16,6 @@ class Config:
     if ENV == "production":
         SQLALCHEMY_DATABASE_URI = "mysql+pymysql://mysql:password@34.27.104.45:3306/CAPSTONE"
     else:  # local dev
-        SQLALCHEMY_DATABASE_URI = "mysql+pymysql://root:password@localhost:3306/CAPSTONE"  # default local
+        SQLALCHEMY_DATABASE_URI = "mysql+pymysql://user:password@db:3306/CAPSTONE"  # default local
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False

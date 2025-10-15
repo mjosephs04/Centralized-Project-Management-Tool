@@ -3,6 +3,9 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+# from google.cloud import storage
+# from datetime import datetime
+# import os
 
 from .models import db, User, UserRole, WorkerType
 
@@ -53,6 +56,7 @@ def register_user():
         passwordHash=generate_password_hash(payload["password"]),
         role=role,
         workerType=worker_type,
+        profilePicture="https://cdn-icons-png.flaticon.com/512/1946/1946429.png",
     )
 
     db.session.add(user)
@@ -87,4 +91,41 @@ def who_am_i():
         return jsonify({"error": "User not found"}), 404
     return jsonify({"user": user.to_dict()}), 200
 
-
+# @auth_bp.post("/upload-picture")
+# @jwt_required()
+# def upload_profile_picture():
+#     user_id = get_jwt_identity()
+#     user = User.query.get(user_id)
+#     if not user:
+#         return jsonify({"error": "User not found"}), 404
+#
+#     if "picture" not in request.files:
+#         return jsonify({"error": "Missing file 'picture' in form data"}), 400
+#
+#     picture = request.files["picture"]
+#
+#     # Check if GCS bucket is configured
+#     bucket_name = "profile_pics_capstone"
+#
+#     # Initialize Google Cloud Storage client
+#     try:
+#         storage_client = storage.Client()
+#         bucket = storage_client.bucket(bucket_name)
+#
+#         # Create unique file name
+#         filename = f"profile_pictures/{user_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{picture.filename}"
+#         blob = bucket.blob(filename)
+#
+#         # Upload to GCS
+#         blob.upload_from_file(picture, content_type=picture.content_type)
+#         blob.make_public()  # Make URL accessible
+#
+#         # Update user record
+#         user.profilePicture = blob.public_url
+#         db.session.commit()
+#
+#         return jsonify({"message": "Profile picture uploaded successfully", "url": blob.public_url}), 200
+#
+#     except Exception as e:
+#         print("Upload error:", e)
+#         return jsonify({"error": f"Upload failed: {str(e)}"}), 500

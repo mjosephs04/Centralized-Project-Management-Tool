@@ -46,6 +46,7 @@ class User(db.Model):
     phoneNumber = db.Column(db.String(30), nullable=True)
     emailAddress = db.Column(db.String(255), unique=True, nullable=False, index=True)
     passwordHash = db.Column(db.String(255), nullable=False)
+    profilePicture = db.Column(db.String(255), nullable=False)
 
     role = db.Column(db.Enum(UserRole), nullable=False)
 
