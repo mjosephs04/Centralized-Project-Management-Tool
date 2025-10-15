@@ -54,6 +54,7 @@ class User(db.Model):
 
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    isActive = db.Column(db.Boolean, default=True, nullable=False)
 
     def to_dict(self) -> dict:
         return {
@@ -66,6 +67,7 @@ class User(db.Model):
             "workerType": self.workerType.value if self.workerType else None,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+            "isActive": self.isActive,
         }
 
 
@@ -98,6 +100,7 @@ class Project(db.Model):
     # Metadata
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    isActive = db.Column(db.Boolean, default=True, nullable=False)
 
     def to_dict(self) -> dict:
         return {
@@ -117,6 +120,7 @@ class Project(db.Model):
             "projectManager": self.projectManager.to_dict() if self.projectManager else None,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+            "isActive": self.isActive,
         }
 
 
@@ -150,6 +154,7 @@ class WorkOrder(db.Model):
     # Metadata
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    isActive = db.Column(db.Boolean, default=True, nullable=False)
 
     def to_dict(self) -> dict:
         return {
@@ -170,6 +175,7 @@ class WorkOrder(db.Model):
             "project": self.project.to_dict() if self.project else None,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+            "isActive": self.isActive,
         }
 
 
@@ -182,6 +188,7 @@ class ProjectMember(db.Model):
     
     # Metadata
     joinedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    isActive = db.Column(db.Boolean, default=True, nullable=False)
     
     # Relationships
     project = db.relationship('Project', backref=db.backref('members', lazy=True))
@@ -197,6 +204,7 @@ class ProjectMember(db.Model):
             "userId": self.userId,
             "user": self.user.to_dict() if self.user else None,
             "joinedAt": self.joinedAt.isoformat() if self.joinedAt else None,
+            "isActive": self.isActive,
         }
 
 
@@ -218,6 +226,7 @@ class ProjectInvitation(db.Model):
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     expiresAt = db.Column(db.DateTime, nullable=False)
     acceptedAt = db.Column(db.DateTime, nullable=True)
+    isActive = db.Column(db.Boolean, default=True, nullable=False)
     
     # Relationships
     project = db.relationship('Project', backref=db.backref('invitations', lazy=True))
@@ -239,6 +248,7 @@ class ProjectInvitation(db.Model):
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "expiresAt": self.expiresAt.isoformat() if self.expiresAt else None,
             "acceptedAt": self.acceptedAt.isoformat() if self.acceptedAt else None,
+            "isActive": self.isActive,
         }
 
 
