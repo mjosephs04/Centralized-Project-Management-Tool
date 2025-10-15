@@ -21,6 +21,10 @@ const LoginForm = () => {
     severity: "info", // 'success' | 'error' | 'warning' | 'info'
   });
 
+
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
   const navigate = useNavigate();
   const formRef = useRef(null);
 
@@ -75,7 +79,7 @@ const LoginForm = () => {
             {error && <p className="error">{error}</p>}
             {success && <p className="success">{success}</p>}
 
-            <form className="login-form" onSubmit={handleSubmit}>
+            <form className="login-form" ref={formRef} onSubmit={handleSubmit}>
                 <div className="input-box">
                     <input
                         type="text"
@@ -111,6 +115,7 @@ const LoginForm = () => {
                         Forgot Password?
                     </button>
                 </div>
+            </form>
 
           {/* Centered Snackbar with slide-down transition */}
           <Snackbar
@@ -135,7 +140,6 @@ const LoginForm = () => {
               {toast.message}
             </Alert>
           </Snackbar>
-        </>
     </div>
   );
 };
