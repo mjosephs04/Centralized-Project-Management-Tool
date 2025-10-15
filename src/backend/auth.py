@@ -43,7 +43,7 @@ def register_user():
         except ValueError:
             return jsonify({"error": "Invalid workerType. Must be contractor or crew_member."}), 400
 
-    if User.query.filter_by(emailAddress=payload["emailAddress"]).first():
+    if User.query.filter_by(emailAddress=payload["emailAddress"], isActive=True).first():
         return jsonify({"error": "Email already registered"}), 409
 
     user = User(
@@ -71,7 +71,7 @@ def login_user():
     if not email or not password:
         return jsonify({"error": "emailAddress and password are required"}), 400
 
-    user = User.query.filter_by(emailAddress=email).first()
+    user = User.query.filter_by(emailAddress=email, isActive=True).first()
     if not user or not check_password_hash(user.passwordHash, password):
         return jsonify({"error": "Invalid credentials"}), 401
 
@@ -83,7 +83,7 @@ def login_user():
 @jwt_required()
 def who_am_i():
     user_id = get_jwt_identity()
-    user = User.query.get(user_id)
+    user = User.query.filter_by(id=user_id, isActive=True).first()
     if not user:
         return jsonify({"error": "User not found"}), 404
     return jsonify({"user": user.to_dict()}), 200
@@ -113,7 +113,7 @@ def register_with_invitation():
         return jsonify({"error": "Invalid or expired invitation token"}), 400
     
     # Check if user already exists with this email
-    existing_user = User.query.filter_by(emailAddress=invitation.email).first()
+    existing_user = User.query.filter_by(emailAddress=invitation.email, isActive=True).first()
     if existing_user:
         return jsonify({"error": "A user with this email already exists. Please log in instead."}), 409
     
@@ -193,7 +193,7 @@ def accept_invitation_existing_user():
     
     # Get current user
     user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
+    user = User.query.filter_by(id=user_id, isActive=True).first()
     if not user:
         return jsonify({"error": "User not found"}), 404
     
@@ -202,7 +202,7 @@ def accept_invitation_existing_user():
         return jsonify({"error": "This invitation is not for your email address"}), 403
     
     # Check if user is already a member of this project
-    existing_member = ProjectMember.query.filter_by(projectId=invitation.projectId, userId=user_id).first()
+    existing_member = ProjectMember.query.filter_by(projectId=invitation.projectId, userId=user_id, isActive=True).first()
     if existing_member:
         return jsonify({"error": "You are already a member of this project"}), 400
     

@@ -21,9 +21,10 @@ def create_project_invitation(email: str, project_id: int, invited_by: int, expi
     """Create a new project invitation with a secure token"""
     # Check if there's already a pending invitation for this email and project
     existing_invitation = ProjectInvitation.query.filter_by(
-        email=email, 
-        projectId=project_id, 
-        status="pending"
+        email=email,
+        projectId=project_id,
+        status="pending",
+        isActive=True
     ).first()
     
     if existing_invitation:
@@ -51,8 +52,8 @@ def create_project_invitation(email: str, project_id: int, invited_by: int, expi
 def send_invitation_email(invitation: ProjectInvitation) -> bool:
     """Send an invitation email to the user"""
     try:
-        project = Project.query.get(invitation.projectId)
-        inviter = User.query.get(invitation.invitedBy)
+        project = Project.query.filter_by(id=invitation.projectId, isActive=True).first()
+        inviter = User.query.filter_by(id=invitation.invitedBy, isActive=True).first()
         
         if not project or not inviter:
             return False
@@ -125,7 +126,7 @@ def send_invitation_email(invitation: ProjectInvitation) -> bool:
 
 def validate_invitation_token(token: str) -> Optional[ProjectInvitation]:
     """Validate an invitation token and return the invitation if valid"""
-    invitation = ProjectInvitation.query.filter_by(token=token, status="pending").first()
+    invitation = ProjectInvitation.query.filter_by(token=token, status="pending", isActive=True).first()
     
     if not invitation:
         return None
