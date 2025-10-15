@@ -17,7 +17,7 @@ def generate_invitation_token() -> str:
     return ''.join(secrets.choice(alphabet) for _ in range(32))
 
 
-def create_project_invitation(email: str, project_id: int, invited_by: int, expires_in_days: int = 7) -> ProjectInvitation:
+def create_project_invitation(email: str, project_id: int, invited_by: int, role, worker_type=None, contractor_expiration_date=None, expires_in_days: int = 7) -> ProjectInvitation:
     """Create a new project invitation with a secure token"""
     # Check if there's already a pending invitation for this email and project
     existing_invitation = ProjectInvitation.query.filter_by(
@@ -32,6 +32,9 @@ def create_project_invitation(email: str, project_id: int, invited_by: int, expi
         existing_invitation.token = generate_invitation_token()
         existing_invitation.expiresAt = datetime.utcnow() + timedelta(days=expires_in_days)
         existing_invitation.createdAt = datetime.utcnow()
+        existing_invitation.role = role
+        existing_invitation.workerType = worker_type
+        existing_invitation.contractorExpirationDate = contractor_expiration_date
         return existing_invitation
     
     # Create new invitation
@@ -40,6 +43,9 @@ def create_project_invitation(email: str, project_id: int, invited_by: int, expi
         projectId=project_id,
         invitedBy=invited_by,
         token=generate_invitation_token(),
+        role=role,
+        workerType=worker_type,
+        contractorExpirationDate=contractor_expiration_date,
         status="pending",
         expiresAt=datetime.utcnow() + timedelta(days=expires_in_days)
     )
@@ -62,7 +68,10 @@ def send_invitation_email(invitation: ProjectInvitation) -> bool:
         invitation_url = f"{current_app.config['APP_URL']}/register?token={invitation.token}"
         
         # Email content
-        subject = f"You're invited to join the project: {project.name}"
+        role_display = invitation.role.value.replace('_', ' ').title()
+        worker_type_display = invitation.workerType.value.replace('_', ' ').title() if invitation.workerType else None
+        
+        subject = f"You're invited to join the project: {project.name} as {role_display}"
         
         html_body = f"""
         <html>
@@ -74,6 +83,9 @@ def send_invitation_email(invitation: ProjectInvitation) -> bool:
             <p><strong>Description:</strong> {project.description or 'No description provided'}</p>
             <p><strong>Location:</strong> {project.location or 'Not specified'}</p>
             <p><strong>Project Manager:</strong> {inviter.firstName} {inviter.lastName}</p>
+            <p><strong>Role:</strong> {role_display}</p>
+            {f'<p><strong>Worker Type:</strong> {worker_type_display}</p>' if worker_type_display else ''}
+            {f'<p><strong>Contractor Expiration Date:</strong> {invitation.contractorExpirationDate.strftime("%B %d, %Y")}</p>' if invitation.contractorExpirationDate else ''}
             
             <p>To accept this invitation and create your account, click the link below:</p>
             <p><a href="{invitation_url}" style="background-color: #4CAF50; color: white; padding: 14px 20px; text-decoration: none; border-radius: 4px;">Accept Invitation</a></p>
@@ -98,6 +110,9 @@ def send_invitation_email(invitation: ProjectInvitation) -> bool:
         Description: {project.description or 'No description provided'}
         Location: {project.location or 'Not specified'}
         Project Manager: {inviter.firstName} {inviter.lastName}
+        Role: {role_display}
+        {f'Worker Type: {worker_type_display}' if worker_type_display else ''}
+        {f'Contractor Expiration Date: {invitation.contractorExpirationDate.strftime("%B %d, %Y")}' if invitation.contractorExpirationDate else ''}
         
         To accept this invitation and create your account, visit:
         {invitation_url}

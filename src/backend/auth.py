@@ -117,23 +117,9 @@ def register_with_invitation():
     if existing_user:
         return jsonify({"error": "A user with this email already exists. Please log in instead."}), 409
     
-    # Create new user
-    # For invited users, we'll default to worker role unless specified otherwise
-    role_str = payload.get("role", "worker").lower()
-    try:
-        role = UserRole(role_str)
-    except ValueError:
-        return jsonify({"error": "Invalid role. Must be admin, worker, or project_manager."}), 400
-    
-    worker_type_value = payload.get("workerType")
-    worker_type = None
-    if role == UserRole.WORKER:
-        if not worker_type_value:
-            return jsonify({"error": "workerType is required when role is worker."}), 400
-        try:
-            worker_type = WorkerType(str(worker_type_value).lower())
-        except ValueError:
-            return jsonify({"error": "Invalid workerType. Must be contractor or crew_member."}), 400
+    # Create new user using role and workerType from invitation
+    role = invitation.role
+    worker_type = invitation.workerType
     
     try:
         user = User(

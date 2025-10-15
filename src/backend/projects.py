@@ -9,7 +9,7 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import select
 
-from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, ProjectMember, ProjectInvitation
+from .models import db, User, Project, ProjectStatus, UserRole, WorkerType, WorkOrder, WorkOrderStatus, ProjectMember, ProjectInvitation
 from .progress import compute_work_order_rollup, compute_schedule_stats, compute_earned_value, to_decimal, normalize_weights
 from .email_service import create_project_invitation, send_invitation_email, validate_invitation_token, accept_invitation
 
@@ -582,14 +582,48 @@ def invite_user_to_project(project_id: int):
     
     payload = request.get_json(silent=True) or request.form.to_dict() or {}
     
-    # Required field
+    # Required fields
     email = payload.get("email")
+    role_str = payload.get("role")
+    
     if not email:
         return jsonify({"error": "email is required"}), 400
+    
+    if not role_str:
+        return jsonify({"error": "role is required"}), 400
     
     # Validate email format (basic validation)
     if "@" not in email or "." not in email:
         return jsonify({"error": "Invalid email format"}), 400
+    
+    # Validate role
+    try:
+        role = UserRole(role_str.lower())
+    except ValueError:
+        return jsonify({"error": "Invalid role. Must be admin, worker, or project_manager."}), 400
+    
+    # Validate worker type if role is worker
+    worker_type = None
+    if role == UserRole.WORKER:
+        worker_type_str = payload.get("workerType")
+        if not worker_type_str:
+            return jsonify({"error": "workerType is required when role is worker."}), 400
+        try:
+            worker_type = WorkerType(worker_type_str.lower())
+        except ValueError:
+            return jsonify({"error": "Invalid workerType. Must be contractor or crew_member."}), 400
+    
+    # Validate contractor expiration date if role is contractor
+    contractor_expiration_date = None
+    if role == UserRole.WORKER and worker_type == WorkerType.CONTRACTOR:
+        contractor_expiration_str = payload.get("contractorExpirationDate")
+        if not contractor_expiration_str:
+            return jsonify({"error": "contractorExpirationDate is required when inviting a contractor."}), 400
+        try:
+            from datetime import datetime
+            contractor_expiration_date = datetime.strptime(contractor_expiration_str, "%Y-%m-%d").date()
+        except ValueError:
+            return jsonify({"error": "Invalid contractorExpirationDate format. Use YYYY-MM-DD."}), 400
     
     # Check if user already exists and is already a member
     existing_user = User.query.filter_by(emailAddress=email).first()
@@ -605,7 +639,7 @@ def invite_user_to_project(project_id: int):
     
     try:
         # Create invitation
-        invitation = create_project_invitation(email, project_id, user_id)
+        invitation = create_project_invitation(email, project_id, user_id, role, worker_type, contractor_expiration_date)
         
         # Send invitation email
         email_sent = send_invitation_email(invitation)

@@ -219,6 +219,13 @@ class ProjectInvitation(db.Model):
     # Invitation token for secure registration
     token = db.Column(db.String(255), unique=True, nullable=False, index=True)
     
+    # Role and worker type for the invited user
+    role = db.Column(db.Enum(UserRole), nullable=False)
+    workerType = db.Column(db.Enum(WorkerType), nullable=True)
+    
+    # Contractor expiration date (only applicable for contractor invitations)
+    contractorExpirationDate = db.Column(db.Date, nullable=True)
+    
     # Invitation status
     status = db.Column(db.String(20), default="pending", nullable=False)  # pending, accepted, expired, cancelled
     
@@ -244,6 +251,9 @@ class ProjectInvitation(db.Model):
             "invitedBy": self.invitedBy,
             "inviter": self.inviter.to_dict() if self.inviter else None,
             "token": self.token,
+            "role": self.role.value if self.role else None,
+            "workerType": self.workerType.value if self.workerType else None,
+            "contractorExpirationDate": self.contractorExpirationDate.isoformat() if self.contractorExpirationDate else None,
             "status": self.status,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "expiresAt": self.expiresAt.isoformat() if self.expiresAt else None,
