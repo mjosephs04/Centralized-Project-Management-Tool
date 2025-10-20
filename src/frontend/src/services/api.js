@@ -78,10 +78,9 @@ export const workOrdersAPI = {
 };
 
 export const usersAPI = {
-  // Uses GET /api/auth/workers
   getWorkers: async () => {
     const response = await apiClient.get("/auth/workers");
-    return response.data.users; // [{ id, firstName, lastName, emailAddress, phoneNumber }, ...]
+    return response.data.users;
   },
 };
 
@@ -96,6 +95,10 @@ export const authAPI = {
   },
   login: async (payload) => {
     const response = await apiClient.post("/auth/login", payload)
+    return response;
+  },
+  forgotPassword: async (payload) => {
+    const response = await apiClient.post("/auth/forgot-password", payload)
     return response;
   }
 };
