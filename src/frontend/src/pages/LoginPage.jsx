@@ -1,20 +1,24 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import LoginForm from "../components/LoginForm";
-import backgroundImg from '../imgs/NewOnePager.svg'; 
+import backgroundImg from '../imgs/OnePager.png';
 import '../styles/pages/LoginPage.css';
 
 const LoginPage = () => {
     const navigate = useNavigate();
+    const [imageLoaded, setImageLoaded] = useState(false);
+
+    useEffect(() => {
+        const img = new Image();
+        img.src = backgroundImg;
+        img.onload = () => setImageLoaded(true);
+    }, []);
 
     return (
         <div
             className="login-page"
             style={{
-                backgroundImage: `url(${backgroundImg})`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                backgroundRepeat: "no-repeat",
+                backgroundImage: imageLoaded ? `url(${backgroundImg})` : 'none',
             }}
         >
             <div className="top-right">

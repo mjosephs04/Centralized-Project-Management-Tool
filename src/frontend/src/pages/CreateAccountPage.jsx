@@ -1,14 +1,27 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import CreateAccountForm from "../components/CreateAccountForm";
-import '../styles/pages/CreateAccount.css'
-
+import backgroundImg from '../imgs/CreateAccount.png';
+import '../styles/pages/CreateAccount.css';
 
 const CreateAccountPage = () => {
     const navigate = useNavigate();
+    const [imageLoaded, setImageLoaded] = useState(false);
+
+    useEffect(() => {
+        // Preload the image
+        const img = new Image();
+        img.src = backgroundImg;
+        img.onload = () => setImageLoaded(true);
+    }, []);
 
     return (
-        <div className="create-account-page">
+        <div 
+            className="create-account-page"
+            style={{
+                backgroundImage: imageLoaded ? `url(${backgroundImg})` : 'none',
+            }}
+        >
             <div className="login-button-wrapper">
                 <button className="login-button" onClick={() => navigate('/login')}>
                     Login
