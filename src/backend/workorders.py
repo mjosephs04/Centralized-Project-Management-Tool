@@ -19,7 +19,7 @@ def test_endpoint():
 def require_project_manager():
     """Decorator to ensure only project managers can access certain endpoints"""
     user_id = get_jwt_identity()
-    user = User.query.get(user_id)
+    user = User.query.filter_by(id=user_id, isActive=True).first()
     if not user or user.role != UserRole.PROJECT_MANAGER:
         return jsonify({"error": "Only project managers can perform this action"}), 403
     return None
@@ -43,7 +43,7 @@ def create_workorder():
         return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
     
     # Validate project exists
-    project = Project.query.get(payload["projectId"])
+    project = Project.query.filter_by(id=payload["projectId"], isActive=True).first()
     if not project:
         return jsonify({"error": "Project not found"}), 404
     
@@ -114,7 +114,7 @@ def get_workorders():
 @jwt_required()
 def get_workorder(workorder_id):
     """Get a specific work order by ID"""
-    workorder = WorkOrder.query.get(workorder_id)
+    workorder = WorkOrder.query.filter_by(id=workorder_id, isActive=True).first()
     if not workorder:
         return jsonify({"error": "Work order not found"}), 404
     
@@ -126,11 +126,11 @@ def get_workorder(workorder_id):
 def get_workorders_by_project(project_id):
     """Get all work orders for a specific project"""
     # Validate project exists
-    project = Project.query.get(project_id)
+    project = Project.query.filter_by(id=project_id, isActive=True).first()
     if not project:
         return jsonify({"error": "Project not found"}), 404
     
-    workorders = WorkOrder.query.filter_by(projectId=project_id).all()
+    workorders = WorkOrder.query.filter_by(projectId=project_id, isActive=True).all()
     return jsonify({"workorders": [workorder.to_dict() for workorder in workorders]}), 200
 
 
@@ -143,7 +143,7 @@ def update_workorder(workorder_id):
     if auth_error:
         return auth_error
     
-    workorder = WorkOrder.query.get(workorder_id)
+    workorder = WorkOrder.query.filter_by(id=workorder_id, isActive=True).first()
     if not workorder:
         return jsonify({"error": "Work order not found"}), 404
     
@@ -327,11 +327,12 @@ def delete_workorder(workorder_id):
     if auth_error:
         return auth_error
     
-    workorder = WorkOrder.query.get(workorder_id)
+    workorder = WorkOrder.query.filter_by(id=workorder_id, isActive=True).first()
     if not workorder:
         return jsonify({"error": "Work order not found"}), 404
     
-    db.session.delete(workorder)
+    # Soft delete: set isActive to False
+    workorder.isActive = False
     db.session.commit()
     
     return jsonify({"message": "Work order deleted successfully"}), 200

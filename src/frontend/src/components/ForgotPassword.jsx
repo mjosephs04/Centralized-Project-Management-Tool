@@ -7,6 +7,7 @@ import { Link, useNavigate } from "react-router-dom";
 import backgroundImg from '../imgs/OnePager.png';
 import "../styles/pages/LoginPage.css";
 import "../styles/components/LoginForm.css";
+import {authAPI} from "../services/api";
 
 function TransitionDown(props) {
   return <Slide {...props} direction="down" />;
@@ -41,9 +42,9 @@ const ForgotPassword = () => {
     }
     try {
       setSubmitting(true);
-      await axios.post("http://localhost:8080/api/auth/forgot-password", {
+      await authAPI.forgotPassword({
         emailAddress: email.trim(),
-      });
+      })
       openToast("If an account exists for that email, a reset link was sent.", "success");
       setEmail("");
     } catch (err) {

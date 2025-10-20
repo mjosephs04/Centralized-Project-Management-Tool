@@ -1,9 +1,9 @@
 import React, { useRef, useState } from "react";
-import axios from "axios";
 import { Typography, Snackbar, Alert, Slide } from "@mui/material";
 import { FaUser, FaLock } from "react-icons/fa";
 import "../styles/components/LoginForm.css";
 import { useNavigate } from "react-router-dom";
+import {authAPI} from "../services/api";
 
 function TransitionDown(props) {
   return <Slide {...props} direction="down" />;
@@ -54,11 +54,12 @@ const LoginForm = () => {
     }
 
     try {
-          const res = await axios.post("http://localhost:8080/api/auth/login", {
-            emailAddress: formData.emailAddress.trim(),
-            password: formData.password,
-          });
-        localStorage.setItem('accessToken', res.data.accessToken);
+
+            const res = await authAPI.login({
+                emailAddress: formData.emailAddress.trim(),
+                password: formData.password,
+            });
+            localStorage.setItem('accessToken', res.data.accessToken);
 
             setSuccess("Login Successful!");
             console.log("Logged in user:", res.data.user);
