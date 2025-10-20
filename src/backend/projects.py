@@ -98,8 +98,6 @@ def create_project():
     db.session.add(project)
     db.session.commit()
     
-    print(f"[DEBUG] Project created with ID {project.id}, projectManagerId: {project.projectManagerId}")
-    
     return jsonify({"project": project.to_dict()}), 201
 
 
@@ -130,30 +128,8 @@ def delete_project(project_id):
 @projects_bp.get("/")
 @jwt_required()
 def get_projects():
-    """Get projects based on user role and assignments"""
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
-    
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    
-    if user.role == UserRole.ADMIN:
-        # Admins can see all projects
-        projects = Project.query.all()
-        print(f"[DEBUG] Admin {user_id} can see {len(projects)} projects")
-    elif user.role == UserRole.PROJECT_MANAGER:
-        # Project managers can see projects they manage
-        projects = Project.query.filter_by(projectManagerId=user_id).all()
-        print(f"[DEBUG] Project Manager {user_id} can see {len(projects)} projects they manage")
-    elif user.role == UserRole.WORKER:
-        # Workers can only see projects they are assigned to
-        projects = Project.query.filter(
-            Project.crewMembers.contains(f'{user_id}')
-        ).all()
-        print(f"[DEBUG] Worker {user_id} can see {len(projects)} projects they are assigned to")
-    else:
-        return jsonify({"error": "Invalid user role"}), 400
-    
+    """Get all projects (accessible by all authenticated users)"""
+    projects = Project.query.all()
     return jsonify({"projects": [project.to_dict() for project in projects]}), 200
 
 
@@ -161,37 +137,20 @@ def get_projects():
 @jwt_required()
 def get_project(project_id):
     """Get a specific project by ID"""
+
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
     project = Project.query.filter_by(id=project_id, isActive=True).first()
     if not project:
-        print(f"[DEBUG] Project {project_id} not found")
         return jsonify({"error": "Project not found"}), 404
     
-    print(f"[DEBUG] User {user_id} (role: {user.role}) trying to access project {project_id} (projectManagerId: {project.projectManagerId})")
-    
-    # Check if user has access to this project
-    has_access = False
-    if user.role == UserRole.ADMIN:
-        has_access = True
-        print(f"[DEBUG] Admin access granted")
-    elif user.role == UserRole.PROJECT_MANAGER and project.projectManagerId == int(user_id):
-        has_access = True
-        print(f"[DEBUG] Project manager access granted (user {user_id} manages project {project_id})")
-    elif user.role == UserRole.WORKER:
-        crew_members = project.get_crew_members()
-        print(f"[DEBUG] Worker {user_id} checking crew members: {crew_members}")
-        print(f"[DEBUG] Crew members type: {type(crew_members)}")
-        print(f"[DEBUG] Looking for user_id '{user_id}' in crew members")
-        if int(user_id) in crew_members:
-            has_access = True
-            print(f"[DEBUG] Worker access granted (user {user_id} is assigned to project {project_id})")
-        else:
-            print(f"[DEBUG] Worker {user_id} not found in crew members {crew_members}")
-    
-    if not has_access:
-        print(f"[DEBUG] Access denied for user {user_id} to project {project_id}")
-        return jsonify({"error": "Access denied"}), 403
-    
     return jsonify({"project": project.to_dict()}), 200
+
+
 
 
 @projects_bp.get("/my-projects")
@@ -209,120 +168,6 @@ def get_my_projects():
         projects = Project.query.filter_by(isActive=True).all()
     
     return jsonify({"projects": [project.to_dict() for project in projects]}), 200
-
-
-@projects_bp.put("/<int:project_id>")
-@jwt_required()
-def update_project(project_id):
-    """Update a project (with access control)"""
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
-    
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    
-    project = Project.query.get(project_id)
-    if not project:
-        return jsonify({"error": "Project not found"}), 404
-    
-    # Check if user has permission to update this project
-    if user.role == UserRole.ADMIN:
-        # Admins can update any project
-        pass
-    elif user.role == UserRole.PROJECT_MANAGER and project.projectManagerId == int(user_id):
-        # Project managers can update their own projects
-        pass
-    else:
-        return jsonify({"error": "Access denied"}), 403
-    
-    payload = request.get_json(silent=True) or request.form.to_dict() or {}
-    
-    # Update basic fields
-    if "name" in payload:
-        project.name = payload["name"]
-    if "description" in payload:
-        project.description = payload["description"]
-    if "location" in payload:
-        project.location = payload["location"]
-    if "priority" in payload:
-        if payload["priority"] not in ["low", "medium", "high", "critical"]:
-            return jsonify({"error": "Invalid priority. Must be low, medium, high, or critical"}), 400
-        project.priority = payload["priority"]
-    if "status" in payload:
-        try:
-            project.status = ProjectStatus(payload["status"].lower())
-        except ValueError:
-            return jsonify({"error": "Invalid status. Must be planning, in_progress, on_hold, completed, or cancelled"}), 400
-    
-    # Update crew members if provided
-    if "crewMembers" in payload:
-        crew_members = payload["crewMembers"]
-        print(f"[DEBUG] Updating crew members for project {project_id}: {crew_members}")
-        if isinstance(crew_members, list):
-            # Convert to list of integers (user IDs)
-            try:
-                member_ids = [int(member) if isinstance(member, (int, str)) and str(member).isdigit() else member for member in crew_members]
-                project.set_crew_members(member_ids)
-                print(f"[DEBUG] Set crew members to: {member_ids}")
-                print(f"[DEBUG] Stored crew members JSON: {project.crewMembers}")
-            except (ValueError, TypeError) as e:
-                print(f"[DEBUG] Error updating crew members: {e}")
-                return jsonify({"error": "Invalid crew members format"}), 400
-        else:
-            print(f"[DEBUG] Crew members is not a list: {type(crew_members)}")
-            return jsonify({"error": "Crew members must be a list"}), 400
-    
-    # Update budget if provided
-    if "estimatedBudget" in payload:
-        try:
-            budget = float(payload["estimatedBudget"]) if payload["estimatedBudget"] else None
-            if budget is not None and budget < 0:
-                return jsonify({"error": "Estimated budget must be positive"}), 400
-            project.estimatedBudget = budget
-        except ValueError:
-            return jsonify({"error": "Invalid estimated budget format"}), 400
-    
-    if "actualCost" in payload:
-        try:
-            cost = float(payload["actualCost"]) if payload["actualCost"] else None
-            if cost is not None and cost < 0:
-                return jsonify({"error": "Actual cost must be positive"}), 400
-            project.actualCost = cost
-        except ValueError:
-            return jsonify({"error": "Invalid actual cost format"}), 400
-    
-    # Update dates if provided
-    if "startDate" in payload:
-        try:
-            project.startDate = datetime.strptime(payload["startDate"], "%Y-%m-%d").date()
-        except ValueError:
-            return jsonify({"error": "Invalid start date format. Use YYYY-MM-DD"}), 400
-    
-    if "endDate" in payload:
-        try:
-            project.endDate = datetime.strptime(payload["endDate"], "%Y-%m-%d").date()
-        except ValueError:
-            return jsonify({"error": "Invalid end date format. Use YYYY-MM-DD"}), 400
-    
-    if "actualStartDate" in payload:
-        try:
-            project.actualStartDate = datetime.strptime(payload["actualStartDate"], "%Y-%m-%d").date() if payload["actualStartDate"] else None
-        except ValueError:
-            return jsonify({"error": "Invalid actual start date format. Use YYYY-MM-DD"}), 400
-    
-    if "actualEndDate" in payload:
-        try:
-            project.actualEndDate = datetime.strptime(payload["actualEndDate"], "%Y-%m-%d").date() if payload["actualEndDate"] else None
-        except ValueError:
-            return jsonify({"error": "Invalid actual end date format. Use YYYY-MM-DD"}), 400
-    
-    # Validate date consistency
-    if project.startDate and project.endDate and project.startDate >= project.endDate:
-        return jsonify({"error": "End date must be after start date"}), 400
-    
-    db.session.commit()
-    
-    return jsonify({"project": project.to_dict()}), 200
 
 #
 #    DASHBOARD / PROGRESS APIs
@@ -432,27 +277,7 @@ def get_dashboard_progress():
         page = int(request.args.get("page", 1))
         page_size = int(request.args.get("pageSize", 25))
 
-        user_id = get_jwt_identity()
-        user = User.query.get(user_id)
-        
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-        
         stmt = select(Project)
-        
-        # Apply role-based filtering
-        if user.role == UserRole.ADMIN:
-            # Admins can see all projects
-            pass
-        elif user.role == UserRole.PROJECT_MANAGER:
-            # Project managers can see projects they manage
-            stmt = stmt.where(Project.projectManagerId == user_id)
-        elif user.role == UserRole.WORKER:
-            # Workers can only see projects they are assigned to
-            stmt = stmt.where(Project.crewMembers.contains(f'{user_id}'))
-        else:
-            return jsonify({"error": "Invalid user role"}), 400
-        
         if status_str:
             try:
                 status = ProjectStatus(status_str)
@@ -513,12 +338,6 @@ def get_project_progress_detail(project_id: int):
       date=YYYY-MM-DD (optional)
     """
     try:
-        user_id = get_jwt_identity()
-        user = User.query.get(user_id)
-        
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-        
         today = _parse_iso_date(request.args.get("date"))
 
         project = Project.query.filter_by(id=project_id, isActive=True).first()

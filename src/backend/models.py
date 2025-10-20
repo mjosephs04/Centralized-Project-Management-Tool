@@ -94,8 +94,7 @@ class Project(db.Model):
     estimatedBudget = db.Column(DECIMAL(15, 2), nullable=True)
     actualCost = db.Column(DECIMAL(15, 2), nullable=True)
     
-    # Team members (stored as JSON array of user IDs)
-    crewMembers = db.Column(db.Text, nullable=True)  # JSON string of user IDs
+    # Team members are handled through the ProjectMember relationship model
     
     # Relationships
     projectManagerId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -107,17 +106,24 @@ class Project(db.Model):
     isActive = db.Column(db.Boolean, default=True, nullable=False)
 
     def get_crew_members(self) -> list:
-        """Get crew members as a list of user IDs"""
-        if not self.crewMembers:
-            return []
-        try:
-            return json.loads(self.crewMembers)
-        except (json.JSONDecodeError, TypeError):
-            return []
+        """Get crew members as a list of user IDs from ProjectMember relationships"""
+        return [member.userId for member in self.members if member.isActive]
 
     def set_crew_members(self, member_ids: list):
-        """Set crew members from a list of user IDs"""
-        self.crewMembers = json.dumps(member_ids) if member_ids else None
+        """Set crew members from a list of user IDs using ProjectMember relationships"""
+        # Remove existing members
+        for member in self.members:
+            if member.userId not in member_ids:
+                member.isActive = False
+        
+        # Add new members
+        for user_id in member_ids:
+            existing_member = next((m for m in self.members if m.userId == user_id), None)
+            if existing_member:
+                existing_member.isActive = True
+            else:
+                new_member = ProjectMember(projectId=self.id, userId=user_id)
+                db.session.add(new_member)
 
     def to_dict(self) -> dict:
         return {
