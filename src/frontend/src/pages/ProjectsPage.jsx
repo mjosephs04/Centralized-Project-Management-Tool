@@ -212,13 +212,6 @@ const ProjectsPage = () => {
             <div style={styles.pageContainer}>
                 <div style={styles.header}>
 
-                    <h2 style={styles.pageTitle}>Ongoing Projects</h2>
-                    {userRole !== 'worker' && (
-                        <Link to="/projects/create" style={styles.createButtonLink}>
-                            Create New Project
-                        </Link>
-                    )}
-
                     <div>
                         <h1 style={styles.pageTitle}>Project Dashboard</h1>
                         <p style={styles.subtitle}>Manage And Track All Ongoing Projects</p>
@@ -429,29 +422,6 @@ const ProjectsPage = () => {
                     </div>
                 )}
             </div>
-
-            { loading ? (
-                <div style={styles.centerContent}>
-                    <p>Loading projects...</p>
-                </div>
-            ) : error ? (
-                <div style={styles.centerContent}>
-                    <p style={styles.errorText}>Error Loading projects: {error}</p>
-                    <button onClick={fetchProjects} style={styles.retryButton}>
-                        Retry
-                    </button>
-                </div>
-            ) : projects.length === 0 ? (
-                <div style={styles.centerContent}>
-                    <p>No projects underway!</p>
-                </div>
-            ) : (
-                <div style={styles.projectsGrid}>
-                    {projects.map((project) => (
-                        <ProjectCard key={project.id} project={project} userRole={userRole} />
-                    ))}
-                </div>
-            )}
 
             <Snackbar
                 open={snackbarOpen}

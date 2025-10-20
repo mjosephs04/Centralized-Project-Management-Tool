@@ -1,10 +1,10 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import axios from "axios";
 import { Typography, Snackbar, Alert, Slide } from "@mui/material";
 import { FaUser } from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
 
-
+import backgroundImg from '../imgs/OnePager.png';
 import "../styles/pages/LoginPage.css";
 import "../styles/components/LoginForm.css";
 import {authAPI} from "../services/api";
@@ -17,8 +17,15 @@ const ForgotPassword = () => {
   const [email, setEmail] = useState("");
   const [toast, setToast] = useState({ open: false, message: "", severity: "info" });
   const [submitting, setSubmitting] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const formRef = useRef(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const img = new Image();
+    img.src = backgroundImg;
+    img.onload = () => setImageLoaded(true);
+  }, []);
 
   const openToast = (message, severity = "info") =>
     setToast({ open: true, message, severity });
@@ -51,8 +58,12 @@ const ForgotPassword = () => {
 
   return (
     <>
-      {}
-      <div className="login-page">
+      <div 
+        className="login-page"
+        style={{
+          backgroundImage: imageLoaded ? `url(${backgroundImg})` : 'none',
+        }}
+      >
         <div className="top-right">
           <button className="create-account" onClick={() => navigate("/create-account")}>
             Create Account
