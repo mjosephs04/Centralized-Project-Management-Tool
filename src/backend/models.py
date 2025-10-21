@@ -38,6 +38,11 @@ class WorkOrderStatus(enum.Enum):
     CANCELLED = "cancelled"
 
 
+class AuditEntityType(enum.Enum):
+    PROJECT = "project"
+    WORK_ORDER = "work_order"
+
+
 class User(db.Model):
     __tablename__ = "users"
 
@@ -191,3 +196,34 @@ class WorkOrder(db.Model):
         }
 
 
+class Audit(db.Model):
+    __tablename__ = "audit_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    entityType = db.Column(db.Enum(AuditEntityType), nullable=False)
+    entityId = db.Column(db.Integer, nullable=False, index=True)
+    userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    field = db.Column(db.String(100), nullable=False)
+    oldValue = db.Column(db.Text, nullable=True)
+    newValue = db.Column(db.Text, nullable=True)
+    sessionId = db.Column(db.String(36), nullable=True, index=True)  # UUID for grouping changes
+    projectId = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True, index=True)  # Track project for work orders
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship('User', backref=db.backref('audit_logs', lazy=True))
+    project = db.relationship('Project', backref=db.backref('audit_logs', lazy=True))
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "entityType": self.entityType.value if self.entityType else None,
+            "entityId": self.entityId,
+            "userId": self.userId,
+            "user": self.user.to_dict() if self.user else None,
+            "field": self.field,
+            "oldValue": self.oldValue,
+            "newValue": self.newValue,
+            "sessionId": self.sessionId,
+            "projectId": self.projectId,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+        }
