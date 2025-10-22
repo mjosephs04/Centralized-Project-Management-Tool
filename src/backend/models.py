@@ -84,6 +84,7 @@ class Project(db.Model):
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     location = db.Column(db.String(300), nullable=True)
+    crewMembers = db.Column(db.Text, nullable=True)
     
     # Project timeline
     startDate = db.Column(db.Date, nullable=False)
