@@ -225,7 +225,6 @@ const UserNavbar = () => {
                             ...(isHovered.mail ? styles.iconHover : {})
                         }}
                     />
-                    
                 </button>
 
                 <Link to="/profile">

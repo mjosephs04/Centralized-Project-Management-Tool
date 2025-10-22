@@ -8,6 +8,7 @@ import ProjectsPage from "./pages/ProjectsPage";
 import CreateProjectPage from "./pages/CreateProjectsPage";
 import SingleProjectPage from "./pages/SingleProjectPage";
 import ProfilePage from "./pages/ProfilePage"
+import RouteProtector from "./components/RouteProtector";
 
 const App = () => {
   return (
@@ -17,10 +18,12 @@ const App = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/create-account" element={<CreateAccountPage />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/projects" element={<ProjectsPage />} />
-        <Route path="/projects/create" element={<CreateProjectPage />} />
-        <Route path="/projects/:projectId" element={<SingleProjectPage />} />
+
+        
+        <Route path="/profile" element={<RouteProtector>{<ProfilePage />}</RouteProtector>} />
+        <Route path="/projects" element={<RouteProtector>{<ProjectsPage />}</RouteProtector>} />
+        <Route path="/projects/create" element={<RouteProtector>{<CreateProjectPage />}</RouteProtector>} />
+        <Route path="/projects/:projectId" element={<RouteProtector>{<SingleProjectPage />}</RouteProtector>} />
       </Routes>
     </Router>
   );
