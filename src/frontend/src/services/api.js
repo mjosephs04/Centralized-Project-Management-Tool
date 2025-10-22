@@ -71,6 +71,11 @@ export const projectsAPI = {
     const response = await apiClient.delete(`/projects/${projectId}/supplies/${supplyID}`);
     return response;
   },
+
+  inviteUser: async (projectId, invitationData) => {
+    const response = await apiClient.post(`/projects/${projectId}/invite`, invitationData);
+    return response.data;
+  },
 };
 
 export const workOrdersAPI = {

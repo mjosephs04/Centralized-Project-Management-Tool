@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FaEdit, FaSave, FaTimes, FaUserPlus, FaTrash, FaUser } from "react-icons/fa";
-import { usersAPI } from "../../services/api"; // << make sure path is correct for your project
+import { usersAPI, projectsAPI } from "../../services/api"; // << make sure path is correct for your project
 
 const TeamTab = ({ project, onUpdate, userRole }) => {
   // Local state
@@ -20,6 +20,10 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("worker");
+  const [inviteWorkerType, setInviteWorkerType] = useState("crew_member");
+  const [isInviting, setIsInviting] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState("");
 
   // Load initial crew + workers
   useEffect(() => {
@@ -194,6 +198,38 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
     setIsEditing(false);
   };
 
+  const handleInviteUser = async () => {
+    if (!inviteEmail.trim()) return;
+    
+    setIsInviting(true);
+    setInviteMessage("");
+    
+    try {
+      const invitationData = {
+        email: inviteEmail.trim(),
+        role: inviteRole,
+        workerType: inviteRole === "worker" ? inviteWorkerType : undefined,
+      };
+      
+      const response = await projectsAPI.inviteUser(project.id, invitationData);
+      
+      if (response.message) {
+        setInviteMessage(`✅ ${response.message}`);
+        setInviteEmail("");
+        setInviteRole("worker");
+        setInviteWorkerType("crew_member");
+      } else if (response.warning) {
+        setInviteMessage(`⚠️ ${response.warning}`);
+      }
+    } catch (error) {
+      console.error("Failed to send invitation:", error);
+      const errorMessage = error.response?.data?.error || "Failed to send invitation";
+      setInviteMessage(`❌ ${errorMessage}`);
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
   const canEdit = userRole !== "worker"; // Only PM/Admin edit; adjust as needed
 
   return (
@@ -321,45 +357,72 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
         </div>
       )}
 
-      {/* Invite Worker Section - Only for Project Managers/Admins */}
+      {/* Invite User Section - Only for Project Managers/Admins */}
       {canEdit && (
         <div style={styles.inviteSection}>
-          <h3 style={styles.inviteTitle}>Invite New Worker</h3>
+          <h3 style={styles.inviteTitle}>Invite New User</h3>
           <p style={styles.inviteDescription}>
-            Send an email invitation to add a new worker to this project.
+            Send an email invitation to add a new user to this project.
           </p>
+          
+          {inviteMessage && (
+            <div style={styles.inviteMessage}>
+              {inviteMessage}
+            </div>
+          )}
+          
           <div style={styles.inviteForm}>
-            <input
-              type="email"
-              placeholder="Enter worker's email address..."
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              onFocus={() => setFocusedInput('invite')}
-              onBlur={() => setFocusedInput(null)}
-              style={{
-                ...styles.inviteInput,
-                borderColor: focusedInput === 'invite' ? '#10b981' : '#d1d5db',
-                boxShadow: focusedInput === 'invite' ? '0 0 0 3px rgba(16, 185, 129, 0.1)' : 'none',
-              }}
-            />
+            <div style={styles.inviteInputGroup}>
+              <input
+                type="email"
+                placeholder="Enter user's email address..."
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                onFocus={() => setFocusedInput('invite')}
+                onBlur={() => setFocusedInput(null)}
+                style={{
+                  ...styles.inviteInput,
+                  borderColor: focusedInput === 'invite' ? '#10b981' : '#d1d5db',
+                  boxShadow: focusedInput === 'invite' ? '0 0 0 3px rgba(16, 185, 129, 0.1)' : 'none',
+                }}
+              />
+              
+              <select
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value)}
+                style={styles.inviteSelect}
+              >
+                <option value="worker">Worker</option>
+                <option value="project_manager">Project Manager</option>
+                <option value="admin">Admin</option>
+              </select>
+              
+              {inviteRole === "worker" && (
+                <select
+                  value={inviteWorkerType}
+                  onChange={(e) => setInviteWorkerType(e.target.value)}
+                  style={styles.inviteSelect}
+                >
+                  <option value="crew_member">Crew Member</option>
+                  <option value="contractor">Contractor</option>
+                </select>
+              )}
+            </div>
+            
             <button
               style={{
                 ...styles.inviteButton,
-                ...(inviteEmail.trim() ? {} : styles.buttonDisabled),
-                backgroundColor: hoveredButton === 'invite' && inviteEmail.trim() ? '#059669' : 
-                  inviteEmail.trim() ? '#10b981' : '#9ca3af',
+                ...(inviteEmail.trim() && !isInviting ? {} : styles.buttonDisabled),
+                backgroundColor: hoveredButton === 'invite' && inviteEmail.trim() && !isInviting ? '#059669' : 
+                  inviteEmail.trim() && !isInviting ? '#10b981' : '#9ca3af',
               }}
-              disabled={!inviteEmail.trim()}
+              disabled={!inviteEmail.trim() || isInviting}
               onMouseEnter={() => setHoveredButton('invite')}
               onMouseLeave={() => setHoveredButton(null)}
-              onClick={() => {
-                // TODO: Implement email invitation functionality
-                alert(`Invitation will be sent to: ${inviteEmail}`);
-                setInviteEmail("");
-              }}
+              onClick={handleInviteUser}
             >
               <FaUserPlus style={styles.inviteIcon} />
-              Send Invitation
+              {isInviting ? "Sending..." : "Send Invitation"}
             </button>
           </div>
         </div>
@@ -692,17 +755,43 @@ const styles = {
     },
     inviteForm: {
         display: "flex",
+        flexDirection: "column",
+        gap: "1rem",
+    },
+    inviteInputGroup: {
+        display: "flex",
         gap: "0.75rem",
         alignItems: "flex-end",
+        flexWrap: "wrap",
     },
     inviteInput: {
         flex: 1,
+        minWidth: "200px",
         padding: "0.75rem 1rem",
         border: "1px solid #d1d5db",
         borderRadius: "8px",
         fontSize: "1rem",
         outline: "none",
         transition: "border-color 0.2s, box-shadow 0.2s",
+    },
+    inviteSelect: {
+        padding: "0.75rem 1rem",
+        border: "1px solid #d1d5db",
+        borderRadius: "8px",
+        fontSize: "1rem",
+        outline: "none",
+        backgroundColor: "white",
+        cursor: "pointer",
+        minWidth: "150px",
+    },
+    inviteMessage: {
+        padding: "0.75rem 1rem",
+        borderRadius: "8px",
+        fontSize: "0.9rem",
+        fontWeight: "500",
+        backgroundColor: "#f0f9ff",
+        border: "1px solid #0ea5e9",
+        color: "#0c4a6e",
     },
     inviteButton: {
         padding: "0.75rem 1.5rem",
@@ -717,6 +806,7 @@ const styles = {
         display: "flex",
         alignItems: "center",
         gap: "0.5rem",
+        alignSelf: "flex-start",
     },
     inviteIcon: {
         fontSize: "0.9rem",
