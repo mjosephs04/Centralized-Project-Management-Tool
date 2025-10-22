@@ -44,9 +44,19 @@ export const projectsAPI = {
     return response.data.project;
   },
 
+  workerUpdateProject: async (projectId, updates) => {
+    const response = await apiClient.patch(`/projects/${projectId}/worker-update`, updates);
+    return response.data.project;
+  },
+
   deleteProject: async (projectId) => {
     await apiClient.delete(`/projects/${projectId}`);
     return true;
+  },
+
+  getProjectAuditLogs: async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/audit-logs`);
+    return response.data;
   },
 };
 

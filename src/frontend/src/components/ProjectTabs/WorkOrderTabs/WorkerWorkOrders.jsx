@@ -11,7 +11,7 @@ const COLUMNS = [
   { key: "cancelled", label: "Cancelled" },
 ];
 
-const WorkerWorkOrders = ({ project }) => {
+const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
   const [workOrders, setWorkOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -111,6 +111,7 @@ const WorkerWorkOrders = ({ project }) => {
     setWorkOrders((prev) => prev.map((wo) => (wo.id === moved.id ? { ...wo, status: toCol } : wo)));
     try {
         await workOrdersAPI.workerUpdate(moved.id, { status: toCol });
+        if (onWorkOrderUpdate) onWorkOrderUpdate();
     } catch (err) {
       alert(err.response?.data?.error || err.message);
       await fetchWorkOrders();
@@ -383,6 +384,7 @@ const WorkerWorkOrders = ({ project }) => {
                       });
                       await fetchWorkOrders();
                       setShowUpdate(false);
+                      if (onWorkOrderUpdate) onWorkOrderUpdate();
                     } catch (err) {
                       alert(err.response?.data?.error || err.message);
                     }

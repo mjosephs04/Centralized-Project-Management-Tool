@@ -47,6 +47,7 @@ const SingleProjectPage = ({ projects }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [userRole, setUserRole] = useState(null);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     useEffect(() => {
         fetchInitialData();
@@ -94,8 +95,13 @@ const SingleProjectPage = ({ projects }) => {
 
     const handleUpdateProject = async (updatedData) => {
         try {
-            const updated = await projectsAPI.updateProject(projectId, updatedData);
+            // Use worker-specific endpoint if user is a worker
+            const updated = userRole === 'worker' 
+                ? await projectsAPI.workerUpdateProject(projectId, updatedData)
+                : await projectsAPI.updateProject(projectId, updatedData);
             setProject(updated);
+            // Trigger refresh for LogsTab when project is updated
+            triggerRefresh();
         } catch (err) {
             console.error('Error updating project:', err);
             alert('Failed to update project: ' + err.message);
@@ -104,6 +110,10 @@ const SingleProjectPage = ({ projects }) => {
 
     const handleDelete = () => {
         navigate('/projects', { state: { projectDeleted: true }});
+    };
+
+    const triggerRefresh = () => {
+        setRefreshTrigger(prev => prev + 1);
     };
 
     if (loading) {
@@ -162,9 +172,9 @@ const SingleProjectPage = ({ projects }) => {
             case 'calendar':
                 return <CalendarTab project={project} />
             case 'workorders':
-                return <WorkOrdersTab project={project} userRole={userRole} />
+                return <WorkOrdersTab project={project} userRole={userRole} onWorkOrderUpdate={triggerRefresh} />
             case 'logs':
-                return <LogsTab project={project} />
+                return <LogsTab project={project} refreshTrigger={refreshTrigger} />
             default:
                 return <p>Nothing to show here...</p>
         }
