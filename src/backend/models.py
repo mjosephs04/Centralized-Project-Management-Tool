@@ -107,21 +107,31 @@ class Project(db.Model):
 
     def get_crew_members(self) -> list:
         """Get crew members as a list of user IDs from ProjectMember relationships"""
-        return [member.userId for member in self.members if member.isActive]
+        try:
+            return [member.userId for member in self.members if member.isActive]
+        except Exception:
+            # If members relationship is not loaded, return empty list
+            return []
 
     def set_crew_members(self, member_ids: list):
         """Set crew members from a list of user IDs using ProjectMember relationships"""
-        # Remove existing members
-        for member in self.members:
-            if member.userId not in member_ids:
-                member.isActive = False
-        
-        # Add new members
-        for user_id in member_ids:
-            existing_member = next((m for m in self.members if m.userId == user_id), None)
-            if existing_member:
-                existing_member.isActive = True
-            else:
+        try:
+            # Remove existing members
+            for member in self.members:
+                if member.userId not in member_ids:
+                    member.isActive = False
+            
+            # Add new members
+            for user_id in member_ids:
+                existing_member = next((m for m in self.members if m.userId == user_id), None)
+                if existing_member:
+                    existing_member.isActive = True
+                else:
+                    new_member = ProjectMember(projectId=self.id, userId=user_id)
+                    db.session.add(new_member)
+        except Exception:
+            # If members relationship is not loaded, just add new members
+            for user_id in member_ids:
                 new_member = ProjectMember(projectId=self.id, userId=user_id)
                 db.session.add(new_member)
 
