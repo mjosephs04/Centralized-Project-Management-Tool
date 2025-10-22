@@ -147,6 +147,7 @@ const SingleProjectPage = ({ projects }) => {
         { id: 'team', label: 'Team'},
         { id: 'workorders', label: 'Work Orders'},
         { id: 'logs', label: 'Logs'},
+        { id: 'supplies', label: 'Supplies'},
     ];
 
     // Worker-specific tabs (no Metrics, but includes read-only Team)
@@ -156,6 +157,7 @@ const SingleProjectPage = ({ projects }) => {
         { id: 'team', label: 'Team' },
         { id: 'workorders', label: 'Work Orders'},
         { id: 'logs', label: 'Logs'},
+        { id: 'supplies', label: 'Supplies'},
     ];
 
     const tabs = userRole === 'worker' ? workerTabs : managerTabs;

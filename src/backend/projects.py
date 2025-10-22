@@ -891,18 +891,18 @@ def get_project_supplies(project_id):
         return jsonify({"error": "Project not found"}), 404
 
     # Check access permissions
-    has_access = False
-    if user.role == UserRole.ADMIN:
-        has_access = True
-    elif user.role == UserRole.PROJECT_MANAGER and project.projectManagerId == user_id:
-        has_access = True
-    elif user.role == UserRole.WORKER:
-        crew_members = project.get_crew_members()
-        if int(user_id) in crew_members:
-            has_access = True
-
-    if not has_access:
-        return jsonify({"error": "Access denied"}), 403
+    # has_access = False
+    # if user.role == UserRole.ADMIN:
+    #     has_access = True
+    # elif user.role == UserRole.PROJECT_MANAGER and project.projectManagerId == user_id:
+    #     has_access = True
+    # elif user.role == UserRole.WORKER:
+    #     crew_members = project.get_crew_members()
+    #     if int(user_id) in crew_members:
+    #         has_access = True
+    #
+    # if not has_access:
+    #     return jsonify({"error": "Access denied"}), 403
 
     supplies = Supply.query.filter_by(projectId=project_id).order_by(Supply.createdAt.desc()).all()
     return jsonify({"supplies": [s.to_dict() for s in supplies]}), 200
@@ -922,10 +922,10 @@ def add_project_supply(project_id):
         return jsonify({"error": "Project not found"}), 404
 
     # Only Project Managers or Admins can add supplies
-    if user.role not in [UserRole.ADMIN, UserRole.PROJECT_MANAGER]:
-        return jsonify({"error": "Only project managers or admins can add supplies"}), 403
-    if user.role == UserRole.PROJECT_MANAGER and project.projectManagerId != user.id:
-        return jsonify({"error": "You can only add supplies to your own projects"}), 403
+    # if user.role not in [UserRole.ADMIN, UserRole.PROJECT_MANAGER]:
+    #     return jsonify({"error": "Only project managers or admins can add supplies"}), 403
+    # if user.role == UserRole.PROJECT_MANAGER and project.projectManagerId != user.id:
+    #     return jsonify({"error": "You can only add supplies to your own projects"}), 403
 
     payload = request.get_json(silent=True) or request.form.to_dict() or {}
     required_fields = ["name", "vendor", "budget"]

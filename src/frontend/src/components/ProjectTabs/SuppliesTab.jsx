@@ -24,8 +24,8 @@ const SuppliesTab = ({ project }) => {
                 setError("");
 
                 const res = await projectsAPI.getSupplies(project.id);
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || "Failed to load supplies");
+                const data = res.data;
+                if (res.status != 200) throw new Error(data.error || "Failed to load supplies");
                 setSupplies(data.supplies || []);
             } catch (err) {
                 console.error("Error fetching supplies:", err);
@@ -58,8 +58,8 @@ const SuppliesTab = ({ project }) => {
 
             const res = await projectsAPI.postSupplies(project.id, payload)
 
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Failed to add supply");
+            const data = res.data;
+            if (res.status != 201) throw new Error(data.error || "Failed to add supply");
 
             setSupplies((prev) => [data.supply, ...prev]);
             setShowModal(false);
@@ -76,8 +76,8 @@ const SuppliesTab = ({ project }) => {
         try {
             const res = await projectsAPI.deleteSupplies(project.id, id)
 
-            if (!res.ok) {
-                const data = await res.json();
+            if (res.status != 200) {
+                const data = res.data;
                 throw new Error(data.error || "Failed to delete supply");
             }
 
