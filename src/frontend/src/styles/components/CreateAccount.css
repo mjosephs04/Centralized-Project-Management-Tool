@@ -3,12 +3,12 @@
     flex-direction: column;
     align-items: flex-start;
     width: 100%;
-    max-width: 420px;
+    max-width: 380px;
     padding: 0 20px;
 }
 
 .create-account-form h1 {
-    font-size: 28px;
+    font-size: 24px;
     color: #000000;
     margin-bottom: 12px;
     text-shadow: 0 2px 4px rgba(255, 255, 255, 0.3);
@@ -17,7 +17,7 @@
 
 .input-row {
     display: flex;
-    gap: 20px;
+    gap: 15px;
     width: 100%;
 }
 
@@ -25,25 +25,25 @@
     display: flex;
     flex-direction: column;
     width: 170%;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 
 .input-field label {
     color: rgb(51, 56, 58);
-    font-size: 18px;
-    margin-bottom: 4px;
+    font-size: 14px;
+    margin-bottom: 3px;
     font-weight: 600;
     text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
 }
 
 .input-field input {
-    height: 50px;
+    height: 42px;
     background: rgba(255, 255, 255, 0.95);
     border: 2px solid rgba(0, 0, 0, 0.2);
     border-radius: 20px;
-    padding: 0 16px;
+    padding: 0 14px;
     color: rgb(51, 56, 58);
-    font-size: 16px;
+    font-size: 14px;
     outline: none;
     transition: all 0.3s ease;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
@@ -62,9 +62,9 @@
 .role-select {
     display: flex;
     justify-content: center;
-    gap: 15px; 
-    margin: 12px 0;
-    font-size: 16px;
+    gap: 12px; 
+    margin: 8px 0;
+    font-size: 14px;
 }
 
 .role-option {
@@ -78,8 +78,8 @@
 .role-option label {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 20px;
+    gap: 6px;
+    padding: 8px 16px;
     border-radius: 30px;
     border: 2px solid rgba(0, 0, 0, 0.3);
     color: rgb(51, 56, 58);
@@ -88,6 +88,7 @@
     background-color: rgba(255, 255, 255, 0.8);
     position: relative;
     font-weight: 500;
+    font-size: 14px;
 }
 
 .role-option label:hover {
@@ -100,14 +101,14 @@
 .role-option input[type="radio"]:checked + label::before {
     content: '✔';
     display: inline-block;
-    width: 18px;
-    height: 18px;
-    font-size: 14px;
+    width: 16px;
+    height: 16px;
+    font-size: 12px;
     color: white;
     background: rgb(51, 56, 58);
     border-radius: 50%;
     text-align: center;
-    line-height: 18px;
+    line-height: 16px;
     transform: translateY(-2px);
 }
 
@@ -115,22 +116,22 @@
     background-color: rgb(51, 56, 58);
     color: white;
     font-weight: 600;
-    padding-left: 18px;
+    padding-left: 16px;
     border-color: #333;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
 .butn {
     width: 170%;
-    height: 50px;
+    height: 42px;
     background: #6a97c4;
     border: none;
     border-radius: 20px;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     color: white;
     cursor: pointer;
-    margin-top: 8px;
+    margin-top: 6px;
     transition: all 0.3s ease;
     transform: translateY(50%);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
