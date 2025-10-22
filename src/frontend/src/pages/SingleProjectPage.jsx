@@ -9,6 +9,7 @@ import TeamViewTab from "../components/ProjectTabs/TeamViewTab";
 import CalendarTab from "../components/ProjectTabs/CalendarTab";
 import WorkOrdersTab from "../components/ProjectTabs/WorkOrderTabs/WorkOrders";
 import LogsTab from "../components/ProjectTabs/LogsTab";
+import SuppliesTab from "../components/ProjectTabs/SuppliesTab";
 
 const styleSheet = document.styleSheets[0];
 if (!document.querySelector('#tabAnimation')) {
@@ -175,6 +176,8 @@ const SingleProjectPage = ({ projects }) => {
                 return <WorkOrdersTab project={project} userRole={userRole} onWorkOrderUpdate={triggerRefresh} />
             case 'logs':
                 return <LogsTab project={project} refreshTrigger={refreshTrigger} />
+            case 'supplies':
+                return <SuppliesTab project={project}/>
             default:
                 return <p>Nothing to show here...</p>
         }

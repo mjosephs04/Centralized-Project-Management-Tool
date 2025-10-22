@@ -11,7 +11,7 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import select
 
-from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType
+from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType, Supply
 from .progress import compute_work_order_rollup, compute_schedule_stats, compute_earned_value, to_decimal, normalize_weights
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/api/projects")
@@ -876,3 +876,102 @@ def get_project_progress_detail(project_id: int):
         return jsonify({"error": str(ve)}), 400
     except Exception as e:
         return jsonify({"error": f"Unexpected error: {e}"}), 500
+
+@projects_bp.get("/<int:project_id>/supplies")
+@jwt_required()
+def get_project_supplies(project_id):
+    """Get all supplies associated with a specific project."""
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    project = Project.query.get(project_id)
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+
+    # Check access permissions
+    has_access = False
+    if user.role == UserRole.ADMIN:
+        has_access = True
+    elif user.role == UserRole.PROJECT_MANAGER and project.projectManagerId == user_id:
+        has_access = True
+    elif user.role == UserRole.WORKER:
+        crew_members = project.get_crew_members()
+        if int(user_id) in crew_members:
+            has_access = True
+
+    if not has_access:
+        return jsonify({"error": "Access denied"}), 403
+
+    supplies = Supply.query.filter_by(projectId=project_id).order_by(Supply.createdAt.desc()).all()
+    return jsonify({"supplies": [s.to_dict() for s in supplies]}), 200
+
+
+@projects_bp.post("/<int:project_id>/supplies")
+@jwt_required()
+def add_project_supply(project_id):
+    """Add a new supply to a specific project."""
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    project = Project.query.get(project_id)
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+
+    # Only Project Managers or Admins can add supplies
+    if user.role not in [UserRole.ADMIN, UserRole.PROJECT_MANAGER]:
+        return jsonify({"error": "Only project managers or admins can add supplies"}), 403
+    if user.role == UserRole.PROJECT_MANAGER and project.projectManagerId != user.id:
+        return jsonify({"error": "You can only add supplies to your own projects"}), 403
+
+    payload = request.get_json(silent=True) or request.form.to_dict() or {}
+    required_fields = ["name", "vendor", "budget"]
+    missing = [f for f in required_fields if not payload.get(f)]
+    if missing:
+        return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
+
+    try:
+        budget = float(payload["budget"])
+        if budget < 0:
+            return jsonify({"error": "Budget must be positive"}), 400
+    except ValueError:
+        return jsonify({"error": "Invalid budget format"}), 400
+
+    supply = Supply(
+        name=payload["name"].strip(),
+        vendor=payload["vendor"].strip(),
+        budget=budget,
+        projectId=project_id
+    )
+
+    db.session.add(supply)
+    db.session.commit()
+
+    return jsonify({"supply": supply.to_dict()}), 201
+
+@projects_bp.delete("/<int:project_id>/supplies/<int:supply_id>")
+@jwt_required()
+def delete_project_supply(project_id, supply_id):
+    """Delete a specific supply from a project."""
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    project = Project.query.get(project_id)
+
+    if not user or not project:
+        return jsonify({"error": "User or project not found"}), 404
+
+    if user.role not in [UserRole.ADMIN, UserRole.PROJECT_MANAGER]:
+        return jsonify({"error": "Only project managers or admins can delete supplies"}), 403
+    if user.role == UserRole.PROJECT_MANAGER and project.projectManagerId != user.id:
+        return jsonify({"error": "You can only delete supplies from your own projects"}), 403
+
+    supply = Supply.query.filter_by(id=supply_id, projectId=project_id).first()
+    if not supply:
+        return jsonify({"error": "Supply not found"}), 404
+
+    db.session.delete(supply)
+    db.session.commit()
+    return jsonify({"message": "Supply deleted successfully"}), 200

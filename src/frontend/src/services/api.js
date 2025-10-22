@@ -58,6 +58,19 @@ export const projectsAPI = {
     const response = await apiClient.get(`/projects/${projectId}/audit-logs`);
     return response.data;
   },
+
+  postSupplies: async (projectId, payload) => {
+    const response = await apiClient.post(`/projects/${projectId}/supplies`, payload);
+    return response;
+  },
+  getSupplies:  async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/supplies`);
+    return response;
+  },
+  deleteSupplies:  async (projectId, supplyID) => {
+    const response = await apiClient.delete(`/projects/${projectId}/supplies/${supplyID}`);
+    return response;
+  },
 };
 
 export const workOrdersAPI = {
