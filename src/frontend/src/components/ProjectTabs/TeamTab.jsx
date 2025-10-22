@@ -22,6 +22,7 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("worker");
   const [inviteWorkerType, setInviteWorkerType] = useState("crew_member");
+  const [inviteContractorExpiration, setInviteContractorExpiration] = useState("");
   const [isInviting, setIsInviting] = useState(false);
   const [inviteMessage, setInviteMessage] = useState("");
 
@@ -201,6 +202,12 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
   const handleInviteUser = async () => {
     if (!inviteEmail.trim()) return;
     
+    // Validate contractor expiration date if needed
+    if (inviteRole === "worker" && inviteWorkerType === "contractor" && !inviteContractorExpiration.trim()) {
+      setInviteMessage("❌ Contractor expiration date is required for contractor invitations");
+      return;
+    }
+    
     setIsInviting(true);
     setInviteMessage("");
     
@@ -209,20 +216,25 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
         email: inviteEmail.trim(),
         role: inviteRole,
         workerType: inviteRole === "worker" ? inviteWorkerType : undefined,
+        contractorExpirationDate: inviteRole === "worker" && inviteWorkerType === "contractor" ? inviteContractorExpiration : undefined,
       };
       
+      console.log("Sending invitation data:", invitationData);
       const response = await projectsAPI.inviteUser(project.id, invitationData);
+      console.log("Invitation response:", response);
       
       if (response.message) {
         setInviteMessage(`✅ ${response.message}`);
         setInviteEmail("");
         setInviteRole("worker");
         setInviteWorkerType("crew_member");
+        setInviteContractorExpiration("");
       } else if (response.warning) {
         setInviteMessage(`⚠️ ${response.warning}`);
       }
     } catch (error) {
       console.error("Failed to send invitation:", error);
+      console.error("Error response:", error.response?.data);
       const errorMessage = error.response?.data?.error || "Failed to send invitation";
       setInviteMessage(`❌ ${errorMessage}`);
     } finally {
@@ -406,6 +418,17 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
                   <option value="crew_member">Crew Member</option>
                   <option value="contractor">Contractor</option>
                 </select>
+              )}
+              
+              {inviteRole === "worker" && inviteWorkerType === "contractor" && (
+                <input
+                  type="date"
+                  value={inviteContractorExpiration}
+                  onChange={(e) => setInviteContractorExpiration(e.target.value)}
+                  style={styles.inviteSelect}
+                  required
+                  title="Contractor expiration date is required"
+                />
               )}
             </div>
             

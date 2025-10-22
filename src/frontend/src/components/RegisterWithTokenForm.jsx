@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Snackbar, Alert, Slide } from "@mui/material";
-import { authAPI } from "../services/api";
+import { authAPI, projectsAPI } from "../services/api";
 import "../styles/components/CreateAccount.css";
 
 function TransitionDown(props) {
@@ -45,7 +45,9 @@ const RegisterWithTokenForm = () => {
       }
 
       try {
-        const response = await authAPI.validateInvitationToken(token);
+        console.log("Validating token:", token);
+        const response = await projectsAPI.validateInvitationToken(token);
+        console.log("Validation response:", response);
         if (response.valid) {
           setInvitationData(response.invitation);
         } else {
@@ -53,6 +55,7 @@ const RegisterWithTokenForm = () => {
         }
       } catch (error) {
         console.error("Token validation error:", error);
+        console.error("Error response:", error.response?.data);
         openToast("Invalid or expired invitation token", "error");
       } finally {
         setLoading(false);

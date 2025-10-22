@@ -76,6 +76,11 @@ export const projectsAPI = {
     const response = await apiClient.post(`/projects/${projectId}/invite`, invitationData);
     return response.data;
   },
+
+  validateInvitationToken: async (token) => {
+    const response = await apiClient.get(`/projects/invitations/validate/${token}`);
+    return response.data;
+  },
 };
 
 export const workOrdersAPI = {
