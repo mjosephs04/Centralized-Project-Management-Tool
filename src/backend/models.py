@@ -82,28 +82,28 @@ class Project(db.Model):
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     location = db.Column(db.String(300), nullable=True)
-    
+
     # Project timeline
     startDate = db.Column(db.Date, nullable=False)
     endDate = db.Column(db.Date, nullable=False)
     actualStartDate = db.Column(db.Date, nullable=True)
     actualEndDate = db.Column(db.Date, nullable=True)
-    
+
     # Project status and priority
     status = db.Column(db.Enum(ProjectStatus), default=ProjectStatus.PLANNING, nullable=False)
     priority = db.Column(db.String(20), default="medium", nullable=False)  # low, medium, high, critical
-    
+
     # Budget and cost tracking
     estimatedBudget = db.Column(DECIMAL(15, 2), nullable=True)
     actualCost = db.Column(DECIMAL(15, 2), nullable=True)
-    
+
     # Team members (stored as JSON array of user IDs)
     crewMembers = db.Column(db.Text, nullable=True)  # JSON string of user IDs
-    
+
     # Relationships
     projectManagerId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     projectManager = db.relationship('User', backref=db.backref('managed_projects', lazy=True))
-    
+
     # Metadata
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -151,25 +151,25 @@ class WorkOrder(db.Model):
     description = db.Column(db.Text, nullable=True)
     location = db.Column(db.String(300), nullable=True)
     suppliesList = db.Column(db.Text, nullable=True)  # JSON string or comma-separated list
-    
+
     # Work order timeline
     startDate = db.Column(db.Date, nullable=False)
     endDate = db.Column(db.Date, nullable=False)
     actualStartDate = db.Column(db.Date, nullable=True)
     actualEndDate = db.Column(db.Date, nullable=True)
-    
+
     # Work order status and priority
     status = db.Column(db.Enum(WorkOrderStatus), default=WorkOrderStatus.PENDING, nullable=False)
     priority = db.Column(db.Integer, nullable=False)  # 1-5 scale
-    
+
     # Budget and cost tracking
     estimatedBudget = db.Column(DECIMAL(15, 2), nullable=True)
     actualCost = db.Column(DECIMAL(15, 2), nullable=True)
-    
+
     # Relationships
     projectId = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
     project = db.relationship('Project', backref=db.backref('work_orders', lazy=True))
-    
+
     # Metadata
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -226,4 +226,33 @@ class Audit(db.Model):
             "sessionId": self.sessionId,
             "projectId": self.projectId,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+        }
+
+class Supply(db.Model):
+    __tablename__ = "supplies"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    vendor = db.Column(db.String(200), nullable=False)
+    budget = db.Column(DECIMAL(15, 2), nullable=False, default=0.00)
+
+    # Foreign Key Relationship
+    projectId = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
+    project = db.relationship("Project", backref=db.backref("supplies", lazy=True, cascade="all, delete-orphan"))
+
+    # Metadata
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updatedAt = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "vendor": self.vendor,
+            "budget": float(self.budget) if self.budget is not None else 0.0,
+            "projectId": self.projectId,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+            "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
         }
