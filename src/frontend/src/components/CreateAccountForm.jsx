@@ -18,7 +18,7 @@ const CreateAccountForm = () => {
     password: "",
     confirmPassword: "",
     role: "",
-    workerType: "", // NEW
+    workerType: "",
   });
 
   const [toast, setToast] = useState({ open: false, message: "", severity: "info" });
@@ -34,9 +34,29 @@ const CreateAccountForm = () => {
     setToast((t) => ({ ...t, open: false }));
   };
 
+  const formatPhoneDisplay = (value) => {
+    const phoneNumber = value.replace(/\D/g, "");
+    
+    if (phoneNumber.length === 0) {
+      return "";
+    } else if (phoneNumber.length <= 3) {
+      return `(${phoneNumber}`;
+    } else if (phoneNumber.length <= 6) {
+      return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3)}`;
+    } else {
+      return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3, 6)}-${phoneNumber.slice(6, 10)}`;
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    
+    if (name === "phone") {
+      const digitsOnly = value.replace(/\D/g, "");
+      setFormData((prev) => ({ ...prev, [name]: digitsOnly }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
 
     if (name === "confirmEmail" && confirmEmailRef.current) {
       confirmEmailRef.current.setCustomValidity(
@@ -59,7 +79,6 @@ const CreateAccountForm = () => {
       );
     }
 
-    // if user flips to PM, clear workerType so we don't send it accidentally
     if (name === "role" && value === "project_manager") {
       setFormData((prev) => ({ ...prev, workerType: "" }));
     }
@@ -79,7 +98,6 @@ const CreateAccountForm = () => {
       );
     }
 
-    // Enforce workerType selection if role is worker
     if (formData.role === "worker" && !formData.workerType) {
       openToast("Please choose a worker type.", "error");
       return;
@@ -95,13 +113,12 @@ const CreateAccountForm = () => {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         emailAddress: formData.email.trim(),
-        phoneNumber: formData.phone.replace(/\D/g, ""),
+        phoneNumber: formData.phone, 
         password: formData.password,
-        role: formData.role.toLowerCase(), // "worker" | "project_manager"
-        ...(formData.role === "worker" && { workerType: formData.workerType }), // "contractor" | "crew_member"
+        role: formData.role.toLowerCase(),
+        ...(formData.role === "worker" && { workerType: formData.workerType }),
       };
 
-      // TODO handle errors here
       await authApi.register(payload);
 
       openToast("Account created successfully!", "success");
@@ -171,10 +188,16 @@ const CreateAccountForm = () => {
         <div className="input-field">
           <label htmlFor="phone">Phone Number</label>
           <input
-            type="tel" id="phone" name="phone"
-            value={formData.phone} onChange={handleChange}
-            required inputMode="tel" pattern="\D*?(\d\D*){10,}"
-            title="Enter at least 10 digits (e.g., 5551234567)" placeholder="(555) 555-5555"
+            type="tel" 
+            id="phone" 
+            name="phone"
+            value={formatPhoneDisplay(formData.phone)} 
+            onChange={handleChange}
+            required 
+            inputMode="tel" 
+            pattern="\D*?(\d\D*){10,}"
+            title="Enter at least 10 digits" 
+            placeholder="(555) 555-5555"
           />
         </div>
 

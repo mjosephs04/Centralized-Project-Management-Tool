@@ -1,6 +1,7 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from flask_mail import Mail
 
 from .config import Config
 from .models import db
@@ -17,6 +18,7 @@ def create_app() -> Flask:
 
     db.init_app(app)
     jwt = JWTManager(app)
+    mail = Mail(app)
 
     # JWT Identity Loader
     @jwt.user_identity_loader
