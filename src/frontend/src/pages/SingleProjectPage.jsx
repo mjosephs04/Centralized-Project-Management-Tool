@@ -9,6 +9,7 @@ import TeamViewTab from "../components/ProjectTabs/TeamViewTab";
 import CalendarTab from "../components/ProjectTabs/CalendarTab";
 import WorkOrdersTab from "../components/ProjectTabs/WorkOrderTabs/WorkOrders";
 import LogsTab from "../components/ProjectTabs/LogsTab";
+import SuppliesTab from "../components/ProjectTabs/SuppliesTab";
 
 const styleSheet = document.styleSheets[0];
 if (!document.querySelector('#tabAnimation')) {
@@ -146,6 +147,7 @@ const SingleProjectPage = ({ projects }) => {
         { id: 'team', label: 'Team'},
         { id: 'workorders', label: 'Work Orders'},
         { id: 'logs', label: 'Logs'},
+        { id: 'supplies', label: 'Supplies'},
     ];
 
     // Worker-specific tabs (no Metrics, but includes read-only Team)
@@ -155,6 +157,7 @@ const SingleProjectPage = ({ projects }) => {
         { id: 'team', label: 'Team' },
         { id: 'workorders', label: 'Work Orders'},
         { id: 'logs', label: 'Logs'},
+        { id: 'supplies', label: 'Supplies'},
     ];
 
     const tabs = userRole === 'worker' ? workerTabs : managerTabs;
@@ -175,6 +178,8 @@ const SingleProjectPage = ({ projects }) => {
                 return <WorkOrdersTab project={project} userRole={userRole} onWorkOrderUpdate={triggerRefresh} />
             case 'logs':
                 return <LogsTab project={project} refreshTrigger={refreshTrigger} />
+            case 'supplies':
+                return <SuppliesTab project={project}/>
             default:
                 return <p>Nothing to show here...</p>
         }

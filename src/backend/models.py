@@ -125,7 +125,7 @@ class Project(db.Model):
             for member in self.members:
                 if member.userId not in member_ids:
                     member.isActive = False
-            
+
             # Add new members
             for user_id in member_ids:
                 existing_member = next((m for m in self.members if m.userId == user_id), None)
@@ -224,15 +224,15 @@ class ProjectMember(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     projectId = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
     userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    
+
     # Metadata
     joinedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     isActive = db.Column(db.Boolean, default=True, nullable=False)
-    
+
     # Relationships
     project = db.relationship('Project', backref=db.backref('members', lazy=True))
     user = db.relationship('User', backref=db.backref('project_memberships', lazy=True))
-    
+
     # Ensure unique user-project combinations
     __table_args__ = (db.UniqueConstraint('projectId', 'userId', name='unique_project_user'),)
 
@@ -254,30 +254,30 @@ class ProjectInvitation(db.Model):
     email = db.Column(db.String(255), nullable=False, index=True)
     projectId = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
     invitedBy = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    
+
     # Invitation token for secure registration
     token = db.Column(db.String(255), unique=True, nullable=False, index=True)
-    
+
     # Role and worker type for the invited user
     role = db.Column(db.Enum(UserRole), nullable=False)
     workerType = db.Column(db.Enum(WorkerType), nullable=True)
-    
+
     # Contractor expiration date (only applicable for contractor invitations)
     contractorExpirationDate = db.Column(db.Date, nullable=True)
-    
+
     # Invitation status
     status = db.Column(db.String(20), default="pending", nullable=False)  # pending, accepted, expired, cancelled
-    
+
     # Timestamps
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     expiresAt = db.Column(db.DateTime, nullable=False)
     acceptedAt = db.Column(db.DateTime, nullable=True)
     isActive = db.Column(db.Boolean, default=True, nullable=False)
-    
+
     # Relationships
     project = db.relationship('Project', backref=db.backref('invitations', lazy=True))
     inviter = db.relationship('User', backref=db.backref('sent_invitations', lazy=True))
-    
+
     # Ensure unique email-project combinations for pending invitations
     __table_args__ = (db.UniqueConstraint('email', 'projectId', 'status', name='unique_pending_invitation'),)
 
@@ -331,4 +331,33 @@ class Audit(db.Model):
             "sessionId": self.sessionId,
             "projectId": self.projectId,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+        }
+
+class Supply(db.Model):
+    __tablename__ = "supplies"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    vendor = db.Column(db.String(200), nullable=False)
+    budget = db.Column(DECIMAL(15, 2), nullable=False, default=0.00)
+
+    # Foreign Key Relationship
+    projectId = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
+    project = db.relationship("Project", backref=db.backref("supplies", lazy=True, cascade="all, delete-orphan"))
+
+    # Metadata
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updatedAt = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "vendor": self.vendor,
+            "budget": float(self.budget) if self.budget is not None else 0.0,
+            "projectId": self.projectId,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+            "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
         }

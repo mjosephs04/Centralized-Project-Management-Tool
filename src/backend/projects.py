@@ -11,8 +11,7 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import select
 
-from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType
-from .models import db, User, Project, ProjectStatus, UserRole, WorkerType, WorkOrder, WorkOrderStatus, ProjectMember, ProjectInvitation
+from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType, Supply, ProjectMember, ProjectInvitation
 from .progress import compute_work_order_rollup, compute_schedule_stats, compute_earned_value, to_decimal, normalize_weights
 from .email_service import create_project_invitation, send_invitation_email, validate_invitation_token, accept_invitation
 
@@ -141,7 +140,7 @@ def create_project():
     
     db.session.add(project)
     db.session.commit()
-    
+
     return jsonify({"project": project.to_dict()}), 201
 
 
@@ -191,7 +190,7 @@ def get_project(project_id):
     project = Project.query.filter_by(id=project_id, isActive=True).first()
     if not project:
         return jsonify({"error": "Project not found"}), 404
-    
+
     return jsonify({"project": project.to_dict()}), 200
 
 
@@ -790,7 +789,7 @@ def is_project_member(user_id: int, project_id: int) -> bool:
     project = Project.query.filter_by(id=project_id, isActive=True).first()
     if project and project.projectManagerId == user_id:
         return True
-    
+
     # Check if user is a project member
     membership = ProjectMember.query.filter_by(projectId=project_id, userId=user_id, isActive=True).first()
     return membership is not None
@@ -801,26 +800,26 @@ def is_project_member(user_id: int, project_id: int) -> bool:
 def get_project_members(project_id: int):
     """Get all members of a project (project manager + assigned members)"""
     user_id = int(get_jwt_identity())
-    
+
     # Check if project exists
     project = Project.query.filter_by(id=project_id, isActive=True).first()
     if not project:
         return jsonify({"error": "Project not found"}), 404
-    
+
     # Check if current user is a member of the project
     if not is_project_member(int(user_id), project_id):
         return jsonify({"error": "You must be a member of this project to view its members"}), 403
-    
+
     # Get project manager
     project_manager = project.projectManager
     members = []
-    
+
     if project_manager:
         manager_data = project_manager.to_dict()
         manager_data["role"] = "project_manager"
         manager_data["joinedAt"] = project.createdAt.isoformat() if project.createdAt else None
         members.append(manager_data)
-    
+
     # Get project members
     project_members = ProjectMember.query.filter_by(projectId=project_id, isActive=True).all()
     for member in project_members:
@@ -828,7 +827,7 @@ def get_project_members(project_id: int):
         member_data["role"] = "member"
         member_data["joinedAt"] = member.joinedAt.isoformat() if member.joinedAt else None
         members.append(member_data)
-    
+
     return jsonify({"members": members}), 200
 
 
@@ -840,19 +839,19 @@ def add_project_member(project_id: int):
     auth_error = require_project_manager()
     if auth_error:
         return auth_error
-    
+
     # Check if project exists
     project = Project.query.filter_by(id=project_id, isActive=True).first()
     if not project:
         return jsonify({"error": "Project not found"}), 404
-    
+
     # Check if current user is the project manager of this project
     user_id = int(get_jwt_identity())
     if project.projectManagerId != user_id:
         return jsonify({"error": "You can only add members to projects you manage"}), 403
-    
+
     payload = request.get_json(silent=True) or request.form.to_dict() or {}
-    
+
     # Check if we're adding by userId or email
     if payload.get("userId"):
         # Direct user ID addition (existing functionality)
@@ -860,69 +859,69 @@ def add_project_member(project_id: int):
             member_user_id = int(payload["userId"])
         except ValueError:
             return jsonify({"error": "userId must be a valid integer"}), 400
-        
+
         # Check if user exists
         user = User.query.filter_by(id=member_user_id, isActive=True).first()
         if not user:
             return jsonify({"error": "User not found"}), 404
-        
+
         # Check if user is already a member or project manager
         if project.projectManagerId == member_user_id:
             return jsonify({"error": "User is already the project manager"}), 400
-        
+
         existing_member = ProjectMember.query.filter_by(projectId=project_id, userId=member_user_id, isActive=True).first()
         if existing_member:
             return jsonify({"error": "User is already a member of this project"}), 400
-        
+
         # Add member
         project_member = ProjectMember(
             projectId=project_id,
             userId=member_user_id
         )
-        
+
         db.session.add(project_member)
         db.session.commit()
-        
+
         return jsonify({"message": "Member added successfully", "member": project_member.to_dict()}), 201
-        
+
     elif payload.get("email"):
         # Email-based addition - check if user exists, if not, send invitation
         email = payload["email"]
-        
+
         # Validate email format (basic validation)
         if "@" not in email or "." not in email:
             return jsonify({"error": "Invalid email format"}), 400
-        
+
         # Check if user exists
         existing_user = User.query.filter_by(emailAddress=email, isActive=True).first()
         if existing_user:
             # User exists, add them directly
             member_user_id = existing_user.id
-            
+
             # Check if user is already a member or project manager
             if project.projectManagerId == member_user_id:
                 return jsonify({"error": "User is already the project manager"}), 400
-            
+
             existing_member = ProjectMember.query.filter_by(projectId=project_id, userId=member_user_id, isActive=True).first()
             if existing_member:
                 return jsonify({"error": "User is already a member of this project"}), 400
-            
+
             # Add member
             project_member = ProjectMember(
                 projectId=project_id,
                 userId=member_user_id
             )
-            
+
             db.session.add(project_member)
             db.session.commit()
-            
+
             return jsonify({"message": "Member added successfully", "member": project_member.to_dict()}), 201
         else:
             # User doesn't exist, send invitation
             try:
                 invitation = create_project_invitation(email, project_id, user_id)
                 email_sent = send_invitation_email(invitation)
-                
+
                 if email_sent:
                     return jsonify({
                         "message": "User not found. Invitation sent to email address",
@@ -934,7 +933,7 @@ def add_project_member(project_id: int):
                         "invitation": invitation.to_dict(),
                         "warning": "Email delivery failed"
                     }), 201
-                    
+
             except Exception as e:
                 return jsonify({"error": f"Failed to send invitation: {str(e)}"}), 500
     else:
@@ -949,26 +948,26 @@ def remove_project_member(project_id: int, member_id: int):
     auth_error = require_project_manager()
     if auth_error:
         return auth_error
-    
+
     # Check if project exists
     project = Project.query.filter_by(id=project_id, isActive=True).first()
     if not project:
         return jsonify({"error": "Project not found"}), 404
-    
+
     # Check if current user is the project manager of this project
     user_id = int(get_jwt_identity())
     if project.projectManagerId != user_id:
         return jsonify({"error": "You can only remove members from projects you manage"}), 403
-    
+
     # Find the membership
     project_member = ProjectMember.query.filter_by(projectId=project_id, userId=member_id, isActive=True).first()
     if not project_member:
         return jsonify({"error": "User is not a member of this project"}), 404
-    
+
     # Soft delete: set isActive to False
     project_member.isActive = False
     db.session.commit()
-    
+
     return jsonify({"message": "Member removed successfully"}), 200
 
 
@@ -980,39 +979,39 @@ def invite_user_to_project(project_id: int):
     auth_error = require_project_manager()
     if auth_error:
         return auth_error
-    
+
     # Check if project exists
     project = Project.query.filter_by(id=project_id, isActive=True).first()
     if not project:
         return jsonify({"error": "Project not found"}), 404
-    
+
     # Check if current user is the project manager of this project
     user_id = int(get_jwt_identity())
     if project.projectManagerId != user_id:
         return jsonify({"error": "You can only invite users to projects you manage"}), 403
-    
+
     payload = request.get_json(silent=True) or request.form.to_dict() or {}
-    
+
     # Required fields
     email = payload.get("email")
     role_str = payload.get("role")
-    
+
     if not email:
         return jsonify({"error": "email is required"}), 400
-    
+
     if not role_str:
         return jsonify({"error": "role is required"}), 400
-    
+
     # Validate email format (basic validation)
     if "@" not in email or "." not in email:
         return jsonify({"error": "Invalid email format"}), 400
-    
+
     # Validate role
     try:
         role = UserRole(role_str.lower())
     except ValueError:
         return jsonify({"error": "Invalid role. Must be admin, worker, or project_manager."}), 400
-    
+
     # Validate worker type if role is worker
     worker_type = None
     if role == UserRole.WORKER:
@@ -1023,7 +1022,7 @@ def invite_user_to_project(project_id: int):
             worker_type = WorkerType(worker_type_str.lower())
         except ValueError:
             return jsonify({"error": "Invalid workerType. Must be contractor or crew_member."}), 400
-    
+
     # Validate contractor expiration date if role is contractor
     contractor_expiration_date = None
     if role == UserRole.WORKER and worker_type == WorkerType.CONTRACTOR:
@@ -1035,26 +1034,26 @@ def invite_user_to_project(project_id: int):
             contractor_expiration_date = datetime.strptime(contractor_expiration_str, "%Y-%m-%d").date()
         except ValueError:
             return jsonify({"error": "Invalid contractorExpirationDate format. Use YYYY-MM-DD."}), 400
-    
+
     # Check if user already exists and is already a member
     existing_user = User.query.filter_by(emailAddress=email).first()
     if existing_user:
         # Check if user is already the project manager
         if project.projectManagerId == existing_user.id:
             return jsonify({"error": "User is already the project manager of this project"}), 400
-        
+
         # Check if user is already a member
         existing_member = ProjectMember.query.filter_by(projectId=project_id, userId=existing_user.id).first()
         if existing_member:
             return jsonify({"error": "User is already a member of this project"}), 400
-    
+
     try:
         # Create invitation
         invitation = create_project_invitation(email, project_id, user_id, role, worker_type, contractor_expiration_date)
-        
+
         # Send invitation email
         email_sent = send_invitation_email(invitation)
-        
+
         if email_sent:
             return jsonify({
                 "message": "Invitation sent successfully",
@@ -1068,7 +1067,7 @@ def invite_user_to_project(project_id: int):
                 "invitation": invitation.to_dict(),
                 "warning": "Email delivery failed"
             }), 201
-            
+
     except Exception as e:
         return jsonify({"error": f"Failed to create invitation: {str(e)}"}), 500
 
@@ -1081,20 +1080,20 @@ def get_project_invitations(project_id: int):
     auth_error = require_project_manager()
     if auth_error:
         return auth_error
-    
+
     # Check if project exists
     project = Project.query.filter_by(id=project_id, isActive=True).first()
     if not project:
         return jsonify({"error": "Project not found"}), 404
-    
+
     # Check if current user is the project manager of this project
     user_id = int(get_jwt_identity())
     if project.projectManagerId != user_id:
         return jsonify({"error": "You can only view invitations for projects you manage"}), 403
-    
+
     # Get all invitations for this project
     invitations = ProjectInvitation.query.filter_by(projectId=project_id, isActive=True).all()
-    
+
     return jsonify({"invitations": [invitation.to_dict() for invitation in invitations]}), 200
 
 
@@ -1106,26 +1105,26 @@ def cancel_project_invitation(project_id: int, invitation_id: int):
     auth_error = require_project_manager()
     if auth_error:
         return auth_error
-    
+
     # Check if project exists
     project = Project.query.filter_by(id=project_id, isActive=True).first()
     if not project:
         return jsonify({"error": "Project not found"}), 404
-    
+
     # Check if current user is the project manager of this project
     user_id = int(get_jwt_identity())
     if project.projectManagerId != user_id:
         return jsonify({"error": "You can only cancel invitations for projects you manage"}), 403
-    
+
     # Find the invitation
     invitation = ProjectInvitation.query.filter_by(id=invitation_id, projectId=project_id, isActive=True).first()
     if not invitation:
         return jsonify({"error": "Invitation not found"}), 404
-    
+
     # Soft delete: set isActive to False
     invitation.isActive = False
     db.session.commit()
-    
+
     return jsonify({"message": "Invitation cancelled successfully"}), 200
 
 
@@ -1133,10 +1132,10 @@ def cancel_project_invitation(project_id: int, invitation_id: int):
 def validate_invitation(token: str):
     """Validate an invitation token and return invitation details (public endpoint)"""
     invitation = validate_invitation_token(token)
-    
+
     if not invitation:
         return jsonify({"error": "Invalid or expired invitation token"}), 404
-    
+
     return jsonify({
         "valid": True,
         "invitation": invitation.to_dict()
@@ -1150,7 +1149,7 @@ def debug_project_access(project_id: int):
     user_id = int(get_jwt_identity())
     user = User.query.filter_by(id=user_id, isActive=True).first()
     project = Project.query.filter_by(id=project_id, isActive=True).first()
-    
+
     debug_info = {
         "user_id": user_id,
         "user_role": user.role.value if user else None,
@@ -1162,5 +1161,104 @@ def debug_project_access(project_id: int):
         "is_project_manager": project.projectManagerId == user_id if project else False,
         "project_manager_email": project.projectManager.emailAddress if project and project.projectManager else None
     }
-    
+
     return jsonify(debug_info), 200
+
+@projects_bp.get("/<int:project_id>/supplies")
+@jwt_required()
+def get_project_supplies(project_id):
+    """Get all supplies associated with a specific project."""
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    project = Project.query.get(project_id)
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+
+    # Check access permissions
+    # has_access = False
+    # if user.role == UserRole.ADMIN:
+    #     has_access = True
+    # elif user.role == UserRole.PROJECT_MANAGER and project.projectManagerId == user_id:
+    #     has_access = True
+    # elif user.role == UserRole.WORKER:
+    #     crew_members = project.get_crew_members()
+    #     if int(user_id) in crew_members:
+    #         has_access = True
+    #
+    # if not has_access:
+    #     return jsonify({"error": "Access denied"}), 403
+
+    supplies = Supply.query.filter_by(projectId=project_id).order_by(Supply.createdAt.desc()).all()
+    return jsonify({"supplies": [s.to_dict() for s in supplies]}), 200
+
+
+@projects_bp.post("/<int:project_id>/supplies")
+@jwt_required()
+def add_project_supply(project_id):
+    """Add a new supply to a specific project."""
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    project = Project.query.get(project_id)
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+
+    # Only Project Managers or Admins can add supplies
+    # if user.role not in [UserRole.ADMIN, UserRole.PROJECT_MANAGER]:
+    #     return jsonify({"error": "Only project managers or admins can add supplies"}), 403
+    # if user.role == UserRole.PROJECT_MANAGER and project.projectManagerId != user.id:
+    #     return jsonify({"error": "You can only add supplies to your own projects"}), 403
+
+    payload = request.get_json(silent=True) or request.form.to_dict() or {}
+    required_fields = ["name", "vendor", "budget"]
+    missing = [f for f in required_fields if not payload.get(f)]
+    if missing:
+        return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
+
+    try:
+        budget = float(payload["budget"])
+        if budget < 0:
+            return jsonify({"error": "Budget must be positive"}), 400
+    except ValueError:
+        return jsonify({"error": "Invalid budget format"}), 400
+
+    supply = Supply(
+        name=payload["name"].strip(),
+        vendor=payload["vendor"].strip(),
+        budget=budget,
+        projectId=project_id
+    )
+
+    db.session.add(supply)
+    db.session.commit()
+
+    return jsonify({"supply": supply.to_dict()}), 201
+
+@projects_bp.delete("/<int:project_id>/supplies/<int:supply_id>")
+@jwt_required()
+def delete_project_supply(project_id, supply_id):
+    """Delete a specific supply from a project."""
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    project = Project.query.get(project_id)
+
+    if not user or not project:
+        return jsonify({"error": "User or project not found"}), 404
+
+    if user.role not in [UserRole.ADMIN, UserRole.PROJECT_MANAGER]:
+        return jsonify({"error": "Only project managers or admins can delete supplies"}), 403
+    if user.role == UserRole.PROJECT_MANAGER and project.projectManagerId != user.id:
+        return jsonify({"error": "You can only delete supplies from your own projects"}), 403
+
+    supply = Supply.query.filter_by(id=supply_id, projectId=project_id).first()
+    if not supply:
+        return jsonify({"error": "Supply not found"}), 404
+
+    db.session.delete(supply)
+    db.session.commit()
+    return jsonify({"message": "Supply deleted successfully"}), 200
