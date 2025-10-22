@@ -128,5 +128,15 @@ export const authAPI = {
   forgotPassword: async (payload) => {
     const response = await apiClient.post("/auth/forgot-password", payload)
     return response;
+  },
+  
+  validateInvitationToken: async (token) => {
+    const response = await apiClient.get(`/projects/invitations/validate/${token}`);
+    return response.data;
+  },
+  
+  registerWithInvitation: async (payload) => {
+    const response = await apiClient.post("/auth/register-with-invitation", payload);
+    return response.data;
   }
 };
