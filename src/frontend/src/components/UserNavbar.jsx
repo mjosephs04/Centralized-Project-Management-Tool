@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from 'react-router-dom';
 import { FaEnvelope, FaUserCircle, FaSignOutAlt } from "react-icons/fa";
+import { FaShareFromSquare } from "react-icons/fa6";
 import logo from '../imgs/LSGSLogo.png';
 import { authAPI } from '../services/api';
 
@@ -54,7 +55,7 @@ const styles = {
     divider: {
         width: '1px',
         height: '32px',
-        background: 'linear-gradient(180deg, transparent, rgba(0, 82, 212, 0.8), transparent)',
+        background: 'linear-gradient(180deg, transparent, rgba(0, 82, 212, 1), transparent)',
     },
 
     roleContainer: {
@@ -129,8 +130,38 @@ const styles = {
         border: '2px solid white',
     },
 
-    profileMenu: {
-        position: 'relative',
+    tooltip: {
+        position: 'absolute',
+        bottom: '-35px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        background: '#1a202c',
+        color: 'white',
+        padding: '0.4rem 0.8rem',
+        borderRadius: '6px',
+        fontSize: '0.75rem',
+        fontWeight: '600',
+        whiteSpace: 'nowrap',
+        pointerEvents: 'none',
+        opacity: 0,
+        transition: 'opacity 0.2s ease',
+        zIndex: 1000,
+    },
+
+    tooltipVisible: {
+        opacity: 1,
+    },
+
+    tooltipArrow: {
+        position: 'absolute',
+        top: '-4px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '0',
+        height: '0',
+        borderLeft: '4px solid transparent',
+        borderRight: '4px solid transparent',
+        borderBottom: '4px solid #1a202c',
     },
 
     logoutButton: {
@@ -146,6 +177,7 @@ const styles = {
         fontWeight: '600',
         cursor: 'pointer',
         transition: 'all 0.2s ease',
+        position: 'relative',
     },
 
     logoutButtonHover: {
@@ -158,6 +190,7 @@ const styles = {
 const UserNavbar = () => {
     const navigate = useNavigate();
     const [isHovered, setIsHovered] = useState({
+        login_dist: false,
         mail: false,
         profile: false,
         logout: false,
@@ -210,6 +243,31 @@ const UserNavbar = () => {
             </div>
 
             <div style={styles.navbarIcons}>
+            <button
+                    style={{
+                        ...styles.iconButton,
+                        ...(isHovered.login_dist ? styles.iconButtonHover : {})
+                    }}
+                    onMouseEnter={() => setIsHovered({ ...isHovered, login_dist: true })}
+                    onMouseLeave={() => setIsHovered({ ...isHovered, login_dist: false })}
+                >
+                    <FaShareFromSquare
+                        size={20}
+                        style={{
+                            ...styles.icon,
+                            ...(isHovered.login_dist ? styles.iconHover : {})
+                        }}
+                    />
+                    
+                    <div style={{
+                        ...styles.tooltip,
+                        ...(isHovered.login_dist ? styles.tooltipVisible : {})
+                    }}>
+                        <div style={styles.tooltipArrow}></div>
+                        Login Distribution
+                    </div>
+                </button>
+
                 <button
                     style={{
                         ...styles.iconButton,
@@ -225,6 +283,14 @@ const UserNavbar = () => {
                             ...(isHovered.mail ? styles.iconHover : {})
                         }}
                     />
+                    
+                    <div style={{
+                        ...styles.tooltip,
+                        ...(isHovered.mail ? styles.tooltipVisible : {})
+                    }}>
+                        <div style={styles.tooltipArrow}></div>
+                        Messages
+                    </div>
                 </button>
 
                 <Link to="/profile">
@@ -243,6 +309,14 @@ const UserNavbar = () => {
                                 ...(isHovered.profile ? styles.iconHover : {})
                             }}
                         />
+                        
+                        <div style={{
+                            ...styles.tooltip,
+                            ...(isHovered.profile ? styles.tooltipVisible : {})
+                        }}>
+                            <div style={styles.tooltipArrow}></div>
+                            Profile
+                        </div>
                     </button>
                 </Link>
 
