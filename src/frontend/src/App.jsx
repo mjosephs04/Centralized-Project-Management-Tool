@@ -11,6 +11,7 @@ import SingleProjectPage from "./pages/SingleProjectPage";
 import ProfilePage from "./pages/ProfilePage"
 import RouteProtector from "./components/RouteProtector";
 import LoginDistributionPage from "./pages/LoginDistribution";
+import RoleProtector from "./components/RoleProtector";
 
 const App = () => {
   return (
@@ -27,7 +28,7 @@ const App = () => {
         <Route path="/projects" element={<RouteProtector>{<ProjectsPage />}</RouteProtector>} />
         <Route path="/projects/create" element={<RouteProtector>{<CreateProjectPage />}</RouteProtector>} />
         <Route path="/projects/:projectId" element={<RouteProtector>{<SingleProjectPage />}</RouteProtector>} />
-        <Route path="login-distribution" element={<RouteProtector>{<LoginDistributionPage />}</RouteProtector>} />
+        <Route path="login-distribution" element={<RouteProtector><RoleProtector allowedRoles={['project_manager']}>{<LoginDistributionPage />}</RoleProtector></RouteProtector>} />
       </Routes>
     </Router>
   );

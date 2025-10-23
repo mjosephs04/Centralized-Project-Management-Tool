@@ -259,6 +259,7 @@ const CalendarTab = ({ project }) => {
                                     value={formData.name}
                                     onChange={(e) => setFormData({...formData, name: e.target.value})}
                                     style={styles.input}
+                                    placeholder="Enter work order name"
                                 />
                             </div>
 
@@ -268,6 +269,7 @@ const CalendarTab = ({ project }) => {
                                     value={formData.description}
                                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                                     style={{...styles.input, ...styles.textArea}}
+                                    placeholder="Add a detailed description"
                                 />
                             </div>
 
@@ -279,16 +281,17 @@ const CalendarTab = ({ project }) => {
                                         value={formData.location}
                                         onChange={(e) => setFormData({...formData, location: e.target.value})}
                                         style={styles.input}
+                                        placeholder="Work location"
                                     />
                                 </div>
 
                                 <div style={styles.formGroup}>
-                                    <label style={styles.label}>Priority</label>
+                                    <label style={styles.label}>Priority *</label>
                                     <select
                                         required
                                         value={formData.priority}
                                         onChange={(e) => setFormData({...formData, priority: parseInt(e.target.value)})}
-                                        style={styles.input}
+                                        style={styles.select}
                                     >
                                         <option value="1">Very Low</option>
                                         <option value="2">Low</option>
@@ -300,7 +303,7 @@ const CalendarTab = ({ project }) => {
                             </div>
                             <div style={styles.formRow}>
                                 <div style={styles.formGroup}>
-                                    <label style={styles.label}>Start Date</label>
+                                    <label style={styles.label}>Start Date *</label>
                                     <input
                                         type="date"
                                         required
@@ -310,7 +313,7 @@ const CalendarTab = ({ project }) => {
                                     />
                                 </div>
                                 <div style={styles.formGroup}>
-                                    <label style={styles.label}>End Date</label>
+                                    <label style={styles.label}>End Date *</label>
                                     <input
                                         type="date"
                                         required
@@ -323,14 +326,17 @@ const CalendarTab = ({ project }) => {
 
                             <div style={styles.formGroup}>
                                 <label style={styles.label}>Estimated Budget</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={formData.estimatedBudget}
-                                    onChange={(e) => setFormData({...formData, estimatedBudget: e.target.value})}
-                                    style={styles.input}
-                                    placeholder="0.00"
-                                />
+                                <div style={styles.inputWrapper}>
+                                    <span style={styles.inputPrefix}>$</span>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={formData.estimatedBudget}
+                                        onChange={(e) => setFormData({...formData, estimatedBudget: e.target.value})}
+                                        style={styles.inputWithPrefix}
+                                        placeholder="0.00"
+                                    />
+                                </div>
                             </div>
 
                             <div style={styles.creatorActions}>
@@ -477,32 +483,40 @@ const styles = {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 1000,
+        padding: '1rem',
     },
     creator: {
         backgroundColor: 'white',
-        borderRadius: '12px',
+        borderRadius: '16px',
         width: '90%',
-        maxWidth: '600px',
+        maxWidth: '650px',
         maxHeight: '90vh',
-        overflow: 'auto',
+        overflow: 'hidden',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        display: 'flex',
+        flexDirection: 'column',
     },
     creatorHeader: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '1.5rem',
+        padding: '1.75rem 2rem',
         borderBottom: '1px solid #e5e7eb',
+        backgroundColor: '#fafbfc',
+        flexShrink: 0,
     },
     creatorTitle: {
         fontSize: '1.5rem',
-        fontWeight: '600',
-        color: '#2c3e50',
+        fontWeight: '700',
+        color: '#1f2937',
         margin: 0,
+        letterSpacing: '-0.02em',
     },
     closeButton: {
         background: 'none',
@@ -510,10 +524,21 @@ const styles = {
         fontSize: '1.5rem',
         color: '#6b7280',
         cursor: 'pointer',
-        padding: '0.25rem',
+        padding: '0.5rem',
+        borderRadius: '8px',
+        transition: 'all 0.2s',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        ':hover': {
+            backgroundColor: '#f3f4f6',
+            color: '#374151',
+        }
     },
     form: {
-        padding: '1.5rem',
+        padding: '2rem',
+        overflowY: 'auto',
+        flex: 1,
     },
     formGroup: {
         marginBottom: '1.5rem',
@@ -521,7 +546,8 @@ const styles = {
     },
     formRow: {
         display: 'flex',
-        gap: '1rem',
+        gap: '1.25rem',
+        marginBottom: '0',
     },
     label: {
         display: 'block',
@@ -529,38 +555,90 @@ const styles = {
         fontWeight: '600',
         color: '#374151',
         fontSize: '0.875rem',
+        letterSpacing: '0.01em',
     },
     input: {
         width: '100%',
-        padding: '0.75rem',
-        border: '1px solid #d1d5db',
-        borderRadius: '6px',
-        fontSize: '1rem',
+        padding: '0.875rem 1rem',
+        border: '1.5px solid #e5e7eb',
+        borderRadius: '8px',
+        fontSize: '0.95rem',
         outline: 'none',
-        transition: 'border-color 0.2s',
+        transition: 'all 0.2s',
+        backgroundColor: '#ffffff',
+        color: '#1f2937',
+        fontFamily: 'inherit',
+        boxSizing: 'border-box',
+    },
+    select: {
+        width: '100%',
+        padding: '0.875rem 1rem',
+        border: '1.5px solid #e5e7eb',
+        borderRadius: '8px',
+        fontSize: '0.95rem',
+        outline: 'none',
+        transition: 'all 0.2s',
+        backgroundColor: '#ffffff',
+        color: '#1f2937',
+        fontFamily: 'inherit',
+        cursor: 'pointer',
+        boxSizing: 'border-box',
     },
     textArea: {
-        minHeight: '100px',
+        minHeight: '120px',
         resize: 'vertical',
+        lineHeight: '1.5',
+        fontFamily: 'inherit',
+    },
+    inputWrapper: {
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+    },
+    inputPrefix: {
+        position: 'absolute',
+        left: '1rem',
+        color: '#6b7280',
+        fontSize: '0.95rem',
+        fontWeight: '500',
+        pointerEvents: 'none',
+        zIndex: 1,
+    },
+    inputWithPrefix: {
+        width: '100%',
+        padding: '0.875rem 1rem 0.875rem 2rem',
+        border: '1.5px solid #e5e7eb',
+        borderRadius: '8px',
+        fontSize: '0.95rem',
+        outline: 'none',
+        transition: 'all 0.2s',
+        backgroundColor: '#ffffff',
+        color: '#1f2937',
+        fontFamily: 'inherit',
+        boxSizing: 'border-box',
     },
     creatorActions: {
         display: 'flex',
         gap: '1rem',
         justifyContent: 'flex-end',
         marginTop: '2rem',
+        paddingTop: '1.5rem',
+        borderTop: '1px solid #f3f4f6',
     },
     cancelBtn: {
-        padding: '0.75rem 1.5rem',
-        backgroundColor: '#e5e7eb',
-        color: '#374151',
+        padding: '0.875rem 1.75rem',
+        backgroundColor: '#f3f4f6',
+        color: '#4b5563',
         border: 'none',
         borderRadius: '8px',
         fontSize: '0.95rem',
         fontWeight: '600',
         cursor: 'pointer',
+        transition: 'all 0.2s',
+        letterSpacing: '0.01em',
     },
     submitBtn: {
-        padding: '0.75rem 1.5rem',
+        padding: '0.875rem 1.75rem',
         background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
         color: 'white',
         border: 'none',
@@ -568,6 +646,9 @@ const styles = {
         fontSize: '0.95rem',
         fontWeight: '600',
         cursor: 'pointer',
+        transition: 'all 0.2s',
+        letterSpacing: '0.01em',
+        boxShadow: '0 4px 6px -1px rgba(35, 115, 243, 0.2), 0 2px 4px -1px rgba(35, 115, 243, 0.1)',
     },
     createButton: {
         display: 'flex',

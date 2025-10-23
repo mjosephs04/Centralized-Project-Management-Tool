@@ -243,32 +243,34 @@ const UserNavbar = () => {
             </div>
 
             <div style={styles.navbarIcons}>
-            <Link to="/login-distribution">
-                <button
-                    style={{
-                        ...styles.iconButton,
-                        ...(isHovered.login_dist ? styles.iconButtonHover : {})
-                    }}
-                    onMouseEnter={() => setIsHovered({ ...isHovered, login_dist: true })}
-                    onMouseLeave={() => setIsHovered({ ...isHovered, login_dist: false })}
-                >
-                    <FaShareFromSquare
-                        size={20}
-                        style={{
-                            ...styles.icon,
-                            ...(isHovered.login_dist ? styles.iconHover : {})
-                        }}
-                    />
-                    
-                    <div style={{
-                        ...styles.tooltip,
-                        ...(isHovered.login_dist ? styles.tooltipVisible : {})
-                    }}>
-                        <div style={styles.tooltipArrow}></div>
-                        Login Distribution
-                    </div>
-                </button>
-            </Link>
+            {userRole === 'project_manager' && (
+                    <Link to="/login-distribution">
+                        <button
+                            style={{
+                                ...styles.iconButton,
+                                ...(isHovered.distribution ? styles.iconButtonHover : {})
+                            }}
+                            onMouseEnter={() => setIsHovered({ ...isHovered, distribution: true })}
+                            onMouseLeave={() => setIsHovered({ ...isHovered, distribution: false })}
+                        >
+                            <FaShareFromSquare
+                                size={20}
+                                style={{
+                                    ...styles.icon,
+                                    ...(isHovered.distribution ? styles.iconHover : {})
+                                }}
+                            />
+                            
+                            <div style={{
+                                ...styles.tooltip,
+                                ...(isHovered.distribution ? styles.tooltipVisible : {})
+                            }}>
+                                <div style={styles.tooltipArrow}></div>
+                                Login Distribution
+                            </div>
+                        </button>
+                    </Link>
+                )}
 
                 <button
                     style={{
