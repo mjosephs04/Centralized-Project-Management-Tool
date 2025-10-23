@@ -3,12 +3,15 @@ import axios from "axios";
 import "../styles/components/CreateAccount.css";
 import { Snackbar, Alert, Slide } from "@mui/material";
 import {authAPI as authApi, projectsAPI} from "../services/api";
+import { Navigate, useNavigate } from "react-router-dom";
 
 function TransitionDown(props) {
   return <Slide {...props} direction="down" />;
 }
 
 const CreateAccountForm = () => {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -135,6 +138,11 @@ const CreateAccountForm = () => {
       });
       if (confirmEmailRef.current) confirmEmailRef.current.setCustomValidity("");
       if (confirmPasswordRef.current) confirmPasswordRef.current.setCustomValidity("");
+
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
+      
     } catch (err) {
       console.error(err);
       const msg = err.response?.data?.error || "Registration failed";

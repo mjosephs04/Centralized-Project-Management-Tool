@@ -1,9 +1,10 @@
 .wrapper {
-    width: 420px;
+    width: 325px;
     color: #27496b;
     border-radius: 10px;
     padding: 30px 40px;
     background: transparent;
+    transform: translateX(-10px);
   }
   
   .wrapper h1 {
@@ -22,8 +23,8 @@
   .input-box {
     position: relative;
     width: 150%;
-    height: 75px;
-    margin: 20px 0;
+    height: 60px;
+    margin: 10px 0;
     transform: translateX(-15%);
   }
   
@@ -56,7 +57,7 @@
   .input-icon {
     position: absolute;
     top: 50%;
-    right: 20px;              /* <-- align inside input, not container */
+    right: 20px;              
     transform: translateY(-50%);
     font-size: 20px;
     color: #6a97c4;
@@ -64,8 +65,8 @@
   }
   
   .btn {
-    width: 80%;
-    height: 60px;
+    width: 70%;
+    height: 50px;
     margin-top: 20px;
     background: #6a97c4;
     border: none;
@@ -86,7 +87,7 @@
   .forgot-password {
     display:flex;
     justify-content: center;
-    margin-top: 20px;
+    margin-top: 10px;
     margin-bottom: 20px;
   }
 
@@ -94,7 +95,7 @@
     background: none;
     border: none;
     color: #27496b;
-    font-size: 20px;
+    font-size: 16px;
     cursor: pointer;
     padding: 0;
     transition: color 0.3s ease;

@@ -6,9 +6,7 @@ const CreateProjectPage = ({ addProject }) => {
     return (
         <>
             <UserNavbar />
-            <div style={{ padding: '1rem' }}>
-                <ProjectCreationForm />
-            </div>
+            <ProjectCreationForm />
         </>
     );
 };

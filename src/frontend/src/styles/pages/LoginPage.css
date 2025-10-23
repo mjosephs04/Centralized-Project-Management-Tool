@@ -21,19 +21,19 @@
 }
 
 .top-right {
-    position: absolute;
-    top: 20px;
-    right: 50px;
-    z-index:10;
+  position: absolute;
+  top: 10px;
+  right: 30px;
+  z-index: 3;
 }
 
 .create-account {
-    width: 120%;
-    height: 60px;
+    width: 110%;
+    height: 50px;
     margin-top: 20px;
     border: 1px solid rgb(255, 255, 255);
     border-radius: 40px;
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 600;
     color: white;
     cursor: pointer;
