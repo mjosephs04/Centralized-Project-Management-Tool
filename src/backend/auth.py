@@ -229,4 +229,7 @@ def get_all_workers():
 
         # Serialize users (exclude password hash in to_dict)
         worker_data = [w.to_dict() for w in workers]
-    return jsonify({"users": worker_data}), 200
+        return jsonify({"users": worker_data}), 200
+    
+    except Exception as e:
+        return jsonify({"error": f"Failed to retrieve workers: {str(e)}"}), 500

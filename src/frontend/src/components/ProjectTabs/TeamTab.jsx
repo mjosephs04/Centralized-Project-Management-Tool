@@ -215,8 +215,8 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
       const invitationData = {
         email: inviteEmail.trim(),
         role: inviteRole,
-        workerType: inviteRole === "worker" ? inviteWorkerType : undefined,
-        contractorExpirationDate: inviteRole === "worker" && inviteWorkerType === "contractor" ? inviteContractorExpiration : undefined,
+        workerType: inviteRole === "worker" ? inviteWorkerType : null,
+        contractorExpirationDate: inviteRole === "worker" && inviteWorkerType === "contractor" ? inviteContractorExpiration : null,
       };
       
       console.log("Sending invitation data:", invitationData);
