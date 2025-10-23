@@ -38,6 +38,11 @@ class WorkOrderStatus(enum.Enum):
     CANCELLED = "cancelled"
 
 
+class AuditEntityType(enum.Enum):
+    PROJECT = "project"
+    WORK_ORDER = "work_order"
+
+
 class User(db.Model):
     __tablename__ = "users"
 
@@ -79,6 +84,7 @@ class Project(db.Model):
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     location = db.Column(db.String(300), nullable=True)
+    crewMembers = db.Column(db.Text, nullable=True)
     
     # Project timeline
     startDate = db.Column(db.Date, nullable=False)
@@ -94,8 +100,7 @@ class Project(db.Model):
     estimatedBudget = db.Column(DECIMAL(15, 2), nullable=True)
     actualCost = db.Column(DECIMAL(15, 2), nullable=True)
     
-    # Team members (stored as JSON array of user IDs)
-    crewMembers = db.Column(db.Text, nullable=True)  # JSON string of user IDs
+    # Team members are handled through the ProjectMember relationship model
     
     # Relationships
     projectManagerId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -107,17 +112,34 @@ class Project(db.Model):
     isActive = db.Column(db.Boolean, default=True, nullable=False)
 
     def get_crew_members(self) -> list:
-        """Get crew members as a list of user IDs"""
-        if not self.crewMembers:
-            return []
+        """Get crew members as a list of user IDs from ProjectMember relationships"""
         try:
-            return json.loads(self.crewMembers)
-        except (json.JSONDecodeError, TypeError):
+            return [member.userId for member in self.members if member.isActive]
+        except Exception:
+            # If members relationship is not loaded, return empty list
             return []
 
     def set_crew_members(self, member_ids: list):
-        """Set crew members from a list of user IDs"""
-        self.crewMembers = json.dumps(member_ids) if member_ids else None
+        """Set crew members from a list of user IDs using ProjectMember relationships"""
+        try:
+            # Remove existing members
+            for member in self.members:
+                if member.userId not in member_ids:
+                    member.isActive = False
+
+            # Add new members
+            for user_id in member_ids:
+                existing_member = next((m for m in self.members if m.userId == user_id), None)
+                if existing_member:
+                    existing_member.isActive = True
+                else:
+                    new_member = ProjectMember(projectId=self.id, userId=user_id)
+                    db.session.add(new_member)
+        except Exception:
+            # If members relationship is not loaded, just add new members
+            for user_id in member_ids:
+                new_member = ProjectMember(projectId=self.id, userId=user_id)
+                db.session.add(new_member)
 
     def to_dict(self) -> dict:
         return {
@@ -203,15 +225,15 @@ class ProjectMember(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     projectId = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
     userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    
+
     # Metadata
     joinedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     isActive = db.Column(db.Boolean, default=True, nullable=False)
-    
+
     # Relationships
     project = db.relationship('Project', backref=db.backref('members', lazy=True))
     user = db.relationship('User', backref=db.backref('project_memberships', lazy=True))
-    
+
     # Ensure unique user-project combinations
     __table_args__ = (db.UniqueConstraint('projectId', 'userId', name='unique_project_user'),)
 
@@ -233,30 +255,30 @@ class ProjectInvitation(db.Model):
     email = db.Column(db.String(255), nullable=False, index=True)
     projectId = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
     invitedBy = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    
+
     # Invitation token for secure registration
     token = db.Column(db.String(255), unique=True, nullable=False, index=True)
-    
+
     # Role and worker type for the invited user
     role = db.Column(db.Enum(UserRole), nullable=False)
     workerType = db.Column(db.Enum(WorkerType), nullable=True)
-    
+
     # Contractor expiration date (only applicable for contractor invitations)
     contractorExpirationDate = db.Column(db.Date, nullable=True)
-    
+
     # Invitation status
     status = db.Column(db.String(20), default="pending", nullable=False)  # pending, accepted, expired, cancelled
-    
+
     # Timestamps
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     expiresAt = db.Column(db.DateTime, nullable=False)
     acceptedAt = db.Column(db.DateTime, nullable=True)
     isActive = db.Column(db.Boolean, default=True, nullable=False)
-    
+
     # Relationships
     project = db.relationship('Project', backref=db.backref('invitations', lazy=True))
     inviter = db.relationship('User', backref=db.backref('sent_invitations', lazy=True))
-    
+
     # Ensure unique email-project combinations for pending invitations
     __table_args__ = (db.UniqueConstraint('email', 'projectId', 'status', name='unique_pending_invitation'),)
 
@@ -280,3 +302,63 @@ class ProjectInvitation(db.Model):
         }
 
 
+class Audit(db.Model):
+    __tablename__ = "audit_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    entityType = db.Column(db.Enum(AuditEntityType), nullable=False)
+    entityId = db.Column(db.Integer, nullable=False, index=True)
+    userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    field = db.Column(db.String(100), nullable=False)
+    oldValue = db.Column(db.Text, nullable=True)
+    newValue = db.Column(db.Text, nullable=True)
+    sessionId = db.Column(db.String(36), nullable=True, index=True)  # UUID for grouping changes
+    projectId = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True, index=True)  # Track project for work orders
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship('User', backref=db.backref('audit_logs', lazy=True))
+    project = db.relationship('Project', backref=db.backref('audit_logs', lazy=True))
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "entityType": self.entityType.value if self.entityType else None,
+            "entityId": self.entityId,
+            "userId": self.userId,
+            "user": self.user.to_dict() if self.user else None,
+            "field": self.field,
+            "oldValue": self.oldValue,
+            "newValue": self.newValue,
+            "sessionId": self.sessionId,
+            "projectId": self.projectId,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+        }
+
+class Supply(db.Model):
+    __tablename__ = "supplies"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    vendor = db.Column(db.String(200), nullable=False)
+    budget = db.Column(DECIMAL(15, 2), nullable=False, default=0.00)
+
+    # Foreign Key Relationship
+    projectId = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
+    project = db.relationship("Project", backref=db.backref("supplies", lazy=True, cascade="all, delete-orphan"))
+
+    # Metadata
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updatedAt = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "vendor": self.vendor,
+            "budget": float(self.budget) if self.budget is not None else 0.0,
+            "projectId": self.projectId,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+            "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+        }

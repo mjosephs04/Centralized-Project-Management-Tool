@@ -44,9 +44,42 @@ export const projectsAPI = {
     return response.data.project;
   },
 
+  workerUpdateProject: async (projectId, updates) => {
+    const response = await apiClient.patch(`/projects/${projectId}/worker-update`, updates);
+    return response.data.project;
+  },
+
   deleteProject: async (projectId) => {
     await apiClient.delete(`/projects/${projectId}`);
     return true;
+  },
+
+  getProjectAuditLogs: async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/audit-logs`);
+    return response.data;
+  },
+
+  postSupplies: async (projectId, payload) => {
+    const response = await apiClient.post(`/projects/${projectId}/supplies`, payload);
+    return response;
+  },
+  getSupplies:  async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/supplies`);
+    return response;
+  },
+  deleteSupplies:  async (projectId, supplyID) => {
+    const response = await apiClient.delete(`/projects/${projectId}/supplies/${supplyID}`);
+    return response;
+  },
+
+  inviteUser: async (projectId, invitationData) => {
+    const response = await apiClient.post(`/projects/${projectId}/invite`, invitationData);
+    return response.data;
+  },
+
+  validateInvitationToken: async (token) => {
+    const response = await apiClient.get(`/projects/invitations/validate/${token}`);
+    return response.data;
   },
 };
 
@@ -100,5 +133,15 @@ export const authAPI = {
   forgotPassword: async (payload) => {
     const response = await apiClient.post("/auth/forgot-password", payload)
     return response;
+  },
+  
+  validateInvitationToken: async (token) => {
+    const response = await apiClient.get(`/projects/invitations/validate/${token}`);
+    return response.data;
+  },
+  
+  registerWithInvitation: async (payload) => {
+    const response = await apiClient.post("/auth/register-with-invitation", payload);
+    return response.data;
   }
 };

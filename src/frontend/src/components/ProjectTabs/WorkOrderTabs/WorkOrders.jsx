@@ -10,17 +10,17 @@ import PMWorkOrders from "./PMWorkOrders";
  *  - project (required)
  *  - userRole: "worker" | "project_manager" | "admin"
  */
-const WorkOrders = ({ project, userRole }) => {
+const WorkOrders = ({ project, userRole, onWorkOrderUpdate }) => {
   if (!project) return null;
 
   // Admins see the PM view by default (adjust if you have a separate admin UI)
   if (userRole === "project_manager" || userRole === "admin") {
-    return <PMWorkOrders project={project} />;
+    return <PMWorkOrders project={project} onWorkOrderUpdate={onWorkOrderUpdate} />;
   }
 
   // Workers get the DnD board with Actual Cost updates
   if (userRole === "worker") {
-    return <WorkerWorkOrders project={project} />;
+    return <WorkerWorkOrders project={project} onWorkOrderUpdate={onWorkOrderUpdate} />;
   }
 
   // Fallback if auth hasn’t loaded or role is unknown

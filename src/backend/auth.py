@@ -215,3 +215,18 @@ def accept_invitation_existing_user():
         return jsonify({"error": f"Failed to accept invitation: {str(e)}"}), 500
 
 
+@auth_bp.get("/workers")
+@jwt_required()
+def get_all_workers():
+    """
+    Return all users with role=worker.
+    Example request: GET /api/auth/workers
+    Requires Authorization header with Bearer token.
+    """
+    try:
+        # Query all users who are workers
+        workers = User.query.filter_by(role=UserRole.WORKER).all()
+
+        # Serialize users (exclude password hash in to_dict)
+        worker_data = [w.to_dict() for w in workers]
+    return jsonify({"users": worker_data}), 200

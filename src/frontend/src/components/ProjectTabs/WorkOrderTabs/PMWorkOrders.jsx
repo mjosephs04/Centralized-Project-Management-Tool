@@ -11,7 +11,7 @@ const STATUS_LABEL = {
   cancelled: "Cancelled",
 };
 
-const PMWorkOrders = ({ project }) => {
+const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
   const [workOrders, setWorkOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -151,6 +151,7 @@ const PMWorkOrders = ({ project }) => {
       });
       await fetchWorkOrders();
       setShowUpdate(false);
+      if (onWorkOrderUpdate) onWorkOrderUpdate();
     } catch (err) {
       alert(err.response?.data?.error || err.message);
     }
@@ -161,6 +162,7 @@ const PMWorkOrders = ({ project }) => {
     try {
       await workOrdersAPI.deleteWorkOrder(woId);
       await fetchWorkOrders();
+      if (onWorkOrderUpdate) onWorkOrderUpdate();
     } catch (err) {
       alert(err.response?.data?.error || err.message);
     }

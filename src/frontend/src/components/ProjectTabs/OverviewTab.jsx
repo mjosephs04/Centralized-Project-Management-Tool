@@ -7,17 +7,33 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [password, setPassword] = useState('');
     const [deleteError, setDeleteError] = useState('');
+
+    // Helper function to capitalize priority for display
+    const capitalizePriority = (priority) => {
+        if (!priority) return 'Medium';
+        return priority.charAt(0).toUpperCase() + priority.slice(1);
+    };
+
     const [editedData, setEditedData] = useState({
         location: project.location || '',
-        actualStartDate: project.startDate || '',
-        scheduledEndDate: project.endDate || '',
-        priority: project.priority || 'Medium',
-        allocatedBudget: project.estimatedBudget || ''
+        actualStartDate: project.actualStartDate || '',
+        endDate: project.endDate || '',
+        priority: capitalizePriority(project.priority),
+        estimatedBudget: project.estimatedBudget || ''
     });
 
     const handleSave = () => {
         if (onUpdate) {
-            onUpdate(editedData);
+            // Convert data to match backend expectations
+            const processedData = {
+                ...editedData,
+                priority: editedData.priority.toLowerCase(),
+                estimatedBudget: editedData.estimatedBudget ? parseFloat(editedData.estimatedBudget) : null,
+                // Only include dates if they have values
+                actualStartDate: editedData.actualStartDate || null,
+                endDate: editedData.endDate || null
+            };
+            onUpdate(processedData);
         }
         setIsEditing(false);
     };
@@ -25,10 +41,10 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
     const handleCancel = () => {
         setEditedData({
             location: project.location || '',
-            actualStartDate: project.startDate || '',
-            scheduledEndDate: project.endDate || '',
-            priority: project.priority || 'Medium',
-            allocatedBudget: project.estimatedBudget || ''
+            actualStartDate: project.actualStartDate || '',
+            endDate: project.endDate || '',
+            priority: capitalizePriority(project.priority),
+            estimatedBudget: project.estimatedBudget || ''
         });
         setIsEditing(false);
     }
@@ -148,7 +164,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                             style={styles.input}
                         />
                     ) : (
-                        <p style={styles.value}>{project.startDate || 'Not specified'}</p>
+                        <p style={styles.value}>{project.actualStartDate || 'Not specified'}</p>
                     )}
                 </div>
 
@@ -168,8 +184,8 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                     {isEditing ? (
                         <input
                             type='date'
-                            value={editedData.scheduledEndDate}
-                            onChange={(e) => setEditedData({...editedData, scheduledEndDate: e.target.value})}
+                            value={editedData.endDate}
+                            onChange={(e) => setEditedData({...editedData, endDate: e.target.value})}
                             style={styles.input}
                         />
                     ) : (
@@ -186,13 +202,15 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                         {isEditing ? (
                             <input
                                 type='text'
-                                value={editedData.allocatedBudget}
-                                onChange={(e) => setEditedData({...editedData, allocatedBudget: e.target.value})}
+                                value={editedData.estimatedBudget}
+                                onChange={(e) => setEditedData({...editedData, estimatedBudget: e.target.value})}
                                 style={styles.input}
                                 placeholder="$0.00"
                             />
                         ) : (
-                            <p style={styles.value}>{project.estimatedBudget || 'Not specified'}</p>
+                            <p style={styles.value}>
+                                {project.estimatedBudget ? `$${parseFloat(project.estimatedBudget).toFixed(2)}` : 'Not specified'}
+                            </p>
                         )}
                     </div>
                 )}
@@ -239,7 +257,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                             color: priorityStyle.text
                         }}>
                             <span style={styles.priorityIcon}>{priorityStyle.icon}</span>
-                            {project.priority || 'Medium'}
+                            {capitalizePriority(project.priority)}
                         </div>
                     )}
                 </div>
