@@ -243,7 +243,8 @@ const UserNavbar = () => {
             </div>
 
             <div style={styles.navbarIcons}>
-            <button
+            <Link to="/login-distribution">
+                <button
                     style={{
                         ...styles.iconButton,
                         ...(isHovered.login_dist ? styles.iconButtonHover : {})
@@ -267,6 +268,7 @@ const UserNavbar = () => {
                         Login Distribution
                     </div>
                 </button>
+            </Link>
 
                 <button
                     style={{
