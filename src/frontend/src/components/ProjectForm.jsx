@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaPlusCircle, FaMinusCircle } from 'react-icons/fa';
+import { FaPlusCircle, FaMinusCircle, FaArrowLeft } from 'react-icons/fa';
 import { projectsAPI } from '../services/api';
 
 const ProjectCreationForm = ({ onCreate }) => {
@@ -20,7 +20,6 @@ const ProjectCreationForm = ({ onCreate }) => {
         crewMembers: [''],
     });
     
-
     const handleChange = (e, index = null) => {
         const { name, value } = e.target;
         if (name === 'crewMembers') {
@@ -72,25 +71,40 @@ const ProjectCreationForm = ({ onCreate }) => {
         navigate("/projects");
     }
 
-    // --- Inline Styles Object ---
     const styles = {
-        pageContainter: {
-            display: 'flex',
-            flexDirection:'column',
-            padding: '2rem 5rem',
-            backgroundColor: '#f5f5f5',
-            minHeight: 'calc(100vh-70px)',
+        pageContainer: {
+            padding: '2.5rem 2.5rem',
+            background: 'linear-gradient(135deg, rgb(35, 115, 243) 0%, #4facfe 100%)',
+            minHeight: 'calc(100vh - 80px)',
+            fontFamily: 'sans-serif',
         },
-        headerContainer: {
+        header: {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             marginBottom: '2rem',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            padding: '2rem',
+            borderRadius: '16px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
         },
-        formTitle: {
-            fontSize: '2rem',
-            fontWeight: 'bold',
-            color: '#333',
+        titleSection: {
+            flex: 1,
+        },
+        pageTitle: {
+            fontSize: '2.5rem',
+            fontWeight: '700',
+            color: '#1a202c',
+            margin: '0 0 0.5rem 0',
+            background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            MozBackgroundClip: 'text',
+            MozTextFillColor: 'transparent',
+        },
+        subtitle: {
+            fontSize: '1rem',
+            color: '#718096',
             margin: 0,
         },
         actionButtons: {
@@ -98,126 +112,125 @@ const ProjectCreationForm = ({ onCreate }) => {
             gap: '1rem',
         },
         createButton: {
-            padding: '0.8rem 2.2rem',
+            padding: '0.9rem 2rem',
             border: 'none',
-            borderRadius: '25px',
-            backgroundColor: '#f0e6e4',
-            color: '#c45a55',
-            fontSize: '1rem',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'background-color 0.2s',
-        },
-        cancelButton: {
-            padding: '0.8rem 2.2rem',
-            border: 'none',
-            borderRadius: '25px',
-            backgroundColor: '#e6908a',
+            borderRadius: '10px',
+            background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
             color: 'white',
             fontSize: '1rem',
-            fontWeight: 'bold',
+            fontWeight: '600',
             cursor: 'pointer',
-            transition: 'background-color 0.2s',
+            transition: 'all 0.3s ease',
+            boxShadow: '0 4px 15px rgba(35, 115, 243, 0.4)',
+        },
+        cancelButton: {
+            padding: '0.9rem 2rem',
+            border: '2px solid #cbd5e0',
+            borderRadius: '10px',
+            backgroundColor: 'white',
+            color: '#4a5568',
+            fontSize: '1rem',
+            fontWeight: '600',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',
+        },
+        formContainer: {
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            borderRadius: '16px',
+            padding: '2.5rem',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
         },
         formGrid: {
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            gap: '2.5rem 3rem',
-            backgroundColor: '#ffffff',
-            padding: '2.5rem',
-            borderRadius: '12px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+            gap: '2rem',
         },
         formGroup: {
-            marginBottom: '0'
+            display: 'flex',
+            flexDirection: 'column',
         },
         label: {
-            display: 'block',
+            fontSize: '0.95rem',
             fontWeight: '600',
-            marginBottom: '0.6rem',
-            color: "#333",
-            fontSize: '1.05rem',
+            color: '#4a5568',
+            marginBottom: '0.5rem',
         },
         input: {
-            width: '100%',
-            padding: '0.8rem 0.5rem',
-            border: 'none',
-            borderBottom: '1px solid #ddd',
-            outline: 'none',
+            padding: '0.85rem 1rem',
+            borderRadius: '10px',
+            border: '2px solid #e2e8f0',
             fontSize: '1rem',
-            color: '#333',
-            backgroundColor: 'transparent',
-            transition: 'border-color 0.3s ease',
+            transition: 'all 0.3s ease',
+            outline: 'none',
+            fontFamily: 'sans-serif',
+            color: '#2c3e50',
         },
         inputFocus: {
-            borderBottom: '1px solid #0052D4',
+            borderColor: '#2373f3',
+            boxShadow: '0 0 0 3px rgba(35, 115, 243, 0.1)',
         },
         textarea: {
-            height: '100px',
+            minHeight: '120px',
             resize: 'vertical',
+            fontFamily: 'sans-serif',
+        },
+        crewMembersSection: {
+            gridColumn: '1 / -1',
+            marginTop: '1rem',
         },
         crewMembersContainer: {
-            gridColumn: '1 / -1',
-            backgroundColor: '#fcfcfc',
-            border: '1px solid #eee',
-            borderRadius: '8px',
+            backgroundColor: '#f7fafc',
+            border: '2px solid #e2e8f0',
+            borderRadius: '12px',
             padding: '1.5rem',
-            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)',
+            marginTop: '1rem',
         },
         crewMemberInputGroup: {
             display: 'flex',
             alignItems: 'center',
-            marginBottom: '0.8rem',
+            gap: '0.75rem',
+            marginBottom: '1rem',
         },
         crewMemberInput: {
             flex: 1,
-            marginRight: '0.75rem',
-            padding: '0.8rem 0.5',
-            border: 'none',
-            borderBottom: '1px solid #ddd',
+            padding: '0.85rem 1rem',
+            borderRadius: '10px',
+            border: '2px solid #e2e8f0',
             outline: 'none',
-            backgroundColor: 'transparent',
+            fontSize: '1rem',
+            transition: 'all 0.3s ease',
         },
-        crewIconButton: {
+        iconButton: {
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            color: '#888',
-            fontSize: '1.2rem',
-            padding: '0.3rem',
-            transition: 'color 0.2s',
-        },
-        crewIconButtonHover: {
-            color: '#0052D4',
-        },
-        crewRemoveButtonHover: {
-            color: '#dc3545',
-        },
-        formSubmitButton: {
-            gridColumn: '1 / -1',
-            marginTop: '2rem',
-            padding: '1rem',
-            border: 'none',
+            padding: '0.5rem',
             borderRadius: '8px',
-            backgroundColor: '#0052D4',
-            color: 'white',
-            fontSize: '1.1rem',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'background-color 0.2s',
-            boxShadow: '0 4px 10px rgba(0, 82, 212, 0.2)',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontSize: '0.95rem',
+            fontWeight: '600',
         },
-        halfWidthGroup: {
-            flex: 1,
+        addButton: {
+            color: '#2373f3',
+            marginTop: '0.5rem',
+        },
+        removeButton: {
+            color: '#dc2626',
+            padding: '0.5rem',
         },
         errorBanner: {
-            padding: '1rem',
+            padding: '1rem 1.5rem',
             backgroundColor: '#fee2e2',
             color: '#991b1b',
-            borderRadius: '8px',
-            marginBottom: '1rem',
+            borderRadius: '12px',
+            marginBottom: '1.5rem',
             border: '1px solid #fca5a5',
-        }
+            fontSize: '0.95rem',
+            fontWeight: '600',
+        },
     };
 
     const [focusedInput, setFocusedInput] = useState(null);
@@ -233,15 +246,20 @@ const ProjectCreationForm = ({ onCreate }) => {
     });
 
     return (
-        <div style={styles.pageContainter}>
-            {error && (
-                <div style={styles.errorBanner}>
-                    Error: {error}
+        <div style={styles.pageContainer}>
+            <div style={styles.header}>
+                <div style={styles.titleSection}>
+                    <h1 style={styles.pageTitle}>Create New Project</h1>
+                    <p style={styles.subtitle}>Fill in the details to create a new project</p>
                 </div>
-            )}
-            <div style={styles.headerContainer}>
-                <h2 style={styles.formTitle}>Project Details</h2>
                 <div style={styles.actionButtons}>
+                    <button
+                        type="button"
+                        style={styles.cancelButton}
+                        onClick={handleCancel}
+                    >
+                        Cancel
+                    </button>
                     <button
                         type="submit"
                         form="project-form"
@@ -251,54 +269,66 @@ const ProjectCreationForm = ({ onCreate }) => {
                             cursor: isSubmitting ? 'not-allowed' : 'pointer',
                         }}
                         disabled={isSubmitting}
-                    >{isSubmitting ? 'Creating...' : 'Create'}</button>
-                    <button
-                        type="button"
-                        style={styles.cancelButton}
-                        onClick={handleCancel}
-                    >Cancel</button>
+                    >
+                        {isSubmitting ? 'Creating...' : 'Create Project'}
+                    </button>
                 </div>
             </div>
-            <form onSubmit={handleSubmit} style={styles.formGrid} id="project-form">
-                <div style={styles.formGroup}>
-                    <label style={styles.label}>Title</label>
-                    <input
-                        style={getInputStyle('name')}
-                        type="text"
-                        name="name"
-                        required
-                        value={formData.name}
-                        onChange={handleChange}
-                        onFocus={() => setFocusedInput('name')}
-                        onBlur={() => setFocusedInput(null)}
-                    />
-                </div>
-                <div style={styles.formGroup}>
-                    <label style={styles.label}>Location</label>
+
+            <div style={styles.formContainer}>
+                {error && (
+                    <div style={styles.errorBanner}>
+                        ⚠️ Error: {error}
+                    </div>
+                )}
+
+                <form onSubmit={handleSubmit} style={styles.formGrid} id="project-form">
+                    <div style={styles.formGroup}>
+                        <label style={styles.label}>Project Title *</label>
+                        <input
+                            style={getInputStyle('name')}
+                            type="text"
+                            name="name"
+                            required
+                            placeholder="Enter project name"
+                            value={formData.name}
+                            onChange={handleChange}
+                            onFocus={() => setFocusedInput('name')}
+                            onBlur={() => setFocusedInput(null)}
+                        />
+                    </div>
+
+                    <div style={styles.formGroup}>
+                        <label style={styles.label}>Location *</label>
                         <input
                             style={getInputStyle('location')}
                             type="text"
                             name="location"
                             required
+                            placeholder="Project location"
                             value={formData.location}
                             onChange={handleChange}
                             onFocus={() => setFocusedInput('location')}
                             onBlur={() => setFocusedInput(null)}
                         />
-                </div>
-                <div style={{ ...styles.formGroup, gridColumn: '1 / -1'}}>
-                    <label style={styles.label}>Description</label>
-                    <textarea
-                        style={{ ...getInputStyle('description'), ...styles.textarea}}
-                        name='description'
-                        value={formData.description}
-                        onChange={handleChange}
-                        onFocus={() => setFocusedInput('description')}
-                        onBlur={() => setFocusedInput(null)}
-                    />
-                </div>
-                <div style={styles.formGroup}>
-                    <label style={styles.label}>Start Date</label>
+                    </div>
+
+                    <div style={{ ...styles.formGroup, gridColumn: '1 / -1' }}>
+                        <label style={styles.label}>Description</label>
+                        <textarea
+                            style={{ ...getInputStyle('description'), ...styles.textarea }}
+                            name="description"
+                            placeholder="Provide a detailed description of the project..."
+                            value={formData.description}
+                            onChange={handleChange}
+                            onFocus={() => setFocusedInput('description')}
+                            onBlur={() => setFocusedInput(null)}
+                        />
+                    </div>
+
+
+                    <div style={styles.formGroup}>
+                        <label style={styles.label}>Start Date *</label>
                         <input
                             style={getInputStyle('startDate')}
                             type="date"
@@ -309,9 +339,10 @@ const ProjectCreationForm = ({ onCreate }) => {
                             onFocus={() => setFocusedInput('startDate')}
                             onBlur={() => setFocusedInput(null)}
                         />
-                </div>
-                <div style={styles.formGroup}>
-                    <label style={styles.label}>End Date</label>
+                    </div>
+
+                    <div style={styles.formGroup}>
+                        <label style={styles.label}>End Date *</label>
                         <input
                             style={getInputStyle('endDate')}
                             type="date"
@@ -322,60 +353,61 @@ const ProjectCreationForm = ({ onCreate }) => {
                             onFocus={() => setFocusedInput('endDate')}
                             onBlur={() => setFocusedInput(null)}
                         />
-                </div>
-                <div style={styles.formGroup}>
-                    <label style={styles.label}>Allocated Budget</label>
+                    </div>
+
+                    <div style={styles.formGroup}>
+                        <label style={styles.label}>Estimated Budget *</label>
                         <input
                             style={getInputStyle('estimatedBudget')}
                             type="number"
                             name="estimatedBudget"
                             required
-                            placeholder='e.g., 50000'
+                            placeholder="e.g., 50000"
                             value={formData.estimatedBudget}
                             onChange={handleChange}
                             onFocus={() => setFocusedInput('estimatedBudget')}
                             onBlur={() => setFocusedInput(null)}
                         />
-                </div>
+                    </div>
 
-                <div style={styles.crewMembersContainer}>
-                    <label style={styles.label}>Crew Members</label>
-                    {formData.crewMembers.map((member, index) => (
-                        <div key={index} style={styles.crewMemberInputGroup}>
-                            <input
-                                style={getCrewInputStyle(`crewMember-${index}`)}
-                                type="text"
-                                name="crewMembers"
-                                placeholder={`Crew Member ${index + 1}`}
-                                value={member}
-                                onChange={(e) => handleChange(e, index)}
-                                onFocus={() => setFocusedInput(`crewMember-${index}`)}
-                                onBlur={() => setFocusedInput(null)}
-                            />
-                            {formData.crewMembers.length > 1 && (
-                                <FaMinusCircle
-                                    style={{
-                                        ...styles.crewIconButton,
-                                        ...(focusedInput === `removeCrew-${index}` ? styles.crewRemoveButtonHover : {}),
-                                        color: '#dc3545',
-                                    }}
-                                    onMouseEnter={() => setFocusedInput(`removeCrew-${index}`)}
-                                    onMouseLeave={() => setFocusedInput(null)}
-                                    onClick={() => removeCrewMember(index)}
-                                    size={20}
-                                />
-                            )}
+                    <div style={styles.crewMembersSection}>
+                        <label style={styles.label}>Crew Members (Optional)</label>
+                        <div style={styles.crewMembersContainer}>
+                            {formData.crewMembers.map((member, index) => (
+                                <div key={index} style={styles.crewMemberInputGroup}>
+                                    <input
+                                        style={getCrewInputStyle(`crewMember-${index}`)}
+                                        type="text"
+                                        name="crewMembers"
+                                        placeholder={`Crew Member ${index + 1}`}
+                                        value={member}
+                                        onChange={(e) => handleChange(e, index)}
+                                        onFocus={() => setFocusedInput(`crewMember-${index}`)}
+                                        onBlur={() => setFocusedInput(null)}
+                                    />
+                                    {formData.crewMembers.length > 1 && (
+                                        <button
+                                            type="button"
+                                            style={{ ...styles.iconButton, ...styles.removeButton }}
+                                            onClick={() => removeCrewMember(index)}
+                                        >
+                                            <FaMinusCircle size={20} />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                            <button
+                                type="button"
+                                style={{ ...styles.iconButton, ...styles.addButton }}
+                                onClick={addCrewMember}
+                            >
+                                <FaPlusCircle size={18} />
+                                Add Crew Member
+                            </button>
                         </div>
-                    ))}
-                    <button
-                        type="button"
-                        style={{ ...styles.crewIconButton, ...styles.crewIconButtonHover, color: '#0052D4'}}
-                        onClick={addCrewMember}
-                        onMouseEnter={() => setFocusedInput('addCrew')}
-                        onMouseLeave={() => setFocusedInput(null)}
-                    > <FaPlusCircle size={20}/> Add Member </button>
-                </div>
-            </form>
+                    </div>
+                </form>
+            </div>
         </div>
     );
 };

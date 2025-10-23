@@ -14,7 +14,7 @@ const styles = {
         background: 'rgba(255, 255, 255, 0.98)',
         backdropFilter: 'blur(10px)',
         borderBottom: '1px solid rgba(0, 82, 212, 0.1)',
-        boxShadow: '0 2px 20px rgba(0, 0, 0, 0.08)',
+        boxShadow: '0 2px 20px rgba(0, 0, 0, 0.12)',
         position: 'sticky',
         top: 0,
         width: '100%',
