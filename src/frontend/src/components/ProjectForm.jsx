@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaPlusCircle, FaMinusCircle, FaArrowLeft } from 'react-icons/fa';
 import { projectsAPI } from '../services/api';
+import { useSnackbar } from '../contexts/SnackbarContext';
 
 const ProjectCreationForm = ({ onCreate }) => {
     const navigate = useNavigate(); 
+    const { showSnackbar } = useSnackbar();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState(null);
 
@@ -58,9 +60,12 @@ const ProjectCreationForm = ({ onCreate }) => {
             };
             
             const createdProject = await projectsAPI.createProject(projectData);
+            showSnackbar('Project created successfully!', 'success');
             navigate(`/projects/${createdProject.id}`);
        } catch (err) {
-            setError(err.response?.data?.error || err.message);
+            const errorMessage = err.response?.data?.error || err.message;
+            setError(errorMessage);
+            showSnackbar(`Failed to create project: ${errorMessage}`, 'error');
             console.error('Error creating project:', err);
        } finally {
             setIsSubmitting(false);
@@ -68,6 +73,7 @@ const ProjectCreationForm = ({ onCreate }) => {
     };
 
     const handleCancel = () => {
+        showSnackbar('Project creation cancelled', 'warning');
         navigate("/projects");
     }
 

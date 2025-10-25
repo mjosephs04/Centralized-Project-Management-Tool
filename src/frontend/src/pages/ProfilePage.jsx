@@ -2,8 +2,10 @@ import React, { useState, useEffect } from "react";
 import UserNavbar from "../components/UserNavbar";
 import {authAPI} from "../services/api";
 import { useNavigate } from "react-router-dom";
+import { useSnackbar } from "../contexts/SnackbarContext";
 
 const ProfilePage = () => {
+    const { showSnackbar } = useSnackbar();
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -21,6 +23,7 @@ const ProfilePage = () => {
         } catch (err) {
             console.error("Error fetching profile:", err);
             setError("Failed to load profile data.");
+            showSnackbar("Failed to load profile data", "error");
         } finally {
             setLoading(false);
         }
@@ -28,6 +31,7 @@ const ProfilePage = () => {
 
     const handleLogout = () => {
         localStorage.removeItem("accessToken");
+        showSnackbar("Successfully logged out", "info");
         navigate("/login");
     };
 

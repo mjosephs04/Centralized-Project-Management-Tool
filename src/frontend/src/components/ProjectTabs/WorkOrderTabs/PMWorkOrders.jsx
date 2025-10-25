@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FaPlus, FaTimes } from "react-icons/fa";
 import { workOrdersAPI } from "../../../services/api";
+import { useSnackbar } from '../../../contexts/SnackbarContext';
 
 const STATUS_ORDER = ["pending", "in_progress", "on_hold", "completed", "cancelled"];
 const STATUS_LABEL = {
@@ -12,6 +13,7 @@ const STATUS_LABEL = {
 };
 
 const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
+  const { showSnackbar } = useSnackbar();
   const [workOrders, setWorkOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -130,9 +132,27 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
       await workOrdersAPI.createWorkOrder(payload);
       await fetchWorkOrders();
       setShowCreate(false);
+      showSnackbar('Work order created successfully!', 'success');
     } catch (err) {
-      alert(err.response?.data?.error || err.message);
+      console.error('Error creating work order:', err);
+      showSnackbar(err.response?.data?.error || 'Failed to create work order', 'error');
     }
+  };
+
+  const handleCancelCreate = () => {
+    setShowCreate(false);
+    setFormData({
+      name: "",
+      description: "",
+      location: "",
+      startDate: "",
+      endDate: "",
+      priority: 3,
+      status: "pending",
+      estimatedBudget: "",
+    });
+    setFormErrors({});
+    showSnackbar('Work order creation cancelled', 'warning');
   };
 
   const updateWorkOrder = async () => {
@@ -151,20 +171,42 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
       });
       await fetchWorkOrders();
       setShowUpdate(false);
+      showSnackbar('Work order updated successfully!', 'success');
       if (onWorkOrderUpdate) onWorkOrderUpdate();
     } catch (err) {
-      alert(err.response?.data?.error || err.message);
+      console.error('Error updating work order:', err);
+      showSnackbar(err.response?.data?.error || 'Failed to update work order', 'error');
     }
   };
 
+  const handleCancelUpdate = () => {
+    setShowUpdate(false);
+    setFormData({
+      name: "",
+      description: "",
+      location: "",
+      startDate: "",
+      endDate: "",
+      priority: 3,
+      status: "pending",
+      estimatedBudget: "",
+    });
+    setFormErrors({});
+  };
+
   const deleteWorkOrder = async (woId) => {
-    if (!window.confirm("Delete this work order?")) return;
+    if (!window.confirm("Delete this work order?")) {
+      showSnackbar('Work order deletion cancelled', 'warning');
+      return;
+    }
     try {
       await workOrdersAPI.deleteWorkOrder(woId);
       await fetchWorkOrders();
+      showSnackbar('Work order deleted successfully!', 'success');
       if (onWorkOrderUpdate) onWorkOrderUpdate();
     } catch (err) {
-      alert(err.response?.data?.error || err.message);
+      console.error('Error deleting work order:', err);
+      showSnackbar(err.response?.data?.error || 'Failed to delete work order', 'error');
     }
   };
 
@@ -278,11 +320,11 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
 
       {/* Create (PM) */}
       {showCreate && (
-        <div style={styles.overlay} onClick={() => setShowCreate(false)}>
+        <div style={styles.overlay} onClick={handleCancelCreate}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h3 style={styles.modalTitle}>Create Work Order</h3>
-              <button style={styles.closeButton} onClick={() => setShowCreate(false)}><FaTimes /></button>
+              <button style={styles.closeButton} onClick={handleCancelCreate}><FaTimes /></button>
             </div>
             <form onSubmit={createWorkOrder} style={styles.form}>
               <div style={styles.formGroup}>
@@ -393,7 +435,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
               </div>
 
               <div style={styles.actions}>
-                <button type="button" style={styles.cancelBtn} onClick={() => setShowCreate(false)}>Cancel</button>
+                <button type="button" style={styles.cancelBtn} onClick={handleCancelCreate}>Cancel</button>
                 <button type="submit" style={styles.submitBtn}>Create Work Order</button>
               </div>
             </form>
@@ -425,11 +467,11 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
 
       {/* Update (PM edits only Estimated Budget; can still change Status via dropdown) */}
       {showUpdate && (
-        <div style={styles.overlay} onClick={() => setShowUpdate(false)}>
+        <div style={styles.overlay} onClick={handleCancelUpdate}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h3 style={styles.modalTitle}>Update Work Order</h3>
-              <button style={styles.closeButton} onClick={() => setShowUpdate(false)}><FaTimes /></button>
+              <button style={styles.closeButton} onClick={handleCancelUpdate}><FaTimes /></button>
             </div>
             <form
               onSubmit={(e) => {
@@ -542,7 +584,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
               </div>
 
               <div style={styles.actions}>
-                <button type="button" style={styles.cancelBtn} onClick={() => setShowUpdate(false)}>Close</button>
+                <button type="button" style={styles.cancelBtn} onClick={handleCancelUpdate}>Close</button>
                 <button type="submit" style={styles.submitBtn}>Update Work Order</button>
               </div>
             </form>
@@ -557,7 +599,7 @@ const styles = {
   container: { maxWidth: "1400px", margin: "0 auto" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" },
   title: { fontSize: "1.8rem", fontWeight: "600", color: "#2c3e50", margin: 0 },
-  createButton: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.7rem 1.5rem", background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)', color: "white", border: "none", borderRadius: "8px", fontSize: "0.95rem", fontWeight: "600", cursor: "pointer" },
+  createButton: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.7rem 1.5rem", backgroundColor: "#0052D4", color: "white", border: "none", borderRadius: "8px", fontSize: "0.95rem", fontWeight: "600", cursor: "pointer" },
 
   groupWrap: { display: "grid", gap: "1.25rem" },
   group: { background: "#ffffff", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" },
@@ -730,7 +772,7 @@ const styles = {
   },
   submitBtn: { 
     padding: "0.875rem 1.75rem", 
-    background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+    backgroundColor: "#0052D4", 
     color: "white", 
     border: "none", 
     borderRadius: "8px", 

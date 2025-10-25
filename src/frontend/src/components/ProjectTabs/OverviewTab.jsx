@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { FaEdit, FaSave, FaTimes, FaMapMarkerAlt, FaCalendarAlt, FaDollarSign, FaFlag, FaChartLine, FaTrashAlt } from "react-icons/fa";
 import { projectsAPI } from "../../services/api";
+import { useSnackbar } from '../../contexts/SnackbarContext';
 
 const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
+    const { showSnackbar } = useSnackbar();
     const [isEditing, setIsEditing] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [password, setPassword] = useState('');
@@ -22,20 +24,25 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
         estimatedBudget: project.estimatedBudget || ''
     });
 
-    const handleSave = () => {
-        if (onUpdate) {
-            // Convert data to match backend expectations
-            const processedData = {
-                ...editedData,
-                priority: editedData.priority.toLowerCase(),
-                estimatedBudget: editedData.estimatedBudget ? parseFloat(editedData.estimatedBudget) : null,
-                // Only include dates if they have values
-                actualStartDate: editedData.actualStartDate || null,
-                endDate: editedData.endDate || null
-            };
-            onUpdate(processedData);
+    const handleSave = async () => {
+        try {
+            if (onUpdate) {
+                // Convert data to match backend expectations
+                const processedData = {
+                    ...editedData,
+                    priority: editedData.priority.toLowerCase(),
+                    estimatedBudget: editedData.estimatedBudget ? parseFloat(editedData.estimatedBudget) : null,
+                    // Only include dates if they have values
+                    actualStartDate: editedData.actualStartDate || null,
+                    endDate: editedData.endDate || null
+                };
+                await onUpdate(processedData);
+                showSnackbar('Project details updated successfully!', 'success');
+            }
+            setIsEditing(false);
+        } catch (error) {
+            showSnackbar('Failed to update project details', 'error');
         }
-        setIsEditing(false);
     };
 
     const handleCancel = () => {
@@ -47,6 +54,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
             estimatedBudget: project.estimatedBudget || ''
         });
         setIsEditing(false);
+        showSnackbar('Changes discarded', 'warning');
     }
 
     const handleDeleteClick = () => {
@@ -59,6 +67,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
         setShowDeleteConfirm(false);
         setDeleteError('');
         setPassword('');
+        showSnackbar('Project deletion cancelled', 'warning');
     };
 
     const handleDeleteConfirm = async () => {
@@ -71,6 +80,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
             await projectsAPI.deleteProject(project.id);
 
             setShowDeleteConfirm(false);
+            showSnackbar('Project deleted successfully', 'success');
 
             if(onDelete) {
                 onDelete();
@@ -78,6 +88,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
         } catch (err) {
             console.error('Error deleting project:', err);
             setDeleteError(err.response?.data?.message || 'Failed to delete project');
+            showSnackbar(err.response?.data?.message || 'Failed to delete project', 'error');
         }
     }
 

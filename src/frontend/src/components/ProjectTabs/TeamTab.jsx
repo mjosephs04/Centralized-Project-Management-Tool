@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FaEdit, FaSave, FaTimes, FaUserPlus, FaTrash, FaUser } from "react-icons/fa";
-import { usersAPI, projectsAPI } from "../../services/api"; // << make sure path is correct for your project
+import { usersAPI, projectsAPI } from "../../services/api";
+import { useSnackbar } from '../../contexts/SnackbarContext';
 
 const TeamTab = ({ project, onUpdate, userRole }) => {
   // Local state
+  const { showSnackbar } = useSnackbar();
   const [isEditing, setIsEditing] = useState(false);
 
   // Normalize incoming crew members to objects { id?, name? } in local state
-  // project.crewMembers might be an array of strings or IDs; we’ll store objects internally.
+  // project.crewMembers might be an array of strings or IDs; we'll store objects internally.
   const [crew, setCrew] = useState([]);
 
   const [allWorkers, setAllWorkers] = useState([]); // full list from API
@@ -47,6 +49,7 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
         setAllWorkers(users || []);
       } catch (e) {
         console.error("Failed to load workers", e);
+        showSnackbar("Failed to load workers list", "error");
       } finally {
         setLoadingWorkers(false);
       }
@@ -168,7 +171,9 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
   };
 
   const handleRemoveMember = (index) => {
+    const memberName = crewResolved[index]?.name || "Team member";
     setCrew((prev) => prev.filter((_, i) => i !== index));
+    showSnackbar(`${memberName} removed from team`, 'warning');
   };
 
   const handleSave = async () => {
@@ -177,9 +182,10 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
     try {
       await onUpdate?.({ crewMembers: payload });
       setIsEditing(false);
+      showSnackbar("Team changes saved successfully!", "success");
     } catch (e) {
       console.error("Failed to save crew", e);
-      alert("Failed to save team. See console for details.");
+      showSnackbar("Failed to save team changes", "error");
     }
   };
 
@@ -197,6 +203,7 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
     setShowDropdown(false);
     setHighlightedIndex(-1);
     setIsEditing(false);
+    showSnackbar("Team changes discarded", "warning");
   };
 
   const handleInviteUser = async () => {
@@ -205,6 +212,7 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
     // Validate contractor expiration date if needed
     if (inviteRole === "worker" && inviteWorkerType === "contractor" && !inviteContractorExpiration.trim()) {
       setInviteMessage("❌ Contractor expiration date is required for contractor invitations");
+      showSnackbar("Contractor expiration date is required", "error");
       return;
     }
     
@@ -225,18 +233,21 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
       
       if (response.message) {
         setInviteMessage(`✅ ${response.message}`);
+        showSnackbar(response.message, "success");
         setInviteEmail("");
         setInviteRole("worker");
         setInviteWorkerType("crew_member");
         setInviteContractorExpiration("");
       } else if (response.warning) {
         setInviteMessage(`⚠️ ${response.warning}`);
+        showSnackbar(response.warning, "warning");
       }
     } catch (error) {
       console.error("Failed to send invitation:", error);
       console.error("Error response:", error.response?.data);
       const errorMessage = error.response?.data?.error || "Failed to send invitation";
       setInviteMessage(`❌ ${errorMessage}`);
+      showSnackbar(errorMessage, "error");
     } finally {
       setIsInviting(false);
     }
@@ -398,7 +409,6 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
                   boxShadow: focusedInput === 'invite' ? '0 0 0 3px rgba(16, 185, 129, 0.1)' : 'none',
                 }}
               />
-              
               <select
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value)}

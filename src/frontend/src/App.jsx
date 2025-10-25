@@ -12,24 +12,28 @@ import ProfilePage from "./pages/ProfilePage"
 import RouteProtector from "./components/RouteProtector";
 import LoginDistributionPage from "./pages/LoginDistribution";
 import RoleProtector from "./components/RoleProtector";
+import { SnackbarProvider } from "./contexts/SnackbarContext";
+import { BrowserRouter } from "react-router-dom";
 
 const App = () => {
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/create-account" element={<CreateAccountPage />} />
-        <Route path="/register" element={<RegisterWithTokenPage />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
+      <SnackbarProvider>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/create-account" element={<CreateAccountPage />} />
+          <Route path="/register" element={<RegisterWithTokenPage />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
 
-        
-        <Route path="/profile" element={<RouteProtector>{<ProfilePage />}</RouteProtector>} />
-        <Route path="/projects" element={<RouteProtector>{<ProjectsPage />}</RouteProtector>} />
-        <Route path="/projects/create" element={<RouteProtector>{<CreateProjectPage />}</RouteProtector>} />
-        <Route path="/projects/:projectId" element={<RouteProtector>{<SingleProjectPage />}</RouteProtector>} />
-        <Route path="login-distribution" element={<RouteProtector><RoleProtector allowedRoles={['project_manager']}>{<LoginDistributionPage />}</RoleProtector></RouteProtector>} />
-      </Routes>
+          
+          <Route path="/profile" element={<RouteProtector>{<ProfilePage />}</RouteProtector>} />
+          <Route path="/projects" element={<RouteProtector>{<ProjectsPage />}</RouteProtector>} />
+          <Route path="/projects/create" element={<RouteProtector>{<CreateProjectPage />}</RouteProtector>} />
+          <Route path="/projects/:projectId" element={<RouteProtector>{<SingleProjectPage />}</RouteProtector>} />
+          <Route path="login-distribution" element={<RouteProtector><RoleProtector allowedRoles={['project_manager']}>{<LoginDistributionPage />}</RoleProtector></RouteProtector>} />
+        </Routes>
+      </SnackbarProvider>
     </Router>
   );
 };

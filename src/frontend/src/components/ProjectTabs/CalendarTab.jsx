@@ -4,8 +4,10 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { workOrdersAPI } from "../../services/api";
 import { FaPlus, FaTimes } from "react-icons/fa";
+import { useSnackbar } from '../../contexts/SnackbarContext';
 
 const CalendarTab = ({ project }) => {
+    const { showSnackbar } = useSnackbar();
     const [workOrders, setWorkOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showCreate, setShowCreate] = useState(false);
@@ -20,6 +22,12 @@ const CalendarTab = ({ project }) => {
             status: 'pending',
         });
     const events =[];
+
+    const handleCloseSnackbar = (event, reason) => {
+        if (reason === 'clickaway') {
+            return;
+        }
+    };
 
     useEffect(() => {
         fetchWorkOrders();
@@ -77,11 +85,27 @@ const CalendarTab = ({ project }) => {
                     estimatedBudget: '',
                     status: 'pending',
                 });
+                showSnackbar('Work order created successfully!', 'success');
             } catch (err) {
                 console.error('Error creating work order:', err);
-                alert('Failed to create work order: ' + err.message);
+                showSnackbar(`Failed to create work order: ${err.message}`, 'error');
             }
         };
+
+    const handleCancelCreate = () => {
+        setShowCreate(false);
+        setFormData({
+            name: '',
+            description: '',
+            location: '',
+            startDate: '',
+            endDate: '',
+            priority: 3,
+            estimatedBudget: '',
+            status: 'pending',
+        });
+        showSnackbar('Work order creation cancelled', 'warning');
+    };
 
     if (project.startDate) {
         events.push({
@@ -242,11 +266,11 @@ const CalendarTab = ({ project }) => {
                 </div>
             </div>
             {showCreate && (
-                <div style={styles.creatorOverlay} onClick={() => setShowCreate(false)}>
+                <div style={styles.creatorOverlay} onClick={handleCancelCreate}>
                     <div style={styles.creator} onClick={(e) => e.stopPropagation()}>
                         <div style={styles.creatorHeader}>
                             <h3 style={styles.creatorTitle}>Create Work Order</h3>
-                            <button style={styles.closeButton} onClick={() => setShowCreate(false)}>
+                            <button style={styles.closeButton} onClick={handleCancelCreate}>
                                 <FaTimes />
                             </button>
                         </div>
@@ -340,7 +364,7 @@ const CalendarTab = ({ project }) => {
                             </div>
 
                             <div style={styles.creatorActions}>
-                                <button type="button" style={styles.cancelBtn} onClick={() => setShowCreate(false)}>
+                                <button type="button" style={styles.cancelBtn} onClick={handleCancelCreate}>
                                     Cancel
                                 </button>
                                 <button type="submit" style={styles.submitBtn}>
