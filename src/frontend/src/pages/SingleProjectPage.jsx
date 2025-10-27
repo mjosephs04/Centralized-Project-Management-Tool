@@ -10,6 +10,7 @@ import CalendarTab from "../components/ProjectTabs/CalendarTab";
 import WorkOrdersTab from "../components/ProjectTabs/WorkOrderTabs/WorkOrders";
 import LogsTab from "../components/ProjectTabs/LogsTab";
 import SuppliesTab from "../components/ProjectTabs/SuppliesTab";
+import { useSnackbar } from "../contexts/SnackbarContext";
 
 const styleSheet = document.styleSheets[0];
 if (!document.querySelector('#tabAnimation')) {
@@ -43,12 +44,14 @@ if (!document.querySelector('#tabAnimation')) {
 const SingleProjectPage = ({ projects }) => {
     const { projectId } = useParams();
     const navigate = useNavigate();
+    const { showSnackbar } = useSnackbar();
     const [activeTab, setActiveTab] = useState('calendar');
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [userRole, setUserRole] = useState(null);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [highlightedWorkOrderId, setHighlightedWorkOrderId] = useState(null);
 
     useEffect(() => {
         fetchInitialData();
@@ -117,6 +120,27 @@ const SingleProjectPage = ({ projects }) => {
         setRefreshTrigger(prev => prev + 1);
     };
 
+    // Handler for calendar navigation to work orders
+    const handleNavigateToWorkOrder = (workOrderId) => {
+        console.log('=== NAVIGATE TO WORK ORDER ===');
+        console.log('Work Order ID:', workOrderId);
+        console.log('Switching to workorders tab');
+        
+        // Switch to work orders tab
+        setActiveTab('workorders');
+        
+        // Set which work order to highlight
+        setHighlightedWorkOrderId(workOrderId);
+        
+        // Show feedback to user
+        showSnackbar('Navigating to work order...', 'info');
+        
+        // Clear highlight after 3 seconds
+        setTimeout(() => {
+            setHighlightedWorkOrderId(null);
+        }, 3000);
+    };
+
     if (loading) {
         return (
             <>
@@ -173,9 +197,9 @@ const SingleProjectPage = ({ projects }) => {
                     ? <TeamViewTab project={project} />
                     : <TeamTab project={project} onUpdate={handleUpdateProject} userRole={userRole} />;
             case 'calendar':
-                return <CalendarTab project={project} />
+                return <CalendarTab project={project} onNavigateToWorkOrder={handleNavigateToWorkOrder} userRole={userRole} />
             case 'workorders':
-                return <WorkOrdersTab project={project} userRole={userRole} onWorkOrderUpdate={triggerRefresh} />
+                return <WorkOrdersTab project={project} userRole={userRole} onWorkOrderUpdate={triggerRefresh} highlightedWorkOrderId={highlightedWorkOrderId} />
             case 'logs':
                 return <LogsTab project={project} refreshTrigger={refreshTrigger} />
             case 'supplies':
