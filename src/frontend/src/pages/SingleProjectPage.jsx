@@ -179,7 +179,7 @@ const SingleProjectPage = ({ projects }) => {
             case 'logs':
                 return <LogsTab project={project} refreshTrigger={refreshTrigger} />
             case 'supplies':
-                return <SuppliesTab project={project}/>
+                return <SuppliesTab project={project} userRole={userRole}/>
             default:
                 return <p>Nothing to show here...</p>
         }
