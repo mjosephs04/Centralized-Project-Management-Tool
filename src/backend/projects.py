@@ -10,10 +10,14 @@ from typing import Dict, Any, List, Optional, Tuple
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
-from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType, \
-    Supply, ProjectMember, ProjectInvitation, SupplyStatus
-from .progress import compute_work_order_rollup, compute_schedule_stats, compute_earned_value, to_decimal, normalize_weights
+from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType, Supply, ProjectMember, ProjectInvitation, SupplyStatus
+from .progress import (
+    compute_work_order_rollup, compute_schedule_stats, compute_earned_value, to_decimal, normalize_weights,
+    compute_schedule_variance, compute_cost_variance, compute_workforce_metrics, compute_quality_metrics, compute_project_health_score,
+    compute_project_progress
+)
 from .email_service import create_project_invitation, send_invitation_email, validate_invitation_token, accept_invitation
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/api/projects")
@@ -224,7 +228,7 @@ def update_project(project_id):
     if not user:
         return jsonify({"error": "User not found"}), 404
     
-    project = Project.query.get(project_id)
+    project = Project.query.options(joinedload(Project.members)).get(project_id)
     if not project:
         return jsonify({"error": "Project not found"}), 404
     
@@ -255,7 +259,7 @@ def update_project(project_id):
         "endDate": project.endDate.isoformat() if project.endDate else None,
         "actualStartDate": project.actualStartDate.isoformat() if project.actualStartDate else None,
         "actualEndDate": project.actualEndDate.isoformat() if project.actualEndDate else None,
-        "crewMembers": project.crewMembers or "[]",
+        "crewMembers": json.dumps(project.get_crew_members()) if project.get_crew_members() else "[]",
     }
     
     # Update basic fields with audit logging
@@ -307,7 +311,7 @@ def update_project(project_id):
                         AuditEntityType.PROJECT, 
                         project_id, 
                         user_id, 
-                        "crewMembers", 
+                        "teamMembers", 
                         old_member_names, 
                         new_member_names, 
                         session_id
@@ -1279,3 +1283,110 @@ def delete_project_supply(project_id, supply_id):
     db.session.delete(supply)
     db.session.commit()
     return jsonify({"message": "Supply deleted successfully"}), 200
+
+
+@projects_bp.get("/<int:project_id>/metrics/schedule")
+@jwt_required()
+def get_schedule_metrics(project_id: int):
+    """Get schedule variance and forecasted completion metrics"""
+    try:
+        project = Project.query.filter_by(id=project_id, isActive=True).first()
+        if not project:
+            return jsonify({"error": "Project not found"}), 404
+        
+        metrics = compute_schedule_variance(project)
+        return jsonify(metrics), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@projects_bp.get("/<int:project_id>/metrics/cost")
+@jwt_required()
+def get_cost_metrics(project_id: int):
+    """Get cost variance, EAC, and TCPI metrics"""
+    try:
+        project = Project.query.filter_by(id=project_id, isActive=True).first()
+        if not project:
+            return jsonify({"error": "Project not found"}), 404
+        
+        metrics = compute_cost_variance(project, project_id)
+        return jsonify(metrics), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@projects_bp.get("/<int:project_id>/metrics/workforce")
+@jwt_required()
+def get_workforce_metrics(project_id: int):
+    """Get workforce and resource efficiency metrics"""
+    try:
+        project = Project.query.filter_by(id=project_id, isActive=True).first()
+        if not project:
+            return jsonify({"error": "Project not found"}), 404
+        
+        metrics = compute_workforce_metrics(project_id)
+        return jsonify(metrics), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@projects_bp.get("/<int:project_id>/metrics/quality")
+@jwt_required()
+def get_quality_metrics(project_id: int):
+    """Get quality and risk indicators"""
+    try:
+        project = Project.query.filter_by(id=project_id, isActive=True).first()
+        if not project:
+            return jsonify({"error": "Project not found"}), 404
+        
+        metrics = compute_quality_metrics(project_id)
+        return jsonify(metrics), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@projects_bp.get("/<int:project_id>/metrics/health")
+@jwt_required()
+def get_health_score(project_id: int):
+    """Get overall project health score (0-100)"""
+    try:
+        project = Project.query.filter_by(id=project_id, isActive=True).first()
+        if not project:
+            return jsonify({"error": "Project not found"}), 404
+        
+        health = compute_project_health_score(project_id)
+        return jsonify(health), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@projects_bp.get("/<int:project_id>/metrics/all")
+@jwt_required()
+def get_all_metrics(project_id: int):
+    """Get all metrics for a project"""
+    try:
+        project = Project.query.filter_by(id=project_id, isActive=True).first()
+        if not project:
+            return jsonify({"error": "Project not found"}), 404
+        
+        # Try to get base progress first
+        progress = compute_project_progress(project_id)
+        
+        # Safely get SPI value with fallback
+        spi_value = progress.get("SPI", 0) if isinstance(progress, dict) else 0
+        
+        all_metrics = {
+            "progress": progress,
+            "schedule": compute_schedule_variance(project, spi=spi_value),
+            "cost": compute_cost_variance(project, project_id),
+            "workforce": compute_workforce_metrics(project_id),
+            "quality": compute_quality_metrics(project_id),
+            "health": compute_project_health_score(project_id, progress=progress)
+        }
+        
+        return jsonify(all_metrics), 200
+    except Exception as e:
+        import traceback
+        print(f"Error in get_all_metrics: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500

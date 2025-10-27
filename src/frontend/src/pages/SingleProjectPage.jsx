@@ -10,6 +10,7 @@ import CalendarTab from "../components/ProjectTabs/CalendarTab";
 import WorkOrdersTab from "../components/ProjectTabs/WorkOrderTabs/WorkOrders";
 import LogsTab from "../components/ProjectTabs/LogsTab";
 import SuppliesTab from "../components/ProjectTabs/SuppliesTab";
+import MetricsTab from "../components/ProjectTabs/MetricsTab";
 
 const styleSheet = document.styleSheets[0];
 if (!document.querySelector('#tabAnimation')) {
@@ -167,7 +168,7 @@ const SingleProjectPage = ({ projects }) => {
             case 'overview':
                 return <OverviewTab project={project} onUpdate={handleUpdateProject} onDelete={handleDelete} userRole={userRole} />;
             case 'metrics':
-                return <p>Metrics content goes here...</p>;
+                return <MetricsTab project={project} />;
             case 'team':
                 return userRole === 'worker' 
                     ? <TeamViewTab project={project} />
