@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir gunicorn
 
 COPY src/ ./src/
-COPY eng-copilot-471923-g2-0495f536051b.json ./eng-copilot-471923-g2-0495f536051b.json
+COPY ./eng-copilot-471923-g2-0495f536051b.json /eng-copilot-471923-g2-0495f536051b.json
 
 EXPOSE 8080
 CMD ["python", "-m", "src.backend.app"]
