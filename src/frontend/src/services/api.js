@@ -67,6 +67,10 @@ export const projectsAPI = {
     const response = await apiClient.get(`/projects/${projectId}/supplies`);
     return response;
   },
+  patchSupplies: async (projectId, supplyID, payload) => {
+    const response = await apiClient.patch(`/projects/${projectId}/supplies/${supplyID}/status`, payload);
+    return response;
+  },
   deleteSupplies:  async (projectId, supplyID) => {
     const response = await apiClient.delete(`/projects/${projectId}/supplies/${supplyID}`);
     return response;

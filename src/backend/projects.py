@@ -11,7 +11,8 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import select
 
-from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType, Supply, ProjectMember, ProjectInvitation
+from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType, \
+    Supply, ProjectMember, ProjectInvitation, SupplyStatus
 from .progress import compute_work_order_rollup, compute_schedule_stats, compute_earned_value, to_decimal, normalize_weights
 from .email_service import create_project_invitation, send_invitation_email, validate_invitation_token, accept_invitation
 
@@ -1167,54 +1168,31 @@ def debug_project_access(project_id: int):
 @projects_bp.get("/<int:project_id>/supplies")
 @jwt_required()
 def get_project_supplies(project_id):
-    """Get all supplies associated with a specific project."""
+    """Get all supplies for a project (pending + approved)."""
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
     project = Project.query.get(project_id)
 
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    if not project:
-        return jsonify({"error": "Project not found"}), 404
-
-    # Check access permissions
-    # has_access = False
-    # if user.role == UserRole.ADMIN:
-    #     has_access = True
-    # elif user.role == UserRole.PROJECT_MANAGER and project.projectManagerId == user_id:
-    #     has_access = True
-    # elif user.role == UserRole.WORKER:
-    #     crew_members = project.get_crew_members()
-    #     if int(user_id) in crew_members:
-    #         has_access = True
-    #
-    # if not has_access:
-    #     return jsonify({"error": "Access denied"}), 403
+    if not user or not project:
+        return jsonify({"error": "User or project not found"}), 404
 
     supplies = Supply.query.filter_by(projectId=project_id).order_by(Supply.createdAt.desc()).all()
     return jsonify({"supplies": [s.to_dict() for s in supplies]}), 200
 
 
+
 @projects_bp.post("/<int:project_id>/supplies")
 @jwt_required()
 def add_project_supply(project_id):
-    """Add a new supply to a specific project."""
+    """Create a new supply request or auto-approved supply."""
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
     project = Project.query.get(project_id)
 
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    if not project:
-        return jsonify({"error": "Project not found"}), 404
+    if not user or not project:
+        return jsonify({"error": "User or project not found"}), 404
 
-    # Only Project Managers or Admins can add supplies
-    # if user.role not in [UserRole.ADMIN, UserRole.PROJECT_MANAGER]:
-    #     return jsonify({"error": "Only project managers or admins can add supplies"}), 403
-    # if user.role == UserRole.PROJECT_MANAGER and project.projectManagerId != user.id:
-    #     return jsonify({"error": "You can only add supplies to your own projects"}), 403
-
-    payload = request.get_json(silent=True) or request.form.to_dict() or {}
+    payload = request.get_json(silent=True) or {}
     required_fields = ["name", "vendor", "budget"]
     missing = [f for f in required_fields if not payload.get(f)]
     if missing:
@@ -1227,17 +1205,56 @@ def add_project_supply(project_id):
     except ValueError:
         return jsonify({"error": "Invalid budget format"}), 400
 
+    # Determine role-based flow
+    if user.role == UserRole.PROJECT_MANAGER:
+        status = SupplyStatus.APPROVED
+        approved_by = user.id
+        requested_by = user.id
+    elif user.role == UserRole.WORKER:
+        status = SupplyStatus.PENDING
+        approved_by = None
+        requested_by = user.id
+    else:
+        return jsonify({"error": "Only project managers or workers can request supplies"}), 403
+
     supply = Supply(
         name=payload["name"].strip(),
         vendor=payload["vendor"].strip(),
         budget=budget,
-        projectId=project_id
+        projectId=project_id,
+        status=status,
+        requestedById=requested_by,
+        approvedById=approved_by,
     )
 
     db.session.add(supply)
     db.session.commit()
-
     return jsonify({"supply": supply.to_dict()}), 201
+
+@projects_bp.patch("/<int:project_id>/supplies/<int:supply_id>/status")
+@jwt_required()
+def update_supply_status(project_id, supply_id):
+    """Approve or reject a supply request (Project Manager only)."""
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    supply = Supply.query.filter_by(id=supply_id, projectId=project_id).first()
+
+    if not user or not supply:
+        return jsonify({"error": "User or supply not found"}), 404
+    if user.role not in [UserRole.ADMIN, UserRole.PROJECT_MANAGER]:
+        return jsonify({"error": "Only project managers or admins can approve/reject supplies"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    new_status = payload.get("status", "").lower()
+    if new_status not in ["approved", "rejected"]:
+        return jsonify({"error": "Invalid status. Must be 'approved' or 'rejected'"}), 400
+
+    supply.status = SupplyStatus.APPROVED if new_status == "approved" else SupplyStatus.REJECTED
+    supply.approvedById = user.id
+    db.session.commit()
+
+    return jsonify({"supply": supply.to_dict()}), 200
+
 
 @projects_bp.delete("/<int:project_id>/supplies/<int:supply_id>")
 @jwt_required()

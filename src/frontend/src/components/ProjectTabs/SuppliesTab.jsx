@@ -1,5 +1,5 @@
-import React, {useEffect, useState} from "react";
-import { FaBox, FaPlus, FaSave, FaTimes, FaTrash } from "react-icons/fa";
+import React, { useEffect, useState } from "react";
+import { FaBox, FaPlus, FaSave, FaTimes, FaTrash, FaCheck, FaBan } from "react-icons/fa";
 import {projectsAPI} from "../../services/api";
 
 const fakeVendors = [
@@ -10,81 +10,82 @@ const fakeVendors = [
     { id: 5, name: "Amazon Business" },
 ];
 
-const SuppliesTab = ({ project }) => {
+const SuppliesTab = ({ project, userRole }) => {
     const [supplies, setSupplies] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const [newSupply, setNewSupply] = useState({ name: "", vendorId: "", budget: "" });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
+    const token = localStorage.getItem("accessToken");
+
     useEffect(() => {
         const fetchSupplies = async () => {
             try {
                 setLoading(true);
-                setError("");
+                const res = await projectsAPI.getSupplies(project.id)
 
-                const res = await projectsAPI.getSupplies(project.id);
                 const data = res.data;
                 if (res.status != 200) throw new Error(data.error || "Failed to load supplies");
                 setSupplies(data.supplies || []);
             } catch (err) {
-                console.error("Error fetching supplies:", err);
+                console.error(err);
                 setError("Failed to load supplies");
             } finally {
                 setLoading(false);
             }
         };
         if (project?.id) fetchSupplies();
-    }, [project?.id]);
+    }, [project?.id, token]);
 
     const handleAddSupply = async () => {
-        if (!newSupply.name.trim() || !newSupply.vendorId || !newSupply.budget) {
+        if (!newSupply.name || !newSupply.vendorId || !newSupply.budget) {
             alert("Please fill out all fields");
             return;
         }
 
         const vendor = fakeVendors.find((v) => v.id === parseInt(newSupply.vendorId));
-        if (!vendor) {
-            alert("Invalid vendor selected");
-            return;
-        }
-
         try {
+
             const payload = JSON.stringify({
                 name: newSupply.name.trim(),
                 vendor: vendor.name,
-                budget: parseFloat(newSupply.budget)
+                budget: parseFloat(newSupply.budget),
             })
 
             const res = await projectsAPI.postSupplies(project.id, payload)
-
             const data = res.data;
-            if (res.status != 201) throw new Error(data.error || "Failed to add supply");
-
+            if (res.status != 201) throw new Error(data.error || "Failed to submit supply");
             setSupplies((prev) => [data.supply, ...prev]);
             setShowModal(false);
             setNewSupply({ name: "", vendorId: "", budget: "" });
         } catch (err) {
-            console.error("Error adding supply:", err);
-            alert("Failed to add supply");
+            alert(err.message);
         }
     };
 
-    const handleRemoveSupply = async (id) => {
+    const handleStatusChange = async (id, status) => {
+        try {
+            const payload = JSON.stringify({ status })
+            const res = await projectsAPI.patchSupplies(project.id, id, payload)
+            const data = res.data;
+            if (res.status != 200) throw new Error(data.error || "Failed to update status");
+            setSupplies((prev) => prev.map((s) => (s.id === id ? data.supply : s)));
+        } catch (err) {
+            alert(err.message);
+        }
+    };
+
+    const handleDeleteSupply = async (id) => {
         if (!window.confirm("Are you sure you want to delete this supply?")) return;
 
         try {
-            const res = await projectsAPI.deleteSupplies(project.id, id)
-
-            if (res.status != 200) {
-                const data = res.data;
-                throw new Error(data.error || "Failed to delete supply");
-            }
-
+            const res = await projectsAPI.deleteSupplies(project.id, id);
+            if (res.status !== 200) throw new Error(res.data.error || "Failed to delete supply");
             setSupplies((prev) => prev.filter((s) => s.id !== id));
         } catch (err) {
-            console.error("Error deleting supply:", err);
-            alert("Failed to delete supply");
+            console.error(err);
+            alert(err.message || "Error deleting supply");
         }
     };
 
@@ -93,43 +94,96 @@ const SuppliesTab = ({ project }) => {
             <div style={styles.header}>
                 <h2 style={styles.title}>Supplies</h2>
                 <button style={styles.addButton} onClick={() => setShowModal(true)}>
-                    <FaPlus /> Add Supply
+                    <FaPlus /> {userRole === "worker" ? "Request Supply" : "Add Supply"}
                 </button>
             </div>
 
             {loading ? (
-                <p>Loading supplies...</p>
-            ) : error ? (
-                <p style={{ color: "red" }}>{error}</p>
+                <p>Loading...</p>
             ) : supplies.length === 0 ? (
                 <div style={styles.emptyState}>
                     <FaBox style={styles.emptyIcon} />
-                    <p style={styles.emptyText}>No supplies added yet.</p>
-                    <button style={styles.addFirstButton} onClick={() => setShowModal(true)}>
-                        Add First Supply
-                    </button>
+                    <p style={styles.emptyText}>No supplies yet.</p>
                 </div>
             ) : (
                 <table style={styles.table}>
                     <thead>
                     <tr>
-                        <th style={styles.th}>Supply Name</th>
+                        <th style={styles.th}>Name</th>
                         <th style={styles.th}>Vendor</th>
                         <th style={styles.th}>Budget ($)</th>
-                        <th style={styles.th}>Actions</th>
+                        <th style={styles.th}>Status</th>
+                        {userRole === "project_manager" && <th style={styles.th}>Actions</th>}
                     </tr>
                     </thead>
                     <tbody>
                     {supplies.map((supply) => (
-                        <tr key={supply.id} style={styles.tr}>
+                        <tr key={supply.id}>
                             <td style={styles.td}>{supply.name}</td>
                             <td style={styles.td}>{supply.vendor}</td>
                             <td style={styles.td}>{supply.budget.toFixed(2)}</td>
                             <td style={styles.td}>
-                                <button style={styles.removeButton} onClick={() => handleRemoveSupply(supply.id)}>
-                                    <FaTrash />
-                                </button>
+                  <span
+                      style={{
+                          color:
+                              supply.status === "approved"
+                                  ? "green"
+                                  : supply.status === "rejected"
+                                      ? "red"
+                                      : "gray",
+                          fontWeight: 600,
+                          textTransform: "capitalize",
+                      }}
+                  >
+                    {supply.status}
+                  </span>
                             </td>
+                            {console.log(userRole)}
+                            {userRole == "project_manager" && (
+                                <td style={styles.td}>
+                                    {supply.status === "pending" ? (
+                                        <>
+                                            <button
+                                                style={{
+                                                    ...styles.actionButton,
+                                                    backgroundColor: "#dcfce7",
+                                                    color: "#166534",
+                                                    border: "1px solid #86efac",
+                                                    marginRight: "0.5rem",
+                                                }}
+                                                onClick={() => handleStatusChange(supply.id, "approved")}
+                                            >
+                                                <FaCheck style={{marginRight: "0.3rem"}}/> Approve
+                                            </button>
+
+                                            <button
+                                                style={{
+                                                    ...styles.actionButton,
+                                                    backgroundColor: "#fee2e2",
+                                                    color: "#991b1b",
+                                                    border: "1px solid #fca5a5",
+                                                    marginRight: "0.5rem",
+                                                }}
+                                                onClick={() => handleStatusChange(supply.id, "rejected")}
+                                            >
+                                                <FaBan style={{marginRight: "0.3rem"}}/> Reject
+                                            </button>
+                                        </>
+                                    ) : null}
+
+                                    <button
+                                        style={{
+                                            ...styles.actionButton,
+                                            backgroundColor: "#fef2f2",
+                                            color: "#b91c1c",
+                                            border: "1px solid #fecaca",
+                                        }}
+                                        onClick={() => handleDeleteSupply(supply.id)}
+                                    >
+                                        <FaTrash style={{marginRight: "0.3rem"}}/> Delete
+                                    </button>
+                                </td>
+                            )}
                         </tr>
                     ))}
                     </tbody>
@@ -139,43 +193,39 @@ const SuppliesTab = ({ project }) => {
             {showModal && (
                 <div style={styles.modalOverlay}>
                     <div style={styles.modal}>
-                        <h3 style={styles.modalTitle}>Add New Supply</h3>
-
+                        <h3 style={styles.modalTitle}>
+                            {userRole === "worker" ? "Request New Supply" : "Add Supply"}
+                        </h3>
                         <label style={styles.label}>Supply Name</label>
                         <input
                             type="text"
                             value={newSupply.name}
-                            onChange={(e) => setNewSupply({ ...newSupply, name: e.target.value })}
+                            onChange={(e) => setNewSupply({...newSupply, name: e.target.value})}
                             style={styles.input}
-                            placeholder="e.g., Paint, Nails, Wood Planks"
                         />
-
                         <label style={styles.label}>Vendor</label>
                         <select
                             value={newSupply.vendorId}
-                            onChange={(e) => setNewSupply({ ...newSupply, vendorId: e.target.value })}
+                            onChange={(e) => setNewSupply({...newSupply, vendorId: e.target.value})}
                             style={styles.input}
                         >
                             <option value="">Select a vendor</option>
-                            {fakeVendors.map((vendor) => (
-                                <option key={vendor.id} value={vendor.id}>
-                                    {vendor.name}
+                            {fakeVendors.map((v) => (
+                                <option key={v.id} value={v.id}>
+                                    {v.name}
                                 </option>
                             ))}
                         </select>
-
                         <label style={styles.label}>Budget ($)</label>
                         <input
                             type="number"
                             value={newSupply.budget}
                             onChange={(e) => setNewSupply({ ...newSupply, budget: e.target.value })}
                             style={styles.input}
-                            placeholder="Enter budget amount"
                         />
-
                         <div style={styles.modalActions}>
                             <button style={styles.saveButton} onClick={handleAddSupply}>
-                                <FaSave /> Save
+                                <FaSave /> {userRole === "worker" ? "Request" : "Save"}
                             </button>
                             <button style={styles.cancelButton} onClick={() => setShowModal(false)}>
                                 <FaTimes /> Cancel
@@ -312,6 +362,18 @@ const styles = {
         gap: "0.4rem",
         fontWeight: "600",
         cursor: "pointer",
+    },
+    actionButton: {
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.4rem",
+        padding: "0.5rem 1rem",
+        borderRadius: "6px",
+        border: "none",
+        fontSize: "0.9rem",
+        fontWeight: "600",
+        cursor: "pointer",
+        transition: "all 0.2s ease",
     },
 };
 
