@@ -15,9 +15,6 @@ const SuppliesTab = ({ project, userRole }) => {
     const [showModal, setShowModal] = useState(false);
     const [newSupply, setNewSupply] = useState({ name: "", vendorId: "", budget: "" });
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
-
-    const token = localStorage.getItem("accessToken");
 
     useEffect(() => {
         const fetchSupplies = async () => {
@@ -30,13 +27,12 @@ const SuppliesTab = ({ project, userRole }) => {
                 setSupplies(data.supplies || []);
             } catch (err) {
                 console.error(err);
-                setError("Failed to load supplies");
             } finally {
                 setLoading(false);
             }
         };
         if (project?.id) fetchSupplies();
-    }, [project?.id, token]);
+    }, [project?.id]);
 
     const handleAddSupply = async () => {
         if (!newSupply.name || !newSupply.vendorId || !newSupply.budget) {
