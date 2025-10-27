@@ -227,16 +227,7 @@ def update_project(project_id):
     project = Project.query.get(project_id)
     if not project:
         return jsonify({"error": "Project not found"}), 404
-    
-    # Check if user has permission to update this project
-    if user.role == UserRole.ADMIN:
-        # Admins can update any project
-        pass
-    elif user.role == UserRole.PROJECT_MANAGER and project.projectManagerId == int(user_id):
-        # Project managers can update their own projects
-        pass
-    else:
-        return jsonify({"error": "Access denied"}), 403
+
     
     # Generate a session ID for this update to group all changes together
     session_id = str(uuid.uuid4())
