@@ -19,6 +19,11 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  if (config.url && config.url.includes("/auth/upload-profile")) {
+    delete config.headers["Content-Type"];
+  }
+
   return config;
 });
 
@@ -147,5 +152,10 @@ export const authAPI = {
   registerWithInvitation: async (payload) => {
     const response = await apiClient.post("/auth/register-with-invitation", payload);
     return response.data;
+  },
+
+  uploadProfilePic: async (formData) => {
+    const response = await apiClient.post("/auth/upload-profile", formData);
+    return response;
   }
 };
