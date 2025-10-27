@@ -59,9 +59,9 @@ class User(db.Model):
     passwordHash = db.Column(db.String(255), nullable=False)
 
     role = db.Column(db.Enum(UserRole), nullable=False)
-
-    # Only applicable when role == WORKER
     workerType = db.Column(db.Enum(WorkerType), nullable=True)
+
+    profileImageUrl = db.Column(db.String(500), nullable=False, default="https://storage.googleapis.com/profile_pics_capstone/defaults/profile-default.png")
 
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -76,12 +76,11 @@ class User(db.Model):
             "emailAddress": self.emailAddress,
             "role": self.role.value if self.role else None,
             "workerType": self.workerType.value if self.workerType else None,
+            "profileImageUrl": self.profileImageUrl,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
             "isActive": self.isActive,
         }
-
-
 class Project(db.Model):
     __tablename__ = "projects"
 

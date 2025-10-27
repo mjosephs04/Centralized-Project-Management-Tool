@@ -6,6 +6,8 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 
 from .models import db, User, UserRole, WorkerType, ProjectInvitation, ProjectMember
 from .email_service import validate_invitation_token, accept_invitation
+from google.cloud import storage
+import uuid
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -233,3 +235,52 @@ def get_all_workers():
     
     except Exception as e:
         return jsonify({"error": f"Failed to retrieve workers: {str(e)}"}), 500
+
+
+@auth_bp.post("/upload-profile")
+@jwt_required()
+def upload_profile_picture():
+    """Upload or update a user's profile picture."""
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "Empty filename"}), 400
+
+    # Restrict file types
+    allowed_ext = {"png", "jpg", "jpeg"}
+    ext = file.filename.rsplit(".", 1)[-1].lower()
+    if ext not in allowed_ext:
+        return jsonify({"error": "Only PNG, JPG, JPEG files allowed"}), 400
+
+    try:
+        # Initialize Google Cloud Storage client
+        client = storage.Client()
+        bucket_name = "profile_pics_capstone"
+        bucket = client.bucket(bucket_name)
+
+        # Unique filename
+        blob_name = f"profile_pictures/{user_id}_{uuid.uuid4()}.{ext}"
+        blob = bucket.blob(blob_name)
+
+        # Upload to GCS
+        blob.upload_from_file(file, content_type=file.content_type)
+
+        # Update user profile
+        user.profileImageUrl = blob.public_url
+        db.session.commit()
+
+        return jsonify({
+            "message": "Profile picture uploaded successfully",
+            "profileImageUrl": user.profileImageUrl
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Upload failed: {str(e)}"}), 500

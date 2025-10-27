@@ -37,6 +37,7 @@ services:
         condition: service_healthy
     volumes:
       - ./src:/app/src
+      - ./eng-copilot-471923-g2-0495f536051b.json:/eng-copilot-471923-g2-0495f536051b.json
 
 volumes:
   mysql_data:
