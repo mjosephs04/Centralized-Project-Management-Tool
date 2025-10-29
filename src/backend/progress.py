@@ -1,9 +1,9 @@
 from __future__ import annotations
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, getcontext
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
-from .models import db, Project, WorkOrder, WorkOrderStatus, ProjectStatus
+from .models import db, Project, WorkOrder, WorkOrderStatus, ProjectStatus, ProjectMember
 
 # precision for Decimal math
 getcontext().prec = 28
@@ -202,3 +202,268 @@ def compute_project_progress(project_id: int, weights: Optional[Dict[str, Decima
             },
         },
     }
+
+
+# --- Advanced Metrics Functions ---
+
+def compute_schedule_variance(project: Project, today: Optional[date] = None, spi: Optional[float] = None) -> Dict[str, Any]:
+    """Calculate schedule variance and forecasted completion"""
+    today = today or date.today()
+    
+    # Schedule variance
+    planned_duration = (project.endDate - project.startDate).days
+    actual_duration = None
+    schedule_variance = None
+    
+    if project.actualStartDate:
+        if project.actualEndDate:
+            actual_duration = (project.actualEndDate - project.actualStartDate).days
+            schedule_variance = planned_duration - actual_duration
+        else:
+            actual_duration = (today - project.actualStartDate).days
+            schedule_variance = planned_duration - actual_duration  # negative means behind
+    
+    # Get SPI for forecast if not provided
+    if spi is None:
+        progress = compute_project_progress(project.id)
+        spi = progress.get("SPI", 0)
+    else:
+        spi = float(spi)
+    
+    # Forecasted end date (EAC-Schedule)
+    forecast_end_date = None
+    try:
+        if spi and spi > 0 and planned_duration > 0:
+            forecast_duration = planned_duration / float(spi)
+            forecast_end_date = (project.startDate + timedelta(days=int(forecast_duration))).isoformat()
+    except (ZeroDivisionError, ValueError, TypeError):
+        forecast_end_date = None
+    
+    return {
+        "plannedDuration": planned_duration,
+        "actualDuration": actual_duration,
+        "scheduleVariance": schedule_variance,
+        "forecastEndDate": forecast_end_date,
+        "SPI": float(spi)
+    }
+
+
+def compute_cost_variance(project: Project, project_id: int) -> Dict[str, Any]:
+    """Calculate cost variance, EAC, and TCPI"""
+    work_orders = fetch_work_orders(project_id)
+    rollup = compute_work_order_rollup(work_orders)
+    
+    est_total = to_decimal(rollup["budget"]["est_total"])
+    ev = to_decimal(rollup["budget"]["est_completed"]) + to_decimal(rollup["budget"]["est_in_progress_credit"])
+    ac = to_decimal(project.actualCost) + to_decimal(rollup["budget"]["actual_cost_total"])
+    
+    # Cost Variance
+    cv = ev - ac
+    
+    # CPI
+    cpi = safe_div(ev, ac) if ac > 0 else Decimal("0")
+    
+    # Estimate at Completion (EAC)
+    eac = None
+    if cpi > 0:
+        try:
+            eac = float(safe_div(est_total, cpi))
+        except (ZeroDivisionError, Exception):
+            eac = None
+    
+    # To-Complete Performance Index (TCPI)
+    bac = est_total  # Budget at Completion
+    tcpi = None
+    if bac - ac > 0:
+        try:
+            tcpi = float(safe_div(bac - ev, bac - ac))
+        except (ZeroDivisionError, Exception):
+            tcpi = None
+    
+    # Remaining Budget
+    remaining_budget = max(0, float(est_total - ac)) if est_total > ac else 0
+    
+    return {
+        "costVariance": float(cv),
+        "earnedValue": float(ev),
+        "actualCost": float(ac),
+        "CPI": float(cpi) if cpi is not None else 0,
+        "estimateAtCompletion": eac,
+        "toCompletePerformanceIndex": tcpi,
+        "remainingBudget": remaining_budget,
+        "budgetAtCompletion": float(bac) if bac is not None else 0
+    }
+
+
+def compute_workforce_metrics(project_id: int) -> Dict[str, Any]:
+    """Calculate workforce and resource efficiency metrics"""
+    try:
+        project = fetch_project(project_id)
+        work_orders = fetch_work_orders(project_id)
+        
+        # Get active team members - handle case where ProjectMember might not exist
+        try:
+            active_members = ProjectMember.query.filter_by(projectId=project_id, isActive=True).all()
+            team_size = len(active_members)
+        except Exception:
+            team_size = 0
+        
+        # Active work orders per worker
+        active_work_orders = [wo for wo in work_orders if wo.status in [WorkOrderStatus.PENDING, WorkOrderStatus.IN_PROGRESS]]
+        active_wo_per_worker = len(active_work_orders) / team_size if team_size > 0 else 0
+        
+        # Average work order duration
+        completed_orders = [wo for wo in work_orders if wo.status == WorkOrderStatus.COMPLETED and wo.actualStartDate and wo.actualEndDate]
+        avg_duration = None
+        if completed_orders:
+            durations = [(wo.actualEndDate - wo.actualStartDate).days for wo in completed_orders]
+            avg_duration = sum(durations) / len(durations)
+        
+        # Distribution by status
+        status_distribution = {
+            "pending": len([wo for wo in work_orders if wo.status == WorkOrderStatus.PENDING]),
+            "in_progress": len([wo for wo in work_orders if wo.status == WorkOrderStatus.IN_PROGRESS]),
+            "completed": len([wo for wo in work_orders if wo.status == WorkOrderStatus.COMPLETED]),
+            "on_hold": len([wo for wo in work_orders if wo.status == WorkOrderStatus.ON_HOLD]),
+            "cancelled": len([wo for wo in work_orders if wo.status == WorkOrderStatus.CANCELLED])
+        }
+        
+        return {
+            "teamSize": team_size,
+            "activeWorkOrdersPerWorker": float(active_wo_per_worker),
+            "averageWorkOrderDurationDays": avg_duration,
+            "statusDistribution": status_distribution,
+            "totalWorkOrders": len(work_orders),
+            "activeWorkOrders": len(active_work_orders)
+        }
+    except Exception:
+        # Return default values if calculation fails
+        return {
+            "teamSize": 0,
+            "activeWorkOrdersPerWorker": 0.0,
+            "averageWorkOrderDurationDays": None,
+            "statusDistribution": {
+                "pending": 0,
+                "in_progress": 0,
+                "completed": 0,
+                "on_hold": 0,
+                "cancelled": 0
+            },
+            "totalWorkOrders": 0,
+            "activeWorkOrders": 0
+        }
+
+
+def compute_quality_metrics(project_id: int) -> Dict[str, Any]:
+    """Calculate quality and risk indicators"""
+    work_orders = fetch_work_orders(project_id)
+    
+    # Rework rate - orders marked completed then changed back
+    # This is approximated by checking orders that went from completed to another status
+    completed_orders = [wo for wo in work_orders if wo.status == WorkOrderStatus.COMPLETED]
+    total_completed = len(completed_orders)
+    
+    # Note: Full rework tracking would require audit logs
+    # For now, we'll return current status distribution
+    rework_rate = 0  # Would need audit logs to calculate properly
+    
+    # Risk indicators
+    overdue_orders = 0
+    for wo in work_orders:
+        if wo.status != WorkOrderStatus.COMPLETED and wo.endDate < date.today():
+            overdue_orders += 1
+    
+    # Cost overruns (work orders over budget)
+    cost_overruns = 0
+    for wo in work_orders:
+        if wo.actualCost and wo.estimatedBudget:
+            if to_decimal(wo.actualCost) > to_decimal(wo.estimatedBudget):
+                cost_overruns += 1
+    
+    # Risk index (simplified score)
+    total_active = len([wo for wo in work_orders if wo.status != WorkOrderStatus.COMPLETED and wo.status != WorkOrderStatus.CANCELLED])
+    overdue_ratio = overdue_orders / total_active if total_active > 0 else 0
+    cost_overrun_ratio = cost_overruns / len(work_orders) if len(work_orders) > 0 else 0
+    risk_score = float(overdue_ratio * 0.5 + cost_overrun_ratio * 0.5) * 100
+    
+    return {
+        "reworkRate": rework_rate,
+        "overdueOrders": overdue_orders,
+        "costOverruns": cost_overruns,
+        "riskIndex": risk_score,
+        "totalCompleted": total_completed
+    }
+
+
+def compute_project_health_score(project_id: int, progress: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Compute overall project health score (0-100)"""
+    try:
+        project = fetch_project(project_id)
+        
+        # Get base progress metrics if not provided
+        if progress is None:
+            progress = compute_project_progress(project_id)
+        
+        # Ensure we have valid progress data
+        if not progress or "SPI" not in progress or "CPI" not in progress:
+            # Fallback values
+            spi = cpi = work_order_completion = 0.0
+        else:
+            spi = float(progress.get("SPI", 0))
+            cpi = float(progress.get("CPI", 0))
+            work_order_completion = float(progress.get("workOrderCompletion", 0))
+        
+        # Get metrics
+        schedule_var = compute_schedule_variance(project, spi=spi)
+        cost_var = compute_cost_variance(project, project_id)
+        quality = compute_quality_metrics(project_id)
+        
+        # Calculate health components (0-1 scale)
+        schedule_health = min(max(spi, 0), 2) / 2.0  # Normalize SPI to 0-1
+        cost_health = min(max(cpi, 0), 2) / 2.0  # Normalize CPI to 0-1
+        completion_health = max(0, min(1, work_order_completion))  # Clamp to 0-1
+        
+        # Risk penalty
+        risk_index = float(quality.get("riskIndex", 0))
+        risk_penalty = max(0, 1 - (risk_index / 100))
+        
+        # Weighted health score
+        overall_health = (
+            schedule_health * 0.35 +
+            cost_health * 0.35 +
+            completion_health * 0.20 +
+            risk_penalty * 0.10
+        ) * 100
+        
+        return {
+            "healthScore": float(overall_health),
+            "components": {
+                "scheduleHealth": float(schedule_health * 100),
+                "costHealth": float(cost_health * 100),
+                "completionHealth": float(completion_health * 100),
+                "riskScore": float(risk_index)
+            },
+            "metrics": {
+                "SPI": spi,
+                "CPI": cpi,
+                "scheduleVariance": schedule_var.get("scheduleVariance"),
+                "forecastEndDate": schedule_var.get("forecastEndDate")
+            }
+        }
+    except Exception as e:
+        # Return default health score if calculation fails
+        return {
+            "healthScore": 0.0,
+            "components": {
+                "scheduleHealth": 0.0,
+                "costHealth": 0.0,
+                "completionHealth": 0.0,
+                "riskScore": 100.0
+            },
+            "metrics": {
+                "SPI": 0.0,
+                "CPI": 0.0,
+                "scheduleVariance": None,
+                "forecastEndDate": None
+            }
+        }

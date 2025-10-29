@@ -16,6 +16,11 @@ class UserRole(enum.Enum):
     WORKER = "worker"
     PROJECT_MANAGER = "project_manager"
 
+class SupplyStatus(enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
 
 class WorkerType(enum.Enum):
     CONTRACTOR = "contractor"
@@ -54,9 +59,9 @@ class User(db.Model):
     passwordHash = db.Column(db.String(255), nullable=False)
 
     role = db.Column(db.Enum(UserRole), nullable=False)
-
-    # Only applicable when role == WORKER
     workerType = db.Column(db.Enum(WorkerType), nullable=True)
+
+    profileImageUrl = db.Column(db.String(500), nullable=False, default="https://storage.googleapis.com/profile_pics_capstone/defaults/profile-default.png")
 
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -71,12 +76,11 @@ class User(db.Model):
             "emailAddress": self.emailAddress,
             "role": self.role.value if self.role else None,
             "workerType": self.workerType.value if self.workerType else None,
+            "profileImageUrl": self.profileImageUrl,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
             "isActive": self.isActive,
         }
-
-
 class Project(db.Model):
     __tablename__ = "projects"
 
@@ -342,23 +346,30 @@ class Supply(db.Model):
     vendor = db.Column(db.String(200), nullable=False)
     budget = db.Column(DECIMAL(15, 2), nullable=False, default=0.00)
 
-    # Foreign Key Relationship
+    # New fields
+    status = db.Column(db.Enum(SupplyStatus), default=SupplyStatus.PENDING, nullable=False)
+    requestedById = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    approvedById = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+
+    requestedBy = db.relationship("User", foreign_keys=[requestedById], backref="supply_requests")
+    approvedBy = db.relationship("User", foreign_keys=[approvedById], backref="approved_supplies")
+
     projectId = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
     project = db.relationship("Project", backref=db.backref("supplies", lazy=True, cascade="all, delete-orphan"))
 
-    # Metadata
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updatedAt = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
-    )
+    updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "name": self.name,
             "vendor": self.vendor,
-            "budget": float(self.budget) if self.budget is not None else 0.0,
+            "budget": float(self.budget) if self.budget else 0.0,
+            "status": self.status.value,
             "projectId": self.projectId,
+            "requestedBy": self.requestedBy.to_dict() if self.requestedBy else None,
+            "approvedBy": self.approvedBy.to_dict() if self.approvedBy else None,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
         }

@@ -19,6 +19,11 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  if (config.url && config.url.includes("/auth/upload-profile")) {
+    delete config.headers["Content-Type"];
+  }
+
   return config;
 });
 
@@ -67,6 +72,10 @@ export const projectsAPI = {
     const response = await apiClient.get(`/projects/${projectId}/supplies`);
     return response;
   },
+  patchSupplies: async (projectId, supplyID, payload) => {
+    const response = await apiClient.patch(`/projects/${projectId}/supplies/${supplyID}/status`, payload);
+    return response;
+  },
   deleteSupplies:  async (projectId, supplyID) => {
     const response = await apiClient.delete(`/projects/${projectId}/supplies/${supplyID}`);
     return response;
@@ -80,6 +89,33 @@ export const projectsAPI = {
   validateInvitationToken: async (token) => {
     const response = await apiClient.get(`/projects/invitations/validate/${token}`);
     return response.data;
+  },
+
+  getMetrics: {
+    all: async (projectId) => {
+      const response = await apiClient.get(`/projects/${projectId}/metrics/all`);
+      return response.data;
+    },
+    schedule: async (projectId) => {
+      const response = await apiClient.get(`/projects/${projectId}/metrics/schedule`);
+      return response.data;
+    },
+    cost: async (projectId) => {
+      const response = await apiClient.get(`/projects/${projectId}/metrics/cost`);
+      return response.data;
+    },
+    workforce: async (projectId) => {
+      const response = await apiClient.get(`/projects/${projectId}/metrics/workforce`);
+      return response.data;
+    },
+    quality: async (projectId) => {
+      const response = await apiClient.get(`/projects/${projectId}/metrics/quality`);
+      return response.data;
+    },
+    health: async (projectId) => {
+      const response = await apiClient.get(`/projects/${projectId}/metrics/health`);
+      return response.data;
+    },
   },
 };
 
@@ -143,5 +179,10 @@ export const authAPI = {
   registerWithInvitation: async (payload) => {
     const response = await apiClient.post("/auth/register-with-invitation", payload);
     return response.data;
+  },
+
+  uploadProfilePic: async (formData) => {
+    const response = await apiClient.post("/auth/upload-profile", formData);
+    return response;
   }
 };

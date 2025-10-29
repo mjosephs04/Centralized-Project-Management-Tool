@@ -66,6 +66,7 @@ const LogsTab = ({ project, refreshTrigger }) => {
             'priority': 'Priority',
             'status': 'Status',
             'crewMembers': 'Team Members',
+            'teamMembers': 'Team Members',
             'work_order_created': 'Work Order Created',
             'work_order_deleted': 'Work Order Deleted'
         };
@@ -213,9 +214,9 @@ const LogsTab = ({ project, refreshTrigger }) => {
         // Apply entity type filter
         let matchesEntityFilter = true;
         if (filter === 'all') matchesEntityFilter = true;
-        else if (filter === 'project') matchesEntityFilter = log.entityType === 'project' && log.field !== 'crewMembers';
+        else if (filter === 'project') matchesEntityFilter = log.entityType === 'project' && log.field !== 'crewMembers' && log.field !== 'teamMembers';
         else if (filter === 'workorder') matchesEntityFilter = log.entityType === 'work_order';
-        else if (filter === 'team') matchesEntityFilter = log.entityType === 'project' && log.field === 'crewMembers';
+        else if (filter === 'team') matchesEntityFilter = log.entityType === 'project' && (log.field === 'crewMembers' || log.field === 'teamMembers');
         
         // Apply time filter
         const matchesTime = matchesTimeFilter(log);
@@ -275,7 +276,7 @@ const LogsTab = ({ project, refreshTrigger }) => {
                         }}
                         onClick={() => setFilter('project')}
                     >
-                        Project ({auditLogs.filter(log => log.entityType === 'project' && log.field !== 'crewMembers').length})
+                        Project ({auditLogs.filter(log => log.entityType === 'project' && log.field !== 'crewMembers' && log.field !== 'teamMembers').length})
                     </button>
                     <button 
                         style={{
@@ -293,7 +294,7 @@ const LogsTab = ({ project, refreshTrigger }) => {
                         }}
                         onClick={() => setFilter('team')}
                     >
-                        Team ({auditLogs.filter(log => log.entityType === 'project' && log.field === 'crewMembers').length})
+                        Team ({auditLogs.filter(log => log.entityType === 'project' && (log.field === 'crewMembers' || log.field === 'teamMembers')).length})
                     </button>
                 </div>
             </div>

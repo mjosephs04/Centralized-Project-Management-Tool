@@ -11,6 +11,7 @@ import WorkOrdersTab from "../components/ProjectTabs/WorkOrderTabs/WorkOrders";
 import LogsTab from "../components/ProjectTabs/LogsTab";
 import SuppliesTab from "../components/ProjectTabs/SuppliesTab";
 import { useSnackbar } from "../contexts/SnackbarContext";
+import MetricsTab from "../components/ProjectTabs/MetricsTab";
 
 const styleSheet = document.styleSheets[0];
 if (!document.querySelector('#tabAnimation')) {
@@ -191,7 +192,7 @@ const SingleProjectPage = ({ projects }) => {
             case 'overview':
                 return <OverviewTab project={project} onUpdate={handleUpdateProject} onDelete={handleDelete} userRole={userRole} />;
             case 'metrics':
-                return <p>Metrics content goes here...</p>;
+                return <MetricsTab project={project} />;
             case 'team':
                 return userRole === 'worker' 
                     ? <TeamViewTab project={project} />
@@ -203,7 +204,7 @@ const SingleProjectPage = ({ projects }) => {
             case 'logs':
                 return <LogsTab project={project} refreshTrigger={refreshTrigger} />
             case 'supplies':
-                return <SuppliesTab project={project}/>
+                return <SuppliesTab project={project} userRole={userRole}/>
             default:
                 return <p>Nothing to show here...</p>
         }

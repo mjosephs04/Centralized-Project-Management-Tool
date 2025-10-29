@@ -95,6 +95,7 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
             name: workerDisplayName(w),
             email: getEmail(w),
             phoneNumber: getPhone(w),
+            profileImageUrl: w.profileImageUrl || ""
           };
         }
         // unresolved ID — show ID as name fallback
@@ -223,8 +224,8 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
       const invitationData = {
         email: inviteEmail.trim(),
         role: inviteRole,
-        workerType: inviteRole === "worker" ? inviteWorkerType : undefined,
-        contractorExpirationDate: inviteRole === "worker" && inviteWorkerType === "contractor" ? inviteContractorExpiration : undefined,
+        workerType: inviteRole === "worker" ? inviteWorkerType : null,
+        contractorExpirationDate: inviteRole === "worker" && inviteWorkerType === "contractor" ? inviteContractorExpiration : null,
       };
       
       console.log("Sending invitation data:", invitationData);
@@ -485,19 +486,28 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
                 </button>
               )}
 
-              <div style={styles.avatarContainer}>
-                <div style={styles.avatar}>
-                  <FaUser style={styles.avatarIcon} />
+                <div style={styles.avatarContainer}>
+                    {member.profileImageUrl ? (
+                        <img
+                            src={member.profileImageUrl}
+                            alt={`${member.name || "User"} profile`}
+                            style={styles.avatarImage}
+                            onError={(e) => (e.target.style.display = "none")}
+                        />
+                    ) : (
+                        <div style={styles.avatar}>
+                            <FaUser style={styles.avatarIcon}/>
+                        </div>
+                    )}
                 </div>
-              </div>
 
-              <div style={styles.cardContent}>
-                <h3 style={styles.memberName}>{member.name || "Member"}</h3>
+                <div style={styles.cardContent}>
+                    <h3 style={styles.memberName}>{member.name || "Member"}</h3>
 
-                <div style={styles.contactInfo}>
-                  <div style={styles.contactItem}>
-                    <span style={styles.label}>Email:</span>
-                    <span style={styles.value}>{member.email || "—"}</span>
+                    <div style={styles.contactInfo}>
+                        <div style={styles.contactItem}>
+                            <span style={styles.label}>Email:</span>
+                            <span style={styles.value}>{member.email || "—"}</span>
                   </div>
                   <div style={styles.contactItem}>
                     <span style={styles.label}>Phone:</span>
@@ -847,6 +857,14 @@ const styles = {
     buttonDisabled: {
         backgroundColor: "#9ca3af",
         cursor: "not-allowed",
+    },
+    avatarImage: {
+        width: "60px",
+        height: "60px",
+        borderRadius: "50%",
+        objectFit: "cover",
+        border: "3px solid #f3f4f6",
+        backgroundColor: "#f9fafb",
     },
 };
 
