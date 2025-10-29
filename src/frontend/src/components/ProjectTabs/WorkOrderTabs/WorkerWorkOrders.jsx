@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { FaEye, FaTimes } from "react-icons/fa";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { workOrdersAPI } from "../../../services/api";
+import { useSnackbar } from '../../../contexts/SnackbarContext';
 
 const COLUMNS = [
   { key: "pending", label: "Pending" },
@@ -12,6 +13,7 @@ const COLUMNS = [
 ];
 
 const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
+  const { showSnackbar } = useSnackbar();
   const [workOrders, setWorkOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -60,6 +62,7 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
       setWorkOrders(data);
     } catch (err) {
       console.error("Error fetching work orders:", err);
+      showSnackbar("Failed to load work orders", "error");
     } finally {
       setLoading(false);
     }
@@ -97,6 +100,21 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
     return Object.keys(errors).length === 0;
   };
 
+  const handleCancelUpdate = () => {
+    setShowUpdate(false);
+    setFormData({
+      name: "",
+      description: "",
+      location: "",
+      startDate: "",
+      endDate: "",
+      priority: 3,
+      status: "pending",
+      actualCost: "",
+    });
+    setFormErrors({});
+  };
+
   // Drag & Drop: workers can move cards to change status
   const onDragEnd = async (result) => {
     const { destination, source } = result;
@@ -107,14 +125,43 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
     const moved = columns[fromCol][source.index];
     if (!moved) return;
 
+    // Get readable status names
+    const fromLabel = COLUMNS.find(c => c.key === fromCol)?.label || fromCol;
+    const toLabel = COLUMNS.find(c => c.key === toCol)?.label || toCol;
+
     // optimistic UI
     setWorkOrders((prev) => prev.map((wo) => (wo.id === moved.id ? { ...wo, status: toCol } : wo)));
+    
     try {
         await workOrdersAPI.workerUpdate(moved.id, { status: toCol });
+        showSnackbar(`Work order moved to ${toLabel}`, 'success');
         if (onWorkOrderUpdate) onWorkOrderUpdate();
     } catch (err) {
-      alert(err.response?.data?.error || err.message);
+      console.error('Error updating work order status:', err);
+      showSnackbar(err.response?.data?.error || 'Failed to update work order status', 'error');
+      await fetchWorkOrders(); // revert on error
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!validateForm()) return;
+    try {
+      await workOrdersAPI.workerUpdate(selectedWorkOrder.id, {
+        description: formData.description,
+        location: formData.location,
+        priority: formData.priority,
+        status: formData.status,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        actualCost: formData.actualCost === "" ? null : parseFloat(formData.actualCost),
+      });
       await fetchWorkOrders();
+      setShowUpdate(false);
+      showSnackbar('Work order updated successfully!', 'success');
+      if (onWorkOrderUpdate) onWorkOrderUpdate();
+    } catch (err) {
+      console.error('Error updating work order:', err);
+      showSnackbar(err.response?.data?.error || 'Failed to update work order', 'error');
     }
   };
 
@@ -261,18 +308,18 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
 
       {/* Update Modal (workers can set Actual Cost; cannot edit Estimated Budget) */}
       {showUpdate && (
-        <div style={styles.overlay} onClick={() => setShowUpdate(false)}>
+        <div style={styles.overlay} onClick={handleCancelUpdate}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h3 style={styles.modalTitle}>Update Work Order</h3>
-              <button style={styles.closeButton} onClick={() => setShowUpdate(false)}>
+              <button style={styles.closeButton} onClick={handleCancelUpdate}>
                 <FaTimes />
               </button>
             </div>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                setShowUpdate(false);
+                handleUpdate();
               }}
               style={styles.form}
             >
@@ -364,31 +411,12 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
               </div>
 
               <div style={styles.actions}>
-                <button type="button" style={styles.cancelBtn} onClick={() => setShowUpdate(false)}>
+                <button type="button" style={styles.cancelBtn} onClick={handleCancelUpdate}>
                   Close
                 </button>
                 <button
-                  type="button"
+                  type="submit"
                   style={styles.submitBtn}
-                  onClick={async () => {
-                    if (!validateForm()) return;
-                    try {
-                      await workOrdersAPI.workerUpdate(selectedWorkOrder.id, {
-                        description: formData.description,
-                        location: formData.location,
-                        priority: formData.priority,
-                        status: formData.status,
-                        startDate: formData.startDate,
-                        endDate: formData.endDate,
-                        actualCost: formData.actualCost === "" ? null : parseFloat(formData.actualCost),
-                      });
-                      await fetchWorkOrders();
-                      setShowUpdate(false);
-                      if (onWorkOrderUpdate) onWorkOrderUpdate();
-                    } catch (err) {
-                      alert(err.response?.data?.error || err.message);
-                    }
-                  }}
                 >
                   Update
                 </button>

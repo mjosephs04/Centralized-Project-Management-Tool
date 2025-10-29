@@ -1,13 +1,10 @@
 import React, { useState } from "react";
-import { Snackbar, Alert, Slide } from "@mui/material";
 import { FaUserPlus, FaUserMinus, FaCalendarAlt } from 'react-icons/fa';
 import UserNavbar from "../components/UserNavbar";
-
-function TransitionDown(props) {
-    return <Slide {...props} direction="down" />;
-}
+import { useSnackbar } from "../contexts/SnackbarContext";
 
 const LoginDistributionPage = () => {
+    const { showSnackbar } = useSnackbar();
     const [grantFormData, setGrantFormData] = useState({
         email: '',
         expirationDate: '',
@@ -15,30 +12,16 @@ const LoginDistributionPage = () => {
 
     const [revokeEmail, setRevokeEmail] = useState('');
 
-    const [toast, setToast] = useState({
-        open: false,
-        message: '',
-        severity: 'info',
-    });
-
-    const openToast = (message, severity = "info") => 
-        setToast({ open: true, message, severity});
-
-    const closeToast = (_, reason) => {
-        if (reason === 'clickaway') return;
-        setToast((t) => ({ ...t, open: false}));
-    };
-
     const handleGrantAccess = (e) => {
         e.preventDefault();
 
         if (!grantFormData.email) {
-            openToast('Please enter an email address', 'error');
+            showSnackbar('Please enter an email address', 'error');
             return;
         }
 
         //TODO: Backend calls for approval/email system
-        openToast("Access request confirmed. Awaiting approval from administrator.", 'success');
+        showSnackbar("Access request confirmed. Awaiting approval from administrator.", 'success');
 
         setGrantFormData({
             email: '',
@@ -50,12 +33,12 @@ const LoginDistributionPage = () => {
         e.preventDefault();
 
         if(!revokeEmail) {
-            openToast('Please enter an email address', 'error');
+            showSnackbar('Please enter an email address', 'error');
             return;
         }
 
         //TODO: Backend calls for removal/email system
-        openToast("Access revoation request submitted. Awaiting approval from administrator.", 'success');
+        showSnackbar("Access revocation request submitted. Awaiting approval from administrator.", 'success');
 
         setRevokeEmail('');
     };
@@ -175,29 +158,6 @@ const LoginDistributionPage = () => {
                     </ul>
                 </div>
             </div>
-
-            <Snackbar
-                open={toast.open}
-                autoHideDuration={4000}
-                onClose={closeToast}
-                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-                TransitionComponent={TransitionDown}
-            >
-                <Alert
-                    onClose={closeToast}
-                    severity={toast.severity}
-                    variant="filled"
-                    sx={{
-                        width: '100%',
-                        textAlign: 'center',
-                        fontWeight: 'bold',
-                        borderRadius: '12px',
-                        boxShadow: 3,
-                    }}
-                >
-                    {toast.message}
-                </Alert>
-            </Snackbar>
         </>
     );
 };
@@ -374,5 +334,3 @@ const styles = {
 };
 
 export default LoginDistributionPage;
-
-

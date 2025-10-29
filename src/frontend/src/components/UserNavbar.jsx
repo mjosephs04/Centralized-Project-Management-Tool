@@ -4,6 +4,7 @@ import { FaEnvelope, FaUserCircle, FaSignOutAlt } from "react-icons/fa";
 import { FaShareFromSquare } from "react-icons/fa6";
 import logo from '../imgs/LSGSLogo.png';
 import { authAPI } from '../services/api';
+import { useSnackbar } from '../contexts/SnackbarContext';
 
 const styles = {
     navbar: {
@@ -189,6 +190,7 @@ const styles = {
 
 const UserNavbar = () => {
     const navigate = useNavigate();
+    const { showSnackbar } = useSnackbar();
     const [isHovered, setIsHovered] = useState({
         login_dist: false,
         mail: false,
@@ -219,6 +221,7 @@ const UserNavbar = () => {
 
     const handleLogout = () => {
         localStorage.removeItem('accessToken');
+        showSnackbar('Successfully logged out', 'info');
         navigate('/login');
     };
 
