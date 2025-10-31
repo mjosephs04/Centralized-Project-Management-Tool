@@ -262,6 +262,18 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
     }
   };
 
+  const formatStatus = (status) => {
+    if (!status) return "Pending";
+    const statusMap = {
+      'pending': 'Pending',
+      'in_progress': 'In Progress',
+      'on_hold': 'On Hold',
+      'completed': 'Completed',
+      'cancelled': 'Cancelled',
+    };
+    return statusMap[status.toLowerCase()] || status;
+  };
+
   const getStatusBadge = (status) => {
     switch ((status || "").toLowerCase()) {
       case "pending": return { bg: "#fef3c7", text: "#92400e" };
@@ -328,7 +340,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
                               <td style={styles.td}>{priorityLabel(wo.priority)}</td>
                               <td style={styles.td}>
                                 <span style={{ ...styles.statusBadge, backgroundColor: badge.bg, color: badge.text }}>
-                                  {wo.status}
+                                  {formatStatus(wo.status)}
                                 </span>
                               </td>
                               <td style={styles.td}>
@@ -568,7 +580,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
             </div>
             <div style={styles.viewBody}>
               <div style={styles.viewRow}><strong>Name:</strong> {selectedWorkOrder.name}</div>
-              <div style={styles.viewRow}><strong>Status:</strong> {selectedWorkOrder.status}</div>
+              <div style={styles.viewRow}><strong>Status:</strong> {formatStatus(selectedWorkOrder.status)}</div>
               <div style={styles.viewRow}><strong>Priority:</strong> {priorityLabel(selectedWorkOrder.priority)}</div>
               <div style={styles.viewRow}><strong>Location:</strong> {selectedWorkOrder.location || "-"}</div>
               <div style={styles.viewRow}><strong>Dates:</strong> {selectedWorkOrder.startDate} — {selectedWorkOrder.endDate}</div>
@@ -788,7 +800,7 @@ const styles = {
   tableRow: { borderBottom: "1px solid #f3f4f6" },
   td: { padding: "0.9rem", color: "#374151", verticalAlign: "top" },
   description: { fontSize: "0.875rem", color: "#6b7280" },
-  statusBadge: { display: "inline-block", padding: "0.25rem 0.75rem", borderRadius: "12px", fontSize: "0.75rem", fontWeight: "600", textTransform: "capitalize" },
+  statusBadge: { display: "inline-block", padding: "0.25rem 0.75rem", borderRadius: "12px", fontSize: "0.75rem", fontWeight: "600", textTransform: "capitalize", textAlign: "center" },
   cardBtn: {padding: "0.35rem 0.6rem", background: "#dbeafe", color: "#111827", border: "none", borderRadius: "8px", fontSize: "0.85rem", fontWeight: "700", cursor: "pointer" },
   
   // Modals - Enhanced styling to match CalendarTab

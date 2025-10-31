@@ -180,6 +180,18 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
     }
   };
 
+  const formatStatus = (status) => {
+    if (!status) return "Pending";
+    const statusMap = {
+      'pending': 'Pending',
+      'in_progress': 'In Progress',
+      'on_hold': 'On Hold',
+      'completed': 'Completed',
+      'cancelled': 'Cancelled',
+    };
+    return statusMap[status.toLowerCase()] || status;
+  };
+
   const getStatusColor = (status) => {
     switch ((status || "").toLowerCase()) {
       case "pending": return { bg: "#fef3c7", text: "#92400e" };
@@ -254,7 +266,7 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
                                         backgroundColor: statusStyle.bg,
                                         color: statusStyle.text,
                                       }}>
-                                        {wo.status}
+                                        {formatStatus(wo.status)}
                                       </span>
                                     </div>
 
@@ -327,7 +339,7 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
             </div>
             <div style={styles.viewBody}>
               <div style={styles.viewRow}><strong>Name:</strong> {selectedWorkOrder.name}</div>
-              <div style={styles.viewRow}><strong>Status:</strong> {selectedWorkOrder.status}</div>
+              <div style={styles.viewRow}><strong>Status:</strong> {formatStatus(selectedWorkOrder.status)}</div>
               <div style={styles.viewRow}><strong>Priority:</strong> {getPriorityLabel(selectedWorkOrder.priority)}</div>
               <div style={styles.viewRow}><strong>Location:</strong> {selectedWorkOrder.location || "-"}</div>
               <div style={styles.viewRow}><strong>Dates:</strong> {selectedWorkOrder.startDate} — {selectedWorkOrder.endDate}</div>
@@ -503,7 +515,7 @@ const styles = {
   metaClamp: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: "1 1 auto" },
   cardFooter: { marginTop: "0.6rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" },
   smallLabel: { color: "#6b7280", fontWeight: 600 },
-  statusBadge: { display: "inline-block", padding: "0.2rem 0.6rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: "700", textTransform: "capitalize" },
+  statusBadge: { display: "inline-block", padding: "0.2rem 0.6rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: "700", textTransform: "capitalize", textAlign: "center" },
   cardBtn: { padding: "0.35rem 0.6rem", background: "#dbeafe", color: "#111827", border: "none", borderRadius: "8px", fontSize: "0.85rem", fontWeight: "700", cursor: "pointer" },
   // Modals
   overlay: { position: "fixed", inset: 0, backgroundColor: "rgba(0, 0, 0, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
