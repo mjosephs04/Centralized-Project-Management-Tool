@@ -672,13 +672,18 @@ def assign_workers_to_workorder(workorder_id):
     
     # Get current assigned workers for audit log
     current_assignments = WorkOrderWorker.query.filter_by(workOrderId=workorder_id, isActive=True).all()
-    old_worker_ids = [a.userId for a in current_assignments]
+    old_worker_ids = set([a.userId for a in current_assignments])
+    old_worker_ids_sorted = sorted(old_worker_ids)
     old_worker_names = []
-    for wid in old_worker_ids:
+    for wid in old_worker_ids_sorted:
         w = User.query.filter_by(id=wid).first()
         if w:
             old_worker_names.append(f"{w.firstName} {w.lastName}".strip() or w.emailAddress)
     old_value = ", ".join(old_worker_names) if old_worker_names else "None"
+    
+    # Check if workers have actually changed (using sets to compare regardless of order)
+    new_worker_ids = set(worker_ids)
+    workers_changed = old_worker_ids != new_worker_ids
     
     # Deactivate all current assignments
     WorkOrderWorker.query.filter_by(workOrderId=workorder_id, isActive=True).update({"isActive": False})
@@ -702,29 +707,31 @@ def assign_workers_to_workorder(workorder_id):
     
     db.session.flush()  # Flush to ensure assignments are saved
     
-    # Get updated assigned workers for audit log
-    updated_assignments = WorkOrderWorker.query.filter_by(workOrderId=workorder_id, isActive=True).all()
-    new_worker_ids = [a.userId for a in updated_assignments]
-    new_worker_names = []
-    for wid in new_worker_ids:
-        w = User.query.filter_by(id=wid).first()
-        if w:
-            new_worker_names.append(f"{w.firstName} {w.lastName}".strip() or w.emailAddress)
-    new_value = ", ".join(new_worker_names) if new_worker_names else "None"
-    
-    # Create audit log for worker assignment
-    user_id = get_jwt_identity()
-    session_id = str(uuid.uuid4())
-    create_audit_log(
-        AuditEntityType.WORK_ORDER,
-        workorder_id,
-        user_id,
-        "assignedWorkers",
-        old_value,
-        new_value,
-        session_id,
-        workorder.projectId
-    )
+    # Only create audit log if workers actually changed
+    if workers_changed:
+        # Get updated assigned workers for audit log
+        updated_assignments = WorkOrderWorker.query.filter_by(workOrderId=workorder_id, isActive=True).all()
+        new_worker_ids_sorted = sorted([a.userId for a in updated_assignments])
+        new_worker_names = []
+        for wid in new_worker_ids_sorted:
+            w = User.query.filter_by(id=wid).first()
+            if w:
+                new_worker_names.append(f"{w.firstName} {w.lastName}".strip() or w.emailAddress)
+        new_value = ", ".join(new_worker_names) if new_worker_names else "None"
+        
+        # Create audit log for worker assignment
+        user_id = get_jwt_identity()
+        session_id = str(uuid.uuid4())
+        create_audit_log(
+            AuditEntityType.WORK_ORDER,
+            workorder_id,
+            user_id,
+            "assignedWorkers",
+            old_value,
+            new_value,
+            session_id,
+            workorder.projectId
+        )
     
     db.session.commit()
     

@@ -196,9 +196,14 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
         estimatedBudget: formData.estimatedBudget === "" ? null : parseFloat(formData.estimatedBudget),
       });
       
-      // Update worker assignments
-      if (formData.selectedWorkers) {
-        await workOrdersAPI.assignWorkers(selectedWorkOrder.id, formData.selectedWorkers);
+      // Update worker assignments only if they've changed
+      const originalWorkerIds = new Set(selectedWorkOrder.assignedWorkers || []);
+      const newWorkerIds = new Set(formData.selectedWorkers || []);
+      const workersChanged = originalWorkerIds.size !== newWorkerIds.size || 
+                             [...originalWorkerIds].some(id => !newWorkerIds.has(id));
+      
+      if (workersChanged) {
+        await workOrdersAPI.assignWorkers(selectedWorkOrder.id, formData.selectedWorkers || []);
       }
       
       await fetchWorkOrders();
@@ -547,18 +552,6 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
                     )}
                   </div>
                 )}
-                {(formData.selectedWorkers || []).length > 0 && (
-                  <div style={{ marginTop: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                    {formData.selectedWorkers.map(workerId => {
-                      const worker = allWorkers.find(w => w.id === workerId);
-                      return (
-                        <span key={workerId} style={styles.workerBadge}>
-                          {worker ? `${worker.firstName || ''} ${worker.lastName || ''}`.trim() || worker.emailAddress : `Worker #${workerId}`}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
 
               <div style={styles.actions}>
@@ -753,18 +746,6 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
                         );
                       })
                     )}
-                  </div>
-                )}
-                {(formData.selectedWorkers || []).length > 0 && (
-                  <div style={{ marginTop: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                    {formData.selectedWorkers.map(workerId => {
-                      const worker = allWorkers.find(w => w.id === workerId);
-                      return (
-                        <span key={workerId} style={styles.workerBadge}>
-                          {worker ? `${worker.firstName || ''} ${worker.lastName || ''}`.trim() || worker.emailAddress : `Worker #${workerId}`}
-                        </span>
-                      );
-                    })}
                   </div>
                 )}
               </div>
