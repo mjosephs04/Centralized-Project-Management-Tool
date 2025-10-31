@@ -29,7 +29,7 @@ apiClient.interceptors.request.use((config) => {
 
 export const projectsAPI = {
   getProjects: async () => {
-    const response = await apiClient.get("/projects/");
+    const response = await apiClient.get("/projects/my-projects");
     return response.data.projects;
   },
 
@@ -184,5 +184,9 @@ export const authAPI = {
   uploadProfilePic: async (formData) => {
     const response = await apiClient.post("/auth/upload-profile", formData);
     return response;
+  },
+  updateProfile: async (updates) => {
+    const response = await apiClient.put("/auth/me", updates);
+    return response.data.user;
   }
 };

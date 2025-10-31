@@ -284,3 +284,44 @@ def upload_profile_picture():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Upload failed: {str(e)}"}), 500
+
+
+@auth_bp.put("/me")
+@jwt_required()
+def update_profile():
+    """Update the current user's profile information."""
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    payload = request.get_json(silent=True) or request.form.to_dict() or {}
+    
+    # Update firstName if provided
+    if "firstName" in payload:
+        user.firstName = payload["firstName"]
+    
+    # Update lastName if provided
+    if "lastName" in payload:
+        user.lastName = payload["lastName"]
+    
+    # Update emailAddress if provided (check for uniqueness only if changed)
+    if "emailAddress" in payload:
+        email = payload["emailAddress"]
+        # Only check for uniqueness if the email is actually changing
+        if email != user.emailAddress:
+            existing_user = User.query.filter_by(emailAddress=email, isActive=True).first()
+            if existing_user:
+                return jsonify({"error": "Email already in use"}), 409
+        user.emailAddress = email
+    
+    # Update phoneNumber if provided
+    if "phoneNumber" in payload:
+        user.phoneNumber = payload["phoneNumber"] if payload["phoneNumber"] else None
+    
+    try:
+        db.session.commit()
+        return jsonify({"user": user.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Failed to update profile: {str(e)}"}), 500
