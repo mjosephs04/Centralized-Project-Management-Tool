@@ -5,7 +5,7 @@ from datetime import datetime, date
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from .models import db, User, Project, WorkOrder, WorkOrderStatus, UserRole, Audit, AuditEntityType
+from .models import db, User, Project, WorkOrder, WorkOrderWorker, WorkOrderStatus, UserRole, Audit, AuditEntityType
 
 
 workorders_bp = Blueprint("workorders", __name__, url_prefix="/api/workorders")
@@ -458,6 +458,280 @@ def worker_update_workorder(workorder_id):
 
     db.session.commit()
     return jsonify({"workorder": workorder.to_dict()}), 200
+
+
+@workorders_bp.post("/<int:workorder_id>/assign-worker")
+@jwt_required()
+def assign_worker_to_workorder(workorder_id):
+    """Assign a worker to a work order (only project managers can do this)"""
+    auth_error = require_project_manager()
+    if auth_error:
+        return auth_error
+    
+    workorder = WorkOrder.query.filter_by(id=workorder_id, isActive=True).first()
+    if not workorder:
+        return jsonify({"error": "Work order not found"}), 404
+    
+    payload = request.get_json(silent=True) or request.form.to_dict() or {}
+    user_id_to_assign = payload.get("userId")
+    
+    if not user_id_to_assign:
+        return jsonify({"error": "userId is required"}), 400
+    
+    try:
+        user_id_to_assign = int(user_id_to_assign)
+    except ValueError:
+        return jsonify({"error": "userId must be a number"}), 400
+    
+    # Validate user exists and is a worker
+    worker = User.query.filter_by(id=user_id_to_assign, isActive=True).first()
+    if not worker:
+        return jsonify({"error": "Worker not found"}), 404
+    
+    if worker.role != UserRole.WORKER:
+        return jsonify({"error": "User must be a worker to be assigned to work orders"}), 400
+    
+    # Check if already assigned
+    existing_assignment = WorkOrderWorker.query.filter_by(
+        workOrderId=workorder_id, 
+        userId=user_id_to_assign,
+        isActive=True
+    ).first()
+    
+    if existing_assignment:
+        return jsonify({"error": "Worker is already assigned to this work order"}), 400
+    
+    # Check if there's an inactive assignment to reactivate
+    inactive_assignment = WorkOrderWorker.query.filter_by(
+        workOrderId=workorder_id,
+        userId=user_id_to_assign,
+        isActive=False
+    ).first()
+    
+    # Get current assigned workers for audit log
+    current_assignments = WorkOrderWorker.query.filter_by(workOrderId=workorder_id, isActive=True).all()
+    old_worker_ids = [a.userId for a in current_assignments]
+    old_worker_names = []
+    for wid in old_worker_ids:
+        w = User.query.filter_by(id=wid).first()
+        if w:
+            old_worker_names.append(f"{w.firstName} {w.lastName}".strip() or w.emailAddress)
+    old_value = ", ".join(old_worker_names) if old_worker_names else "None"
+    
+    if inactive_assignment:
+        inactive_assignment.isActive = True
+        inactive_assignment.assignedAt = datetime.utcnow()
+    else:
+        # Create new assignment
+        assignment = WorkOrderWorker(
+            workOrderId=workorder_id,
+            userId=user_id_to_assign
+        )
+        db.session.add(assignment)
+    
+    db.session.flush()  # Flush to ensure assignment is saved
+    
+    # Get updated assigned workers for audit log
+    updated_assignments = WorkOrderWorker.query.filter_by(workOrderId=workorder_id, isActive=True).all()
+    new_worker_ids = [a.userId for a in updated_assignments]
+    new_worker_names = []
+    for wid in new_worker_ids:
+        w = User.query.filter_by(id=wid).first()
+        if w:
+            new_worker_names.append(f"{w.firstName} {w.lastName}".strip() or w.emailAddress)
+    new_value = ", ".join(new_worker_names) if new_worker_names else "None"
+    
+    # Create audit log for worker assignment
+    user_id = get_jwt_identity()
+    session_id = str(uuid.uuid4())
+    create_audit_log(
+        AuditEntityType.WORK_ORDER,
+        workorder_id,
+        user_id,
+        "assignedWorkers",
+        old_value,
+        new_value,
+        session_id,
+        workorder.projectId
+    )
+    
+    db.session.commit()
+    
+    # Refresh work order to get updated assigned workers
+    workorder = WorkOrder.query.filter_by(id=workorder_id, isActive=True).first()
+    
+    return jsonify({"workorder": workorder.to_dict(), "message": "Worker assigned successfully"}), 200
+
+
+@workorders_bp.post("/<int:workorder_id>/remove-worker")
+@jwt_required()
+def remove_worker_from_workorder(workorder_id):
+    """Remove a worker from a work order (only project managers can do this)"""
+    auth_error = require_project_manager()
+    if auth_error:
+        return auth_error
+    
+    workorder = WorkOrder.query.filter_by(id=workorder_id, isActive=True).first()
+    if not workorder:
+        return jsonify({"error": "Work order not found"}), 404
+    
+    payload = request.get_json(silent=True) or request.form.to_dict() or {}
+    user_id_to_remove = payload.get("userId")
+    
+    if not user_id_to_remove:
+        return jsonify({"error": "userId is required"}), 400
+    
+    try:
+        user_id_to_remove = int(user_id_to_remove)
+    except ValueError:
+        return jsonify({"error": "userId must be a number"}), 400
+    
+    # Find and deactivate the assignment
+    assignment = WorkOrderWorker.query.filter_by(
+        workOrderId=workorder_id,
+        userId=user_id_to_remove,
+        isActive=True
+    ).first()
+    
+    if not assignment:
+        return jsonify({"error": "Worker is not assigned to this work order"}), 404
+    
+    # Get current assigned workers for audit log
+    current_assignments = WorkOrderWorker.query.filter_by(workOrderId=workorder_id, isActive=True).all()
+    old_worker_ids = [a.userId for a in current_assignments]
+    old_worker_names = []
+    for wid in old_worker_ids:
+        w = User.query.filter_by(id=wid).first()
+        if w:
+            old_worker_names.append(f"{w.firstName} {w.lastName}".strip() or w.emailAddress)
+    old_value = ", ".join(old_worker_names) if old_worker_names else "None"
+    
+    assignment.isActive = False
+    db.session.flush()  # Flush to ensure assignment is saved
+    
+    # Get updated assigned workers for audit log
+    updated_assignments = WorkOrderWorker.query.filter_by(workOrderId=workorder_id, isActive=True).all()
+    new_worker_ids = [a.userId for a in updated_assignments]
+    new_worker_names = []
+    for wid in new_worker_ids:
+        w = User.query.filter_by(id=wid).first()
+        if w:
+            new_worker_names.append(f"{w.firstName} {w.lastName}".strip() or w.emailAddress)
+    new_value = ", ".join(new_worker_names) if new_worker_names else "None"
+    
+    # Create audit log for worker removal
+    user_id = get_jwt_identity()
+    session_id = str(uuid.uuid4())
+    create_audit_log(
+        AuditEntityType.WORK_ORDER,
+        workorder_id,
+        user_id,
+        "assignedWorkers",
+        old_value,
+        new_value,
+        session_id,
+        workorder.projectId
+    )
+    
+    db.session.commit()
+    
+    # Refresh work order to get updated assigned workers
+    workorder = WorkOrder.query.filter_by(id=workorder_id, isActive=True).first()
+    
+    return jsonify({"workorder": workorder.to_dict(), "message": "Worker removed successfully"}), 200
+
+
+@workorders_bp.put("/<int:workorder_id>/assign-workers")
+@jwt_required()
+def assign_workers_to_workorder(workorder_id):
+    """Assign multiple workers to a work order (only project managers can do this)"""
+    auth_error = require_project_manager()
+    if auth_error:
+        return auth_error
+    
+    workorder = WorkOrder.query.filter_by(id=workorder_id, isActive=True).first()
+    if not workorder:
+        return jsonify({"error": "Work order not found"}), 404
+    
+    payload = request.get_json(silent=True) or request.form.to_dict() or {}
+    worker_ids = payload.get("workerIds", [])
+    
+    if not isinstance(worker_ids, list):
+        return jsonify({"error": "workerIds must be a list"}), 400
+    
+    # Validate all workers exist and are workers
+    worker_ids = [int(wid) for wid in worker_ids]
+    workers = User.query.filter(
+        User.id.in_(worker_ids),
+        User.isActive == True,
+        User.role == UserRole.WORKER
+    ).all()
+    
+    if len(workers) != len(worker_ids):
+        return jsonify({"error": "One or more worker IDs are invalid"}), 400
+    
+    # Get current assigned workers for audit log
+    current_assignments = WorkOrderWorker.query.filter_by(workOrderId=workorder_id, isActive=True).all()
+    old_worker_ids = [a.userId for a in current_assignments]
+    old_worker_names = []
+    for wid in old_worker_ids:
+        w = User.query.filter_by(id=wid).first()
+        if w:
+            old_worker_names.append(f"{w.firstName} {w.lastName}".strip() or w.emailAddress)
+    old_value = ", ".join(old_worker_names) if old_worker_names else "None"
+    
+    # Deactivate all current assignments
+    WorkOrderWorker.query.filter_by(workOrderId=workorder_id, isActive=True).update({"isActive": False})
+    
+    # Create or reactivate assignments for the new worker list
+    for worker_id in worker_ids:
+        existing = WorkOrderWorker.query.filter_by(
+            workOrderId=workorder_id,
+            userId=worker_id
+        ).first()
+        
+        if existing:
+            existing.isActive = True
+            existing.assignedAt = datetime.utcnow()
+        else:
+            assignment = WorkOrderWorker(
+                workOrderId=workorder_id,
+                userId=worker_id
+            )
+            db.session.add(assignment)
+    
+    db.session.flush()  # Flush to ensure assignments are saved
+    
+    # Get updated assigned workers for audit log
+    updated_assignments = WorkOrderWorker.query.filter_by(workOrderId=workorder_id, isActive=True).all()
+    new_worker_ids = [a.userId for a in updated_assignments]
+    new_worker_names = []
+    for wid in new_worker_ids:
+        w = User.query.filter_by(id=wid).first()
+        if w:
+            new_worker_names.append(f"{w.firstName} {w.lastName}".strip() or w.emailAddress)
+    new_value = ", ".join(new_worker_names) if new_worker_names else "None"
+    
+    # Create audit log for worker assignment
+    user_id = get_jwt_identity()
+    session_id = str(uuid.uuid4())
+    create_audit_log(
+        AuditEntityType.WORK_ORDER,
+        workorder_id,
+        user_id,
+        "assignedWorkers",
+        old_value,
+        new_value,
+        session_id,
+        workorder.projectId
+    )
+    
+    db.session.commit()
+    
+    # Refresh work order to get updated assigned workers
+    workorder = WorkOrder.query.filter_by(id=workorder_id, isActive=True).first()
+    
+    return jsonify({"workorder": workorder.to_dict(), "message": "Workers assigned successfully"}), 200
 
 
 @workorders_bp.delete("/<int:workorder_id>")

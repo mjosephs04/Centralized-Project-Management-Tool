@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FaEye, FaTimes } from "react-icons/fa";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { workOrdersAPI } from "../../../services/api";
+import { workOrdersAPI, usersAPI } from "../../../services/api";
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 
 const COLUMNS = [
@@ -16,6 +16,8 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
   const { showSnackbar } = useSnackbar();
   const [workOrders, setWorkOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [allWorkers, setAllWorkers] = useState([]);
+  const [loadingWorkers, setLoadingWorkers] = useState(true);
 
   // Modals
   const [showUpdate, setShowUpdate] = useState(false);
@@ -52,8 +54,21 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
 
   useEffect(() => {
     fetchWorkOrders();
+    fetchWorkers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id]);
+
+  const fetchWorkers = async () => {
+    try {
+      setLoadingWorkers(true);
+      const workers = await usersAPI.getWorkers();
+      setAllWorkers(workers || []);
+    } catch (err) {
+      console.error("Error fetching workers:", err);
+    } finally {
+      setLoadingWorkers(false);
+    }
+  };
 
   const fetchWorkOrders = async () => {
     try {
@@ -178,6 +193,12 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
   const getPriorityLabel = (p) => ["", "Very Low", "Low", "Medium", "High", "Critical"][p] || "Medium";
   const getPriorityColor = (p) => (p >= 4 ? "#ef4444" : p === 3 ? "#f59e0b" : "#10b981");
 
+  const getWorkerName = (workerId) => {
+    const worker = allWorkers.find(w => w.id === workerId);
+    if (!worker) return `Worker #${workerId}`;
+    return `${worker.firstName || ''} ${worker.lastName || ''}`.trim() || worker.emailAddress || `Worker #${workerId}`;
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -249,6 +270,22 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
                                       </span>
                                     </div>
 
+                                    {wo.assignedWorkers && wo.assignedWorkers.length > 0 && (
+                                      <div style={styles.cardAssignedWorkers}>
+                                        <span style={styles.assignedLabel}>Assigned:</span>
+                                        <div style={styles.workerBadgesContainer}>
+                                          {wo.assignedWorkers.slice(0, 3).map(workerId => (
+                                            <span key={workerId} style={styles.workerBadge}>
+                                              {getWorkerName(workerId)}
+                                            </span>
+                                          ))}
+                                          {wo.assignedWorkers.length > 3 && (
+                                            <span style={styles.workerBadge}>+{wo.assignedWorkers.length - 3}</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+
                                     <div style={styles.cardFooter}>
                                       <button
                                         style={{ ...styles.cardBtn, background: "#e5e7eb" }}
@@ -301,6 +338,21 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
                 <strong>Actual Cost:</strong>{" "}
                 {selectedWorkOrder.actualCost != null ? `$${selectedWorkOrder.actualCost.toLocaleString()}` : "-"}
               </div>
+              {selectedWorkOrder.assignedWorkers && selectedWorkOrder.assignedWorkers.length > 0 && (
+                <div style={styles.viewRow}>
+                  <strong>Assigned Workers:</strong>{" "}
+                  <div style={{ marginTop: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                    {selectedWorkOrder.assignedWorkers.map(workerId => {
+                      const worker = allWorkers.find(w => w.id === workerId);
+                      return (
+                        <span key={workerId} style={styles.workerBadge}>
+                          {worker ? `${worker.firstName || ''} ${worker.lastName || ''}`.trim() || worker.emailAddress : `Worker #${workerId}`}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -471,6 +523,35 @@ const styles = {
   viewBody: { padding: "1.25rem", display: "grid", gap: "0.6rem" },
   viewRow: { lineHeight: 1.4 },
   error: { marginTop: "0.25rem", color: "#b91c1c", fontSize: "0.85rem", fontWeight: "700" },
+  cardAssignedWorkers: {
+    marginTop: "0.5rem",
+    paddingTop: "0.5rem",
+    borderTop: "1px solid #f3f4f6",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.35rem"
+  },
+  assignedLabel: {
+    fontSize: "0.75rem",
+    color: "#6b7280",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em"
+  },
+  workerBadgesContainer: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.35rem"
+  },
+  workerBadge: {
+    display: "inline-block",
+    padding: "0.25rem 0.6rem",
+    backgroundColor: "#e0e7ff",
+    color: "#3730a3",
+    borderRadius: "9999px",
+    fontSize: "0.75rem",
+    fontWeight: "600"
+  },
 };
 
 export default WorkerWorkOrders;

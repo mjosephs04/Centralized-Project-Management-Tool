@@ -144,6 +144,21 @@ export const workOrdersAPI = {
     await apiClient.delete(`/workorders/${workOrderId}`);
     return true;
   },
+
+  assignWorker: async (workOrderId, userId) => {
+    const response = await apiClient.post(`/workorders/${workOrderId}/assign-worker`, { userId });
+    return response.data.workorder;
+  },
+
+  removeWorker: async (workOrderId, userId) => {
+    const response = await apiClient.post(`/workorders/${workOrderId}/remove-worker`, { userId });
+    return response.data.workorder;
+  },
+
+  assignWorkers: async (workOrderId, workerIds) => {
+    const response = await apiClient.put(`/workorders/${workOrderId}/assign-workers`, { workerIds });
+    return response.data.workorder;
+  },
 };
 
 export const usersAPI = {

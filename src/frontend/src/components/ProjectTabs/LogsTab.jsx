@@ -46,6 +46,7 @@ const LogsTab = ({ project, refreshTrigger }) => {
             case 'status':
                 return <FaFlag style={styles.fieldIcon} />;
             case 'crewMembers':
+            case 'assignedWorkers':
                 return <FaUser style={styles.fieldIcon} />;
             default:
                 return <FaCog style={styles.fieldIcon} />;
@@ -67,6 +68,7 @@ const LogsTab = ({ project, refreshTrigger }) => {
             'status': 'Status',
             'crewMembers': 'Team Members',
             'teamMembers': 'Team Members',
+            'assignedWorkers': 'Assigned Workers',
             'work_order_created': 'Work Order Created',
             'work_order_deleted': 'Work Order Deleted'
         };
@@ -412,7 +414,10 @@ const LogsTab = ({ project, refreshTrigger }) => {
                                             <>
                                                 <div style={styles.changeRow}>
                                                     <span style={styles.changeLabel}>
-                                                        {formatFieldName(log.field)}:
+                                                        {formatFieldName(log.field)}
+                                                        {log.field === 'assignedWorkers' && log.workOrderName && (
+                                                            <span style={styles.workOrderName}> for "{log.workOrderName}"</span>
+                                                        )}:
                                                     </span>
                                                 </div>
                                                  <div style={styles.changeRow}>
@@ -690,6 +695,10 @@ const styles = {
         fontSize: '1rem',
         fontWeight: '500',
         color: '#374151',
+    },
+    workOrderName: {
+        fontWeight: '600',
+        color: '#6b7280',
     }
 };
 
