@@ -351,7 +351,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
                               <td style={styles.td}>
                                 {wo.assignedWorkers && wo.assignedWorkers.length > 0 ? (
                                   <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
-                                    {wo.assignedWorkers.slice(0, 2).map(workerId => {
+                                    {wo.assignedWorkers.map(workerId => {
                                       const worker = allWorkers.find(w => w.id === workerId);
                                       const fullName = worker ? `${worker.firstName || ''} ${worker.lastName || ''}`.trim() || worker.emailAddress : `Worker #${workerId}`;
                                       return (
@@ -360,9 +360,6 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
                                         </span>
                                       );
                                     })}
-                                    {wo.assignedWorkers.length > 2 && (
-                                      <span style={styles.workerBadge}>+{wo.assignedWorkers.length - 2}</span>
-                                    )}
                                   </div>
                                 ) : (
                                   "-"

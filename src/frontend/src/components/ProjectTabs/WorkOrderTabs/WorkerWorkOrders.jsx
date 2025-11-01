@@ -286,14 +286,11 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
                                       <div style={styles.cardAssignedWorkers}>
                                         <span style={styles.assignedLabel}>Assigned:</span>
                                         <div style={styles.workerBadgesContainer}>
-                                          {wo.assignedWorkers.slice(0, 3).map(workerId => (
+                                          {wo.assignedWorkers.map(workerId => (
                                             <span key={workerId} style={styles.workerBadge}>
                                               {getWorkerName(workerId)}
                                             </span>
                                           ))}
-                                          {wo.assignedWorkers.length > 3 && (
-                                            <span style={styles.workerBadge}>+{wo.assignedWorkers.length - 3}</span>
-                                          )}
                                         </div>
                                       </div>
                                     )}

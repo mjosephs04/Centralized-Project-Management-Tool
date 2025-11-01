@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { FaEdit, FaSave, FaTimes, FaMapMarkerAlt, FaCalendarAlt, FaDollarSign, FaFlag, FaChartLine, FaTrashAlt } from "react-icons/fa";
+import { FaEdit, FaSave, FaTimes, FaMapMarkerAlt, FaCalendarAlt, FaDollarSign, FaFlag, FaChartLine, FaTrashAlt, FaFileAlt } from "react-icons/fa";
 import { projectsAPI } from "../../services/api";
 import { useSnackbar } from '../../contexts/SnackbarContext';
 
@@ -17,6 +17,8 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
     };
 
     const [editedData, setEditedData] = useState({
+        name: project.name || '',
+        description: project.description || '',
         location: project.location || '',
         actualStartDate: project.actualStartDate || '',
         endDate: project.endDate || '',
@@ -47,6 +49,8 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
 
     const handleCancel = () => {
         setEditedData({
+            name: project.name || '',
+            description: project.description || '',
             location: project.location || '',
             actualStartDate: project.actualStartDate || '',
             endDate: project.endDate || '',
@@ -145,6 +149,42 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
             </div>
 
             <div style={styles.grid}>
+                <div style={{...styles.card, gridColumn: '1 / -1'}}>
+                    <div style={styles.cardHeader}>
+                        <FaFileAlt style={styles.icon} />
+                        <span style={styles.label}>Project Title</span>
+                    </div>
+                    {isEditing ? (
+                        <input
+                            type='text'
+                            value={editedData.name}
+                            onChange={(e) => setEditedData({...editedData, name: e.target.value})}
+                            style={styles.input}
+                            placeholder="Enter project title"
+                        />
+                    ) : (
+                        <p style={styles.value}>{project.name || 'Not specified'}</p>
+                    )}
+                </div>
+
+                <div style={{...styles.card, gridColumn: '1 / -1', minHeight: '120px'}}>
+                    <div style={styles.cardHeader}>
+                        <FaFileAlt style={styles.icon} />
+                        <span style={styles.label}>Description</span>
+                    </div>
+                    {isEditing ? (
+                        <textarea
+                            value={editedData.description}
+                            onChange={(e) => setEditedData({...editedData, description: e.target.value})}
+                            style={{...styles.input, ...styles.textarea}}
+                            placeholder="Enter project description"
+                            rows={3}
+                        />
+                    ) : (
+                        <p style={styles.value}>{project.description || 'No description provided'}</p>
+                    )}
+                </div>
+
                 <div style={styles.card}>
                     <div style={styles.cardHeader}>
                         <FaMapMarkerAlt style={styles.icon} />
@@ -405,7 +445,15 @@ const styles = {
         borderRadius: '10px',
         boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
         transition: 'transform 0.2s, box-shadow 0.2s',
-        height: '100px',
+        minHeight: '100px',
+        display: 'flex',
+        flexDirection: 'column',
+    },
+    textarea: {
+        resize: 'vertical',
+        minHeight: '80px',
+        fontFamily: 'inherit',
+        marginTop: 'auto',
     },
     cardHeader: {
         display: 'flex',

@@ -80,26 +80,32 @@ def compute_work_order_rollup(work_orders: list[WorkOrder]) -> Dict[str, Any]:
         total += 1
         est_budget = to_decimal(wo.estimatedBudget)
         actual_cost = to_decimal(wo.actualCost)
-        est_total += est_budget
         actual_cost_total += actual_cost
 
         if wo.status == WorkOrderStatus.COMPLETED:
             completed += 1
             est_completed += est_budget
+            est_total += est_budget  # Include completed in total budget
         elif wo.status == WorkOrderStatus.IN_PROGRESS:
             in_progress += 1
             est_in_progress_raw += est_budget
+            est_total += est_budget  # Include in-progress in total budget
         elif wo.status == WorkOrderStatus.ON_HOLD:
             on_hold += 1
+            est_total += est_budget  # Include on-hold in total budget
         elif wo.status == WorkOrderStatus.PENDING:
             pending += 1
+            est_total += est_budget  # Include pending in total budget
         elif wo.status == WorkOrderStatus.CANCELLED:
             cancelled += 1
+            # Exclude cancelled work orders from est_total for SPI/CPI calculations
 
     # completion ratio with partial credit for in-progress
-    if total > 0:
+    # Exclude cancelled work orders from the total for completion calculation
+    active_total = total - cancelled
+    if active_total > 0:
         completed_equiv = Decimal(completed) + IN_PROGRESS_CREDIT * Decimal(in_progress)
-        completion_ratio = clamp(safe_div(completed_equiv, Decimal(total)))
+        completion_ratio = clamp(safe_div(completed_equiv, Decimal(active_total)))
     else:
         completion_ratio = Decimal("0")
 
