@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
-from .models import db, User, UserRole, WorkerType, ProjectInvitation, ProjectMember
+from .models import db, User, UserRole, WorkerType, ProjectInvitation, ProjectMember, ProjectManager
 from .email_service import validate_invitation_token, accept_invitation
 from google.cloud import storage
 import uuid
@@ -139,12 +139,11 @@ def register_with_invitation():
         
         # Accept the invitation and add user to project
         if accept_invitation(invitation, user.id):
-            # Add user to project as a member
-            project_member = ProjectMember(
-                projectId=invitation.projectId,
-                userId=user.id
-            )
-            db.session.add(project_member)
+            # Add user to project based on role
+            if role == UserRole.PROJECT_MANAGER:
+                db.session.add(ProjectManager(projectId=invitation.projectId, userId=user.id))
+            elif role == UserRole.WORKER:
+                db.session.add(ProjectMember(projectId=invitation.projectId, userId=user.id))
             db.session.commit()
             
             # Create access token
@@ -191,18 +190,17 @@ def accept_invitation_existing_user():
     
     # Check if user is already a member of this project
     existing_member = ProjectMember.query.filter_by(projectId=invitation.projectId, userId=user_id, isActive=True).first()
-    if existing_member:
+    if existing_member and invitation.role != UserRole.PROJECT_MANAGER:
         return jsonify({"error": "You are already a member of this project"}), 400
     
     try:
         # Accept the invitation and add user to project
         if accept_invitation(invitation, user_id):
-            # Add user to project as a member
-            project_member = ProjectMember(
-                projectId=invitation.projectId,
-                userId=user_id
-            )
-            db.session.add(project_member)
+            # Add user to project based on role
+            if invitation.role == UserRole.PROJECT_MANAGER:
+                db.session.add(ProjectManager(projectId=invitation.projectId, userId=user_id))
+            elif invitation.role == UserRole.WORKER:
+                db.session.add(ProjectMember(projectId=invitation.projectId, userId=user_id))
             db.session.commit()
             
             return jsonify({

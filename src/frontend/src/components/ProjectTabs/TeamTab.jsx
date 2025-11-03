@@ -26,6 +26,10 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
   const [isInviting, setIsInviting] = useState(false);
   const [inviteMessage, setInviteMessage] = useState("");
 
+  // Full team fetched from backend (includes project managers and members)
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [loadingTeam, setLoadingTeam] = useState(false);
+
   // Load initial crew + workers
   useEffect(() => {
     // Normalize project.crewMembers -> local objects { id | name }
@@ -53,6 +57,28 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
     };
     loadWorkers();
   }, []);
+
+  // Load full team list (project managers + members) for PM/Admin view
+  useEffect(() => {
+    const fetchTeam = async () => {
+      if (!project?.id) return;
+      try {
+        setLoadingTeam(true);
+        const members = await projectsAPI.getProjectMembers(project.id);
+        setTeamMembers(members || []);
+      } catch (e) {
+        console.error("Failed to load team members", e);
+      } finally {
+        setLoadingTeam(false);
+      }
+    };
+    // Show full team for non-worker roles
+    if (userRole && userRole !== "worker") {
+      fetchTeam();
+    } else {
+      setTeamMembers([]);
+    }
+  }, [project?.id, userRole]);
 
   // Helpers
   const getName = (u) => [u?.firstName, u?.lastName].filter(Boolean).join(" ").trim();
@@ -452,7 +478,86 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
         </div>
       )}
 
-      {crewResolved.length === 0 ? (
+      {/* Prefer backend-provided team list for PM/Admin; fallback to local crew */}
+      {teamMembers.length > 0 ? (
+        <>
+          <div style={{ marginBottom: "1.5rem" }}>
+            <h3 style={{ margin: 0, color: "#374151" }}>Project Managers</h3>
+            <div style={styles.grid}>
+              {teamMembers.filter((m) => m.role === "project_manager").map((m, idx) => (
+                <div key={`pm-${idx}`} style={styles.card}>
+                  <div style={styles.avatarContainer}>
+                    {m.profileImageUrl ? (
+                      <img src={m.profileImageUrl} alt={(m.firstName||"User") + " profile"} style={styles.avatarImage} onError={(e) => (e.target.style.display = "none")} />
+                    ) : (
+                      <div style={styles.avatar}>
+                        <FaUser style={styles.avatarIcon} />
+                      </div>
+                    )}
+                  </div>
+                  <div style={styles.cardContent}>
+                    <h3 style={styles.memberName}>{[m.firstName, m.lastName].filter(Boolean).join(" ") || m.emailAddress || "Project Manager"}</h3>
+                    <div style={styles.contactInfo}>
+                      <div style={styles.contactItem}>
+                        <span style={styles.label}>Email:</span>
+                        <span style={styles.value}>{m.emailAddress || "—"}</span>
+                      </div>
+                      {m.phoneNumber && (
+                        <div style={styles.contactItem}>
+                          <span style={styles.label}>Phone:</span>
+                          <span style={styles.value}>{m.phoneNumber}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.5rem" }}>
+            <h3 style={{ margin: 0, color: "#374151" }}>Team Members</h3>
+            {loadingTeam && <span style={{ color: "#6b7280", fontStyle: "italic" }}>(loading)</span>}
+          </div>
+          {teamMembers.filter((m) => m.role !== "project_manager").length === 0 ? (
+            <div style={styles.emptyState}>
+              <FaUser style={styles.emptyIcon} />
+              <p style={styles.emptyText}>No team members yet.</p>
+            </div>
+          ) : (
+            <div style={styles.grid}>
+              {teamMembers.filter((m) => m.role !== "project_manager").map((m, idx) => (
+                <div key={`mem-${idx}`} style={styles.card}>
+                  <div style={styles.avatarContainer}>
+                    {m.profileImageUrl ? (
+                      <img src={m.profileImageUrl} alt={(m.firstName||"User") + " profile"} style={styles.avatarImage} onError={(e) => (e.target.style.display = "none")} />
+                    ) : (
+                      <div style={styles.avatar}>
+                        <FaUser style={styles.avatarIcon} />
+                      </div>
+                    )}
+                  </div>
+                  <div style={styles.cardContent}>
+                    <h3 style={styles.memberName}>{[m.firstName, m.lastName].filter(Boolean).join(" ") || m.emailAddress || "Member"}</h3>
+                    <div style={styles.contactInfo}>
+                      <div style={styles.contactItem}>
+                        <span style={styles.label}>Email:</span>
+                        <span style={styles.value}>{m.emailAddress || "—"}</span>
+                      </div>
+                      {m.phoneNumber && (
+                        <div style={styles.contactItem}>
+                          <span style={styles.label}>Phone:</span>
+                          <span style={styles.value}>{m.phoneNumber}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      ) : crewResolved.length === 0 ? (
         <div style={styles.emptyState}>
           <FaUser style={styles.emptyIcon} />
           <p style={styles.emptyText}>No team members yet.</p>

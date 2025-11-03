@@ -8,7 +8,7 @@ const getAuthToken = () => {
 };
 
 const apiClient = axios.create({
-  baseURL: process.env.REACT_APP_ISPROD ? PROD_API_URL : LOCAL_API_URL,
+  baseURL: LOCAL_API_URL,
   headers: {
     "Content-Type": "application/json",
   },
@@ -29,7 +29,7 @@ apiClient.interceptors.request.use((config) => {
 
 export const projectsAPI = {
   getProjects: async () => {
-    const response = await apiClient.get("/projects/");
+    const response = await apiClient.get("/projects/my-projects");
     return response.data.projects;
   },
 
@@ -79,6 +79,11 @@ export const projectsAPI = {
   deleteSupplies:  async (projectId, supplyID) => {
     const response = await apiClient.delete(`/projects/${projectId}/supplies/${supplyID}`);
     return response;
+  },
+
+  getProjectMembers: async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/members`);
+    return response.data.members;
   },
 
   inviteUser: async (projectId, invitationData) => {

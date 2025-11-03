@@ -76,3 +76,8 @@ htmlcov/
 # Misc
 *.log
 .cache/
+docker-compose.yml
+Dockerfile-backend
+src/backend/__pycache__/progress.cpython-312.pyc
+src/backend/__pycache__/email_service.cpython-312.pyc
+src/frontend/src/.env.prod
