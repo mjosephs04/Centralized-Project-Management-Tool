@@ -405,3 +405,27 @@ class Supply(db.Model):
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
         }
+
+
+class PasswordReset(db.Model):
+    __tablename__ = "password_resets"
+
+    id = db.Column(db.Integer, primary_key=True)
+    userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    token = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    expiresAt = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False, nullable=False)
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('password_resets', lazy=True))
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "userId": self.userId,
+            "token": self.token,
+            "expiresAt": self.expiresAt.isoformat() if self.expiresAt else None,
+            "used": self.used,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+        }

@@ -187,8 +187,18 @@ export const authAPI = {
     return response;
   },
   forgotPassword: async (payload) => {
-    const response = await apiClient.post("/auth/forgot-password", payload)
-    return response;
+    const response = await apiClient.post("/auth/forgot-password", payload);
+    return response.data;
+  },
+
+  resetPassword: async (payload) => {
+    const response = await apiClient.post("/auth/reset-password", payload);
+    return response.data;
+  },
+
+  validateResetToken: async (token) => {
+    const response = await apiClient.get(`/auth/reset-password/validate/${token}`);
+    return response.data;
   },
   
   validateInvitationToken: async (token) => {

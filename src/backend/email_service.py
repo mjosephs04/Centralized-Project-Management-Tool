@@ -8,7 +8,7 @@ from typing import Optional
 from flask import current_app
 from flask_mail import Mail, Message
 
-from .models import db, ProjectInvitation, Project, User
+from .models import db, ProjectInvitation, Project, User, PasswordReset
 
 
 def generate_invitation_token() -> str:
@@ -184,3 +184,103 @@ def cleanup_expired_invitations():
     
     db.session.commit()
     return len(expired_invitations)
+
+
+def create_password_reset_token(user_id: int, expires_in_hours: int = 1) -> PasswordReset:
+    """Create a password reset token for a user"""
+    # Invalidate any existing unused tokens for this user
+    existing_resets = PasswordReset.query.filter_by(userId=user_id, used=False).all()
+    for reset in existing_resets:
+        reset.used = True
+    
+    # Generate secure token
+    token = generate_invitation_token()
+    
+    # Create new password reset record
+    password_reset = PasswordReset(
+        userId=user_id,
+        token=token,
+        expiresAt=datetime.utcnow() + timedelta(hours=expires_in_hours),
+        used=False
+    )
+    
+    db.session.add(password_reset)
+    db.session.commit()
+    return password_reset
+
+
+def send_password_reset_email(password_reset: PasswordReset) -> bool:
+    """Send a password reset email to the user"""
+    try:
+        user = User.query.filter_by(id=password_reset.userId, isActive=True).first()
+        
+        if not user:
+            return False
+        
+        # Create reset link
+        reset_url = f"{current_app.config['APP_URL']}/reset-password?token={password_reset.token}"
+        
+        subject = "Password Reset Request"
+        
+        html_body = f"""
+        <html>
+        <body>
+            <h2>Password Reset Request</h2>
+            <p>Hello {user.firstName},</p>
+            <p>You have requested to reset your password for your Project Management System account.</p>
+            <p>To reset your password, click the link below:</p>
+            <p><a href="{reset_url}" style="background-color: #4CAF50; color: white; padding: 14px 20px; text-decoration: none; border-radius: 4px;">Reset Password</a></p>
+            <p>This link will expire on {password_reset.expiresAt.strftime('%B %d, %Y at %I:%M %p')}.</p>
+            <p>If you did not request this password reset, please ignore this email. Your password will remain unchanged.</p>
+            <hr>
+            <p><small>This is an automated message from the Project Management System.</small></p>
+        </body>
+        </html>
+        """
+        
+        text_body = f"""
+        Password Reset Request
+        
+        Hello {user.firstName},
+        
+        You have requested to reset your password for your Project Management System account.
+        
+        To reset your password, visit:
+        {reset_url}
+        
+        This link will expire on {password_reset.expiresAt.strftime('%B %d, %Y at %I:%M %p')}.
+        
+        If you did not request this password reset, please ignore this email. Your password will remain unchanged.
+        """
+        
+        # Send email
+        mail = Mail(current_app)
+        msg = Message(
+            subject=subject,
+            recipients=[user.emailAddress],
+            html=html_body,
+            body=text_body
+        )
+        
+        mail.send(msg)
+        return True
+        
+    except Exception as e:
+        current_app.logger.error(f"Failed to send password reset email: {str(e)}")
+        return False
+
+
+def validate_password_reset_token(token: str) -> Optional[PasswordReset]:
+    """Validate a password reset token and return the reset record if valid"""
+    password_reset = PasswordReset.query.filter_by(token=token, used=False).first()
+    
+    if not password_reset:
+        return None
+    
+    # Check if token has expired
+    if datetime.utcnow() > password_reset.expiresAt:
+        password_reset.used = True
+        db.session.commit()
+        return None
+    
+    return password_reset
