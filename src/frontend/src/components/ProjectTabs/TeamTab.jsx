@@ -29,6 +29,8 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
   // Full team fetched from backend (includes project managers and members)
   const [teamMembers, setTeamMembers] = useState([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
+  const [invitations, setInvitations] = useState([]);
+  const [loadingInvites, setLoadingInvites] = useState(false);
 
   // Load initial crew + workers
   useEffect(() => {
@@ -72,11 +74,25 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
         setLoadingTeam(false);
       }
     };
+    const fetchInvitations = async () => {
+      if (!project?.id) return;
+      try {
+        setLoadingInvites(true);
+        const invs = await projectsAPI.getProjectInvitations(project.id);
+        setInvitations(invs || []);
+      } catch (e) {
+        console.error("Failed to load invitations", e);
+      } finally {
+        setLoadingInvites(false);
+      }
+    };
     // Show full team for non-worker roles
     if (userRole && userRole !== "worker") {
       fetchTeam();
+      fetchInvitations();
     } else {
       setTeamMembers([]);
+      setInvitations([]);
     }
   }, [project?.id, userRole]);
 
@@ -194,7 +210,7 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
     }
   };
 
-  const handleRemoveMember = (index) => {
+  const handleRemoveMemberFromEdit = (index) => {
     setCrew((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -256,6 +272,11 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
         setInviteRole("worker");
         setInviteWorkerType("crew_member");
         setInviteContractorExpiration("");
+        // Refresh team and invitations
+        const members = await projectsAPI.getProjectMembers(project.id);
+        setTeamMembers(members || []);
+        const invs = await projectsAPI.getProjectInvitations(project.id);
+        setInvitations(invs || []);
       } else if (response.warning) {
         setInviteMessage(`⚠️ ${response.warning}`);
       }
@@ -266,6 +287,26 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
       setInviteMessage(`❌ ${errorMessage}`);
     } finally {
       setIsInviting(false);
+    }
+  };
+
+  const handleRemoveTeamMember = async (memberId, isManager = false) => {
+    if (!window.confirm("Are you sure you want to remove this person from the project?")) {
+      return;
+    }
+    
+    try {
+      if (isManager) {
+        await projectsAPI.removeProjectManager(project.id, memberId);
+      } else {
+        await projectsAPI.removeProjectMember(project.id, memberId);
+      }
+      // Refresh team list
+      const members = await projectsAPI.getProjectMembers(project.id);
+      setTeamMembers(members || []);
+    } catch (error) {
+      console.error("Failed to remove member:", error);
+      alert(error.response?.data?.error || "Failed to remove member");
     }
   };
 
@@ -395,6 +436,7 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
           </div>
         </div>
       )}
+      
 
       {/* Invite User Section - Only for Project Managers/Admins */}
       {canEdit && (
@@ -486,6 +528,15 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
             <div style={styles.grid}>
               {teamMembers.filter((m) => m.role === "project_manager").map((m, idx) => (
                 <div key={`pm-${idx}`} style={styles.card}>
+                  {canEdit && (
+                    <button
+                      style={styles.removeButton}
+                      onClick={() => handleRemoveTeamMember(m.id, true)}
+                      title="Remove project manager"
+                    >
+                      <FaTrash />
+                    </button>
+                  )}
                   <div style={styles.avatarContainer}>
                     {m.profileImageUrl ? (
                       <img src={m.profileImageUrl} alt={(m.firstName||"User") + " profile"} style={styles.avatarImage} onError={(e) => (e.target.style.display = "none")} />
@@ -528,6 +579,15 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
             <div style={styles.grid}>
               {teamMembers.filter((m) => m.role !== "project_manager").map((m, idx) => (
                 <div key={`mem-${idx}`} style={styles.card}>
+                  {canEdit && (
+                    <button
+                      style={styles.removeButton}
+                      onClick={() => handleRemoveTeamMember(m.id, false)}
+                      title="Remove member"
+                    >
+                      <FaTrash />
+                    </button>
+                  )}
                   <div style={styles.avatarContainer}>
                     {m.profileImageUrl ? (
                       <img src={m.profileImageUrl} alt={(m.firstName||"User") + " profile"} style={styles.avatarImage} onError={(e) => (e.target.style.display = "none")} />
@@ -574,7 +634,7 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
               {isEditing && (
                 <button
                   style={styles.removeButton}
-                  onClick={() => handleRemoveMember(index)}
+                  onClick={() => handleRemoveMemberFromEdit(index)}
                   title="Remove member"
                 >
                   <FaTrash />
@@ -612,6 +672,50 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Pending Invitations (PM/Admin only) - moved to bottom */}
+      {userRole !== "worker" && (
+        <div style={{ marginTop: "2rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.5rem" }}>
+            <h3 style={{ margin: 0, color: "#374151" }}>Pending Invitations</h3>
+            {loadingInvites && <span style={{ color: "#6b7280", fontStyle: "italic" }}>(loading)</span>}
+          </div>
+          {invitations.filter((i) => i.status === "pending").length === 0 ? (
+            <div style={styles.emptyState}>
+              <FaUser style={styles.emptyIcon} />
+              <p style={styles.emptyText}>No pending invitations.</p>
+            </div>
+          ) : (
+            <div style={styles.grid}>
+              {invitations
+                .filter((i) => i.status === "pending")
+                .map((inv, idx) => (
+                  <div key={`inv-${idx}`} style={styles.card}>
+                    <div style={styles.cardContent}>
+                      <h3 style={styles.memberName}>{inv.email}</h3>
+                      <div style={styles.contactInfo}>
+                        <div style={styles.contactItem}>
+                          <span style={styles.label}>Role:</span>
+                          <span style={styles.value}>{inv.role || "—"}</span>
+                        </div>
+                        {inv.workerType && (
+                          <div style={styles.contactItem}>
+                            <span style={styles.label}>Worker Type:</span>
+                            <span style={styles.value}>{inv.workerType}</span>
+                          </div>
+                        )}
+                        <div style={styles.contactItem}>
+                          <span style={styles.label}>Expires:</span>
+                          <span style={styles.value}>{inv.expiresAt ? new Date(inv.expiresAt).toLocaleString() : "—"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1013,6 +1013,37 @@ def remove_project_member(project_id: int, member_id: int):
     return jsonify({"message": "Member removed successfully"}), 200
 
 
+@projects_bp.delete("/<int:project_id>/managers/<int:manager_id>")
+@jwt_required()
+def remove_project_manager(project_id: int, manager_id: int):
+    """Remove a project manager from a project (only project managers can do this)"""
+    # Check if user is a project manager
+    auth_error = require_project_manager()
+    if auth_error:
+        return auth_error
+
+    # Check if project exists
+    project = Project.query.filter_by(id=project_id, isActive=True).first()
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+
+    # Check if current user is a manager of this project
+    user_id = int(get_jwt_identity())
+    if not is_project_manager(user_id, project_id):
+        return jsonify({"error": "You can only remove managers from projects you manage"}), 403
+
+    # Find the project manager relationship
+    project_manager = ProjectManager.query.filter_by(projectId=project_id, userId=manager_id, isActive=True).first()
+    if not project_manager:
+        return jsonify({"error": "User is not a project manager of this project"}), 404
+
+    # Soft delete: set isActive to False
+    project_manager.isActive = False
+    db.session.commit()
+
+    return jsonify({"message": "Project manager removed successfully"}), 200
+
+
 @projects_bp.post("/<int:project_id>/invite")
 @jwt_required()
 def invite_user_to_project(project_id: int):

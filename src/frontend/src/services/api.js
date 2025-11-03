@@ -86,6 +86,21 @@ export const projectsAPI = {
     return response.data.members;
   },
 
+  getProjectInvitations: async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/invitations`);
+    return response.data.invitations;
+  },
+
+  removeProjectMember: async (projectId, memberId) => {
+    const response = await apiClient.delete(`/projects/${projectId}/members/${memberId}`);
+    return response.data;
+  },
+
+  removeProjectManager: async (projectId, managerId) => {
+    const response = await apiClient.delete(`/projects/${projectId}/managers/${managerId}`);
+    return response.data;
+  },
+
   inviteUser: async (projectId, invitationData) => {
     const response = await apiClient.post(`/projects/${projectId}/invite`, invitationData);
     return response.data;
