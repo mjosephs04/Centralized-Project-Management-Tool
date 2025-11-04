@@ -46,7 +46,7 @@ const SingleProjectPage = ({ projects }) => {
     const { projectId } = useParams();
     const navigate = useNavigate();
     const { showSnackbar } = useSnackbar();
-    const [activeTab, setActiveTab] = useState('calendar');
+    const [activeTab, setActiveTab] = useState('overview');
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -166,8 +166,8 @@ const SingleProjectPage = ({ projects }) => {
     }
 
     const managerTabs = [
-        { id: 'calendar', label: 'Calendar'},
         { id: 'overview', label: 'Overview' },
+        { id: 'calendar', label: 'Calendar'},
         { id: 'metrics', label: 'Metrics'},
         { id: 'team', label: 'Team'},
         { id: 'workorders', label: 'Work Orders'},
@@ -316,7 +316,7 @@ const styles = {
     },
     contentContainer: {
         padding: '3rem 2.5rem',
-        background: 'linear-gradient(90deg,rgb(35, 115, 243) 0%, #4facfe 100%)',
+        background: '#5692bc',
         minHeight: '100px'
     },
     descriptionSection: {
@@ -342,7 +342,7 @@ const styles = {
     },
     tabContainer: {
         width: '100%',
-        background: 'linear-gradient(90deg,rgb(35, 115, 243) 0%, #4facfe 100%)',
+        background: '#5692bc',
         minHeight: 'calc(100vh - 400px)',
     },
     tabNav: {
@@ -381,7 +381,7 @@ const styles = {
     },
     tabContent: {
         padding: '3rem 2.5rem',
-        backgroundColor: '#f8f0fa',
+        backgroundColor: '#fff4ed',
         minHeight: 'calc(100vh - 500px)',
         animation: 'fadeIn 0.4s ease',
     }

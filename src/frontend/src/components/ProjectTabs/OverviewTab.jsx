@@ -10,6 +10,26 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
     const [password, setPassword] = useState('');
     const [deleteError, setDeleteError] = useState('');
 
+    // Helper functions defined before use
+    const parseLocation = (locationString) => {
+        if (!locationString) return { address: '', city: '', state: '', zipCode: '' };
+        
+        const parts = locationString.split(',').map(part => part.trim());
+        
+        // Expected format: "123 Main St, City, State, 12345"
+        return {
+            address: parts[0] || '',
+            city: parts[1] || '',
+            state: parts[2] || '',
+            zipCode: parts[3] || ''
+        };
+    };
+
+    const formatLocation = (address, city, state, zipCode) => {
+        const parts = [address, city, state, zipCode].filter(part => part && part.trim());
+        return parts.join(', ');
+    };
+
     // Helper function to capitalize priority for display
     const capitalizePriority = (priority) => {
         if (!priority) return 'Medium';
@@ -17,7 +37,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
     };
 
     const [editedData, setEditedData] = useState({
-        location: project.location || '',
+        ...parseLocation(project.location),
         actualStartDate: project.actualStartDate || '',
         endDate: project.endDate || '',
         priority: capitalizePriority(project.priority),
@@ -27,12 +47,17 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
     const handleSave = async () => {
         try {
             if (onUpdate) {
-                // Convert data to match backend expectations
+                const location = formatLocation(
+                    editedData.address,
+                    editedData.city,
+                    editedData.state,
+                    editedData.zipCode
+                );
+    
                 const processedData = {
-                    ...editedData,
+                    location: location,
                     priority: editedData.priority.toLowerCase(),
                     estimatedBudget: editedData.estimatedBudget ? parseFloat(editedData.estimatedBudget) : null,
-                    // Only include dates if they have values
                     actualStartDate: editedData.actualStartDate || null,
                     endDate: editedData.endDate || null
                 };
@@ -44,10 +69,10 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
             showSnackbar('Failed to update project details', 'error');
         }
     };
-
+    
     const handleCancel = () => {
         setEditedData({
-            location: project.location || '',
+            ...parseLocation(project.location),
             actualStartDate: project.actualStartDate || '',
             endDate: project.endDate || '',
             priority: capitalizePriority(project.priority),
@@ -145,20 +170,66 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
             </div>
 
             <div style={styles.grid}>
-                <div style={styles.card}>
+                <div style={{ ...styles.card, gridColumn: isEditing ? '1 / -1' : 'auto' }}>
                     <div style={styles.cardHeader}>
                         <FaMapMarkerAlt style={styles.icon} />
                         <span style={styles.label}>Location</span>
                     </div>
                     {isEditing ? (
-                        <input
-                            type='text'
-                            value={editedData.location}
-                            onChange={(e) => setEditedData({...editedData, location: e.target.value})}
-                            style={styles.input}
-                        />
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
+                            <div>
+                                <label style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '0.5rem', display: 'block' }}>Street Address</label>
+                                <input
+                                    type='text'
+                                    value={editedData.address}
+                                    onChange={(e) => setEditedData({...editedData, address: e.target.value})}
+                                    style={styles.input}
+                                    placeholder="123 Main St"
+                                />
+                            </div>
+                            <div>
+                                <label style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '0.5rem', display: 'block' }}>City</label>
+                                <input
+                                    type='text'
+                                    value={editedData.city}
+                                    onChange={(e) => setEditedData({...editedData, city: e.target.value})}
+                                    style={styles.input}
+                                    placeholder="City"
+                                />
+                            </div>
+                            <div>
+                                <label style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '0.5rem', display: 'block' }}>State</label>
+                                <input
+                                    type='text'
+                                    value={editedData.state}
+                                    onChange={(e) => setEditedData({...editedData, state: e.target.value})}
+                                    style={styles.input}
+                                    placeholder="State"
+                                />
+                            </div>
+                            <div>
+                                <label style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '0.5rem', display: 'block' }}>ZIP Code</label>
+                                <input
+                                    type='text'
+                                    value={editedData.zipCode}
+                                    onChange={(e) => setEditedData({...editedData, zipCode: e.target.value})}
+                                    style={styles.input}
+                                    placeholder="12345"
+                                />
+                            </div>
+                        </div>
                     ) : (
-                        <p style={styles.value}>{project.location || 'Not specified'}</p>
+                        <div>
+                            <p style={styles.value}>{parseLocation(project.location).address || 'Not specified'}</p>
+                            <p style={{ ...styles.value, fontSize: '0.95rem', color: '#718096', marginTop: '0.25rem' }}>
+                                {(() => {
+                                    const loc = parseLocation(project.location);
+                                    const cityState = [loc.city, loc.state].filter(part => part).join(', ');
+                                    const parts = [cityState, loc.zipCode].filter(part => part);
+                                    return parts.join(' ') || '';
+                                })()}
+                            </p>
+                        </div>
                     )}
                 </div>
 
@@ -353,7 +424,7 @@ const styles = {
         alignItems: 'center',
         gap: '0.5rem',
         padding: '0.6rem 1.2rem',
-        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+        background: '#5692bc',
         color: 'white',
         border: 'none',
         borderRadius: '8px',

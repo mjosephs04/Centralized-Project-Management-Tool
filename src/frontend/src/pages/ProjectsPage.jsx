@@ -14,8 +14,7 @@ const ProjectsPage = () => {
     const [error, setError] = useState(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(false);
-    const [showFilters, setShowFilters] = useState(false);
-    const [showSort, setShowSort] = useState(false);
+    const [showFiltersSort, setShowFiltersSort] = useState(false);
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const scrollContainerRef = useRef(null);
@@ -150,12 +149,21 @@ const ProjectsPage = () => {
         setSortOrder('asc');
     }
 
+    const clearAll = () => {
+        clearFilters();
+        clearSort();
+    }
+
     const hasActiveFilters = () => {
         return filters.minBudget || filters.maxBudget || filters.startDate || filters.endDate;
     };
 
     const hasActiveSort = () => {
         return sortBy !== 'name' || sortOrder !== 'asc';
+    }
+
+    const hasActiveFiltersOrSort = () => {
+        return hasActiveFilters() || hasActiveSort();
     }
 
     const checkScrollingButtons = () => {
@@ -192,10 +200,8 @@ const ProjectsPage = () => {
     const fetchInitialData = async () => {
         try {
             setLoading(true);
-            // fetch user role
             const me = await authAPI.me();
             setUserRole(me?.role || null);
-            // then fetch projects
             const data = await projectsAPI.getProjects();
             setProjects(data);
         } catch (err) {
@@ -211,31 +217,20 @@ const ProjectsPage = () => {
             <UserNavbar />
             <div style={styles.pageContainer}>
                 <div style={styles.header}>
-
                     <div>
                         <h1 style={styles.pageTitle}>Project Dashboard</h1>
                         <p style={styles.subtitle}>Manage And Track All Ongoing Projects</p>
                     </div>
                     <div style={styles.headerButtons}>
                         <button
-                            onClick={() => setShowSort(!showSort)}
+                            onClick={() => setShowFiltersSort(!showFiltersSort)}
                             style={{
                                 ...styles.filterButton,
-                                ...(showSort || hasActiveSort() ? styles.filterButtonActive : {})
-                            }}
-                        >
-                            <FaSortAmountDown style={styles.buttonIcon} />
-                            Sort {hasActiveSort() && '(Active)'}
-                        </button>
-                        <button
-                            onClick={() => setShowFilters(!showFilters)}
-                            style={{
-                                ...styles.filterButton,
-                                ...(showFilters || hasActiveFilters() ? styles.filterButtonActive : {})
+                                ...(showFiltersSort || hasActiveFiltersOrSort() ? styles.filterButtonActive : {})
                             }}
                         >
                             <FaFilter style={styles.buttonIcon} />
-                            Filters {hasActiveFilters() && `(${Object.values(filters).filter(v => v).length})`}
+                            Filter & Sort {hasActiveFiltersOrSort() && '(Active)'}
                         </button>
                         {userRole !== 'worker' && (
                             <Link to="/projects/create" style={styles.createButton}>
@@ -244,181 +239,205 @@ const ProjectsPage = () => {
                             </Link>
                         )}
                     </div>
-
                 </div>
-
-                <div style={styles.searchContainer}>
-                    <FaSearch style={styles.searchIcon} />
-                    <input
-                        type="text"
-                        placeholder="Search projects by name, location, or description..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        style={styles.searchInput}
-                    />
-                    {searchQuery && (
-                        <button
-                            onClick={() => setSearchQuery('')}
-                            style={styles.clearSearchButton}
-                        >
-                            x
-                        </button>
-                    )}
-                </div>
-
-                {showSort && (
-                    <div style={styles.sortContainer}>
-                        <div style={styles.sortGroup}>
-                            <label style={styles.sortLabel}>Sort By:</label>
-                            <select
-                                value={sortBy}
-                                onChange={(e) => setSortBy(e.target.value)}
-                                style={styles.sortSelect}
-                            >
-                                <option value="name">Name</option>
-                                <option value="budget">Budget</option>
-                                <option value="startDate">Start Date</option>
-                                <option value="endDate">End Date</option>
-                                <option value="location">Location</option>
-                            </select>
-                        </div>
-                        <div style={styles.sortGroup}>
-                            <label style={styles.sortLabel}>Order:</label>
-                            <select
-                                value={sortOrder}
-                                onChange={(e) => setSortOrder(e.target.value)}
-                                style={styles.sortSelect}
-                            >
-                                <option value="asc">Ascending</option>
-                                <option value="desc">Descending</option>
-                            </select>
-                        </div>
-                        {hasActiveSort() && (
-                            <button onClick={clearSort} style={styles.clearButton}>
-                                Clear Sort Settings
-                            </button>
-                        )}
-                    </div>
-                )}
-
-                {showFilters && (
-                    <div style={styles.filtersContainer}>
-                        <div style={styles.filtersGrid}>
-                            <div style={styles.filterGroup}>
-                                <label style={styles.filterLabel}>Min Budget ($)</label>
-                                <input
-                                    type="number"
-                                    placeholder="e.g., 50000"
-                                    value={filters.minBudget}
-                                    onChange={(e) => handleFilterChange('minBudget', e.target.value)}
-                                    style={styles.filterInput}
-                                />
-                            </div>
-                            <div style={styles.filterGroup}>
-                                <label style={styles.filterLabel}>Max Budget ($)</label>
-                                <input
-                                    type="number"
-                                    placeholder="e.g., 500000"
-                                    value={filters.maxBudget}
-                                    onChange={(e) => handleFilterChange('maxBudget', e.target.value)}
-                                    style={styles.filterInput}
-                                />
-                            </div>
-                            <div style={styles.filterGroup}>
-                                <label style={styles.filterLabel}>Start Date (From)</label>
-                                <input
-                                    type="date"
-                                    value={filters.startDate}
-                                    onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                                    style={styles.filterInput}
-                                />
-                            </div>
-                            <div style={styles.filterGroup}>
-                                <label style={styles.filterLabel}>End Date (Until)</label>
-                                <input
-                                    type="date"
-                                    value={filters.endDate}
-                                    onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                                    style={styles.filterInput}
-                                />
-                            </div>
-                        </div>
-                        {hasActiveFilters() && (
-                            <button onClick={clearFilters} style={styles.clearButton}>
-                                Clear All Filters
-                            </button>
-                        )}
-                    </div>
-                )}
 
                 {loading ? (
                     <div style={styles.centerContent}>
                         <div style={styles.loader}></div>
                         <p style={styles.loadingText}>Loading projects...</p>
                     </div>
-                ) : error  ? (
+                ) : error ? (
                     <div style={styles.centerContent}>
                         <p style={styles.errorText}>Error loading projects: {error}</p>
                         <button onClick={fetchProjects} style={styles.retryButton}>
                             Retry
                         </button>
                     </div>
-                ) : filteredProjects.length === 0 ? (
+                ) : filteredProjects.length === 0 && !showFiltersSort && !searchQuery ? (
                     <div style={styles.emptyState}>
                         <div style={styles.emptyIcon}>📋</div>
                         <h3 style={styles.emptyTitle}>
-                            {hasActiveFilters() ? 'No Projects Match Filters' :
-                             userRole === 'worker' ? 'You are not assigned to any projects yet.' : 'No Projects Yet'}
+                            {userRole === 'worker' ? 'You are not assigned to any projects yet.' : 'No Projects Yet'}
                         </h3>
                         <p style={styles.emptyText}>
-                            {hasActiveFilters() ? 'Try adjusting your filters to see more results' :
-                             userRole === 'worker' ? 'Contact your project manager to get assigned to projects.' : 'Get started by creating your first project'}
+                            {userRole === 'worker' ? 'Contact your project manager to get assigned to projects.' : 'Get started by creating your first project'}
                         </p>
-                        {hasActiveFilters() && (
-                            <button onClick={clearFilters} style={styles.clearButton}>
-                                Clear All Filters
-                            </button>
-                        )}
                     </div>
                 ) : (
-                    <div style={styles.carouselContainer}>
-                        <div style={styles.projectsWrapper}>
-                            {canScrollLeft && (
+                    <div style={styles.mainContainer}>
+                        {/* Search Bar */}
+                        <div style={styles.searchContainer}>
+                            <FaSearch style={styles.searchIcon} />
+                            <input
+                                type="text"
+                                placeholder="Search projects by name, location, or description..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                style={styles.searchInput}
+                            />
+                            {searchQuery && (
                                 <button
-                                    style={styles.scrollButton}
-                                    onClick={() => scroll('left')}
-                                    aria-label="Scroll left"
+                                    onClick={() => setSearchQuery('')}
+                                    style={styles.clearSearchButton}
                                 >
-                                    <FaChevronLeft />
+                                    ✕
                                 </button>
                             )}
+                        </div>
 
-                            <div
-                                style={styles.projectsScroll}
-                                ref={scrollContainerRef}
-                                onScroll={checkScrollingButtons}
-                            >
-                                {filteredProjects.map((project) => (
-                                    <div key={project.id} style={styles.projectCardWrapper}>
-                                        <ProjectCard project={project} />
+                        {/* Filter & Sort Section */}
+                        {showFiltersSort && (
+                            <div style={styles.filterSortWrapper}>
+                                {/* Sort Section */}
+                                <div style={styles.sortSection}>
+                                    <h3 style={styles.sectionTitle}>
+                                        <FaSortAmountDown style={styles.sectionIcon} />
+                                        Sort Projects
+                                    </h3>
+                                    <div style={styles.sortContainer}>
+                                        <div style={styles.sortGroup}>
+                                            <label style={styles.sortLabel}>Sort By:</label>
+                                            <select
+                                                value={sortBy}
+                                                onChange={(e) => setSortBy(e.target.value)}
+                                                style={styles.sortSelect}
+                                            >
+                                                <option value="name">Name</option>
+                                                <option value="budget">Budget</option>
+                                                <option value="startDate">Start Date</option>
+                                                <option value="endDate">End Date</option>
+                                                <option value="location">Location</option>
+                                            </select>
+                                        </div>
+                                        <div style={styles.sortGroup}>
+                                            <label style={styles.sortLabel}>Order:</label>
+                                            <select
+                                                value={sortOrder}
+                                                onChange={(e) => setSortOrder(e.target.value)}
+                                                style={styles.sortSelect}
+                                            >
+                                                <option value="asc">Ascending</option>
+                                                <option value="desc">Descending</option>
+                                            </select>
+                                        </div>
                                     </div>
-                                ))}
+                                </div>
+
+                                {/* Divider */}
+                                <div style={styles.divider}></div>
+
+                                {/* Filter Section */}
+                                <div style={styles.filterSection}>
+                                    <h3 style={styles.sectionTitle}>
+                                        <FaFilter style={styles.sectionIcon} />
+                                        Filter Projects
+                                    </h3>
+                                    <div style={styles.filtersGrid}>
+                                        <div style={styles.filterGroup}>
+                                            <label style={styles.filterLabel}>Min Budget ($)</label>
+                                            <input
+                                                type="number"
+                                                placeholder="e.g., 50000"
+                                                value={filters.minBudget}
+                                                onChange={(e) => handleFilterChange('minBudget', e.target.value)}
+                                                style={styles.filterInput}
+                                            />
+                                        </div>
+                                        <div style={styles.filterGroup}>
+                                            <label style={styles.filterLabel}>Max Budget ($)</label>
+                                            <input
+                                                type="number"
+                                                placeholder="e.g., 500000"
+                                                value={filters.maxBudget}
+                                                onChange={(e) => handleFilterChange('maxBudget', e.target.value)}
+                                                style={styles.filterInput}
+                                            />
+                                        </div>
+                                        <div style={styles.filterGroup}>
+                                            <label style={styles.filterLabel}>Project Starts On or After</label>
+                                            <input
+                                                type="date"
+                                                value={filters.startDate}
+                                                onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                                                style={styles.filterInput}
+                                            />
+                                        </div>
+                                        <div style={styles.filterGroup}>
+                                            <label style={styles.filterLabel}>Project Ends On or After</label>
+                                            <input
+                                                type="date"
+                                                value={filters.endDate}
+                                                onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                                                style={styles.filterInput}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Clear Button */}
+                                {hasActiveFiltersOrSort() && (
+                                    <div style={styles.clearButtonContainer}>
+                                        <button onClick={clearAll} style={styles.clearButton}>
+                                            Clear All Filters & Sort
+                                        </button>
+                                    </div>
+                                )}
                             </div>
+                        )}
 
-                            {canScrollRight && (
-                                <button
-                                    style={{...styles.scrollButton, ...styles.scrollButtonRight}}
-                                    onClick={() => scroll('right')}
-                                    aria-label="Scroll right"
-                                >
-                                    <FaChevronRight />
-                                </button>
-                            )}
-                        </div>
+                        {/* Projects Display */}
+                        {filteredProjects.length === 0 ? (
+                            <div style={styles.emptyStateInside}>
+                                <div style={styles.emptyIcon}>📋</div>
+                                <h3 style={styles.emptyTitle}>No Projects Match Filters</h3>
+                                <p style={styles.emptyText}>Try adjusting your filters to see more results</p>
+                                {hasActiveFiltersOrSort() && (
+                                    <button onClick={clearAll} style={styles.clearButton}>
+                                        Clear All Filters & Sort
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <>
+                                <div style={styles.projectsWrapper}>
+                                    {canScrollLeft && (
+                                        <button
+                                            style={styles.scrollButton}
+                                            onClick={() => scroll('left')}
+                                            aria-label="Scroll left"
+                                        >
+                                            <FaChevronLeft />
+                                        </button>
+                                    )}
 
-                        <div style={styles.projectCount}>
-                            Showing {filteredProjects.length} of {projects.length} project{projects.length !== 1 ? 's' : ''}
-                        </div>
+                                    <div
+                                        style={styles.projectsScroll}
+                                        ref={scrollContainerRef}
+                                        onScroll={checkScrollingButtons}
+                                    >
+                                        {filteredProjects.map((project) => (
+                                            <div key={project.id} style={styles.projectCardWrapper}>
+                                                <ProjectCard project={project} />
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {canScrollRight && (
+                                        <button
+                                            style={{...styles.scrollButton, ...styles.scrollButtonRight}}
+                                            onClick={() => scroll('right')}
+                                            aria-label="Scroll right"
+                                        >
+                                            <FaChevronRight />
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div style={styles.projectCount}>
+                                    Showing {filteredProjects.length} of {projects.length} project{projects.length !== 1 ? 's' : ''}
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
             </div>
@@ -457,8 +476,8 @@ const ProjectsPage = () => {
 
 const styles = {
     pageContainer: {
-        padding: '2.5rem 2.5rem',
-        background: 'linear-gradient(135deg,rgb(35, 115, 243) 0%, #4facfe 100%)',
+        padding: '1.5rem 1rem',
+        background: '#5692bc',
         minHeight: 'calc(100vh - 80px)',
         fontFamily: 'sans-serif',
     },
@@ -466,7 +485,7 @@ const styles = {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '3rem',
+        marginBottom: '1.5rem',
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
         padding: '2rem',
         borderRadius: '16px',
@@ -477,7 +496,7 @@ const styles = {
         fontWeight: '700',
         color: '#1a202c',
         margin: '0 0 0.5rem 0',
-        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+        background: '#515557',
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
         MozBackgroundClip: 'text',
@@ -499,7 +518,7 @@ const styles = {
         gap: '0.5rem',
         textDecoration: 'none',
         color: 'white',
-        background: 'linear-gradient(135deg,rgb(35, 115, 243) 0%, #4facfe 100%)',
+        backgroundColor: '#5692bc',
         padding: '0.9rem 1.8rem',
         borderRadius: '10px',
         fontWeight: '600',
@@ -541,7 +560,7 @@ const styles = {
     },
     retryButton: {
         padding: '0.9rem 1.8rem',
-        background: 'linear-gradient(135deg,rgb(35, 115, 243) 0%, #4facfe 100%)',
+        background: 'linear-gradient(135deg, rgb(35, 115, 243) 0%, #4facfe 100%)',
         color: 'white',
         border: 'none',
         borderRadius: '10px',
@@ -559,6 +578,10 @@ const styles = {
         margin: '0 auto',
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
     },
+    emptyStateInside: {
+        textAlign: 'center',
+        padding: '3rem 2rem',
+    },
     emptyIcon: {
         fontSize: '4rem',
         marginBottom: '1.5rem',
@@ -572,26 +595,192 @@ const styles = {
     emptyText: {
         fontSize: '1rem',
         color: '#4a5568',
-        marginBottom: '0.5rem',
+        marginBottom: '1.5rem',
     },
-    carouselContainer: {
-        maxWidth: '1800px',
-        margin: '0 auto',
+    mainContainer: {
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        padding: '2rem',
         borderRadius: '16px',
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+        padding: '1.5rem',
+    },
+    searchContainer: {
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+    },
+    searchIcon: {
+        position: 'absolute',
+        left: '1rem',
+        fontSize: '1.1rem',
+        color: '#9ca3af',
+        pointerEvents: 'none',
+    },
+    searchInput: {
+        flex: 1,
+        padding: '0.75rem 3rem 0.75rem 3rem',
+        borderRadius: '10px',
+        border: '2px solid #e2e8f0',
+        fontSize: '1rem',
+        outline: 'none',
+        transition: 'border-color 0.3s',
+        backgroundColor: 'white',
+    },
+    clearSearchButton: {
+        position: 'absolute',
+        right: '1rem',
+        background: 'none',
+        border: 'none',
+        fontSize: '1.2rem',
+        color: '#9ca3af',
+        cursor: 'pointer',
+        padding: '0.5rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'all 0.2s',
+    },
+    filterSortWrapper: {
+        backgroundColor: '#f8f9fa',
+        borderRadius: '12px',
+        padding: '0 1rem 0 1rem',
+        marginBottom: '1rem',
+
+    },
+    sortSection: {
+        marginBottom: '1.5rem',
+    },
+    filterSection: {
+        marginBottom: '1rem',
+    },
+    sectionTitle: {
+        fontSize: '1.1rem',
+        fontWeight: '600',
+        color: '#2c3e50',
+        marginBottom: '1rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+    },
+    sectionIcon: {
+        fontSize: '1rem',
+        color: '#b356bc',
+    },
+    divider: {
+        height: '1px',
+        backgroundColor: '#e2e8f0',
+        marginBottom: '1.5rem',
+    },
+    sortContainer: {
+        display: 'flex',
+        gap: '1.5rem',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+    },
+    sortGroup: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+    },
+    sortLabel: {
+        fontSize: '0.95rem',
+        fontWeight: '600',
+        color: '#4a5568',
+        minWidth: '70px',
+    },
+    sortSelect: {
+        padding: '0.65rem 2.5rem 0.65rem 1rem',
+        borderRadius: '8px',
+        border: '2px solid #e2e8f0',
+        fontSize: '0.95rem',
+        fontWeight: '500',
+        color: '#2c3e50',
+        backgroundColor: 'white',
+        cursor: 'pointer',
+        outline: 'none',
+        transition: 'all 0.3s',
+        minWidth: '180px',
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+        appearance: 'none',
+        WebkitAppearance: 'none',
+        MozAppearance: 'none',
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%232373f3' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'right 1rem center',
+        backgroundSize: '12px',
+    },
+    filtersGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '1rem',
+    },
+    filterGroup: {
+        display: 'flex',
+        flexDirection: 'column',
+    },
+    filterLabel: {
+        fontSize: '0.9rem',
+        fontWeight: '600',
+        color: '#4a5568',
+        marginBottom: '0.5rem',
+    },
+    filterInput: {
+        padding: '0.65rem 0.75rem',
+        borderRadius: '8px',
+        border: '2px solid #e2e8f0',
+        fontSize: '0.95rem',
+        transition: 'all 0.3s',
+        outline: 'none',
+        backgroundColor: 'white',
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+    },
+    filterButton: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        textDecoration: 'none',
+        color: '#b356bc',
+        background: 'white',
+        padding: '0.9rem 1.8rem',
+        borderRadius: '10px',
+        fontSize: '1rem',
+        fontWeight: '600',
+        border: '2px solid #b356bc',
+        cursor: 'pointer',
+        transition: 'all 0.3s',
+    },
+    filterButtonActive: {
+        background: '#b356bc',
+        color: 'white',
+        border: '2px solid transparent',
+    },
+    clearButtonContainer: {
+        display: 'flex',
+        justifyContent: 'center',
+        marginTop: '0.5rem',
+    },
+    clearButton: {
+        padding: '0.75rem 1.5rem',
+        background: '#718096',
+        color: 'white',
+        border: 'none',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        fontSize: '0.95rem',
+        fontWeight: '600',
+        transition: 'background 0.3s',
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)',
     },
     projectsWrapper: {
         position: 'relative',
         paddingBottom: '4rem',
+        marginTop: '1rem',
     },
     projectsScroll: {
         display: 'flex',
         gap: '1.5rem',
         overflowX: 'auto',
         scrollBehavior: 'smooth',
-        padding: '1rem 0',
+        padding: '0.5rem 0',
         scrollbarWidth: 'none',
         msOverflowStyle: 'none',
     },
@@ -600,12 +789,12 @@ const styles = {
         minWidth: '320px',
     },
     scrollButton: {
-        position:  'absolute',
+        position: 'absolute',
         bottom: '-0.5rem',
         left: '50%',
         transform: 'translateX(-70px)',
         zIndex: 10,
-        background: 'linear-gradient(135deg,rgb(35, 115, 243) 0%, #4facfe 100%)',
+        background: 'linear-gradient(135deg, rgb(35, 115, 243) 0%, #4facfe 100%)',
         border: 'none',
         borderRadius: '12px',
         width: '56px',
@@ -629,143 +818,6 @@ const styles = {
         fontSize: '0.95rem',
         color: '#4a5568',
         fontWeight: '600',
-    },
-    filtersContainer: {
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        padding: '1rem 2rem 0.5rem 2rem',
-        borderRadius: '16px',
-        marginBottom: '2rem',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-    },
-    filtersGrid: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '1.5rem',
-        marginBottom: '1rem',
-    },
-    filterGroup: {
-        display: 'flex',
-        flexDirection: 'column',
-    },
-    filterLabel: {
-        fontSize: '0.9rem',
-        fontWeight: '600',
-        color: '#4a5568',
-        marginBottom: '0.5rem',
-    },
-    filterInput: {
-        padding: '0.75rem',
-        borderRadius: '8px',
-        border: '2px solid #e2e8f0',
-        fontSize: '1rem',
-        transition: 'border-color 0.3s',
-        outline: 'none',
-    },
-    filterButton: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.5rem',
-        textDecoration: 'none',
-        color: '#2373f3',
-        background: 'white',
-        padding: '0.9rem 1.8rem',
-        borderRadius: '10px',
-        fontSize: '1rem',
-        fontWeight: '600',
-        border: '2px solid #2373f3',
-        cursor: 'pointer',
-        transition: 'all 0.3s',
-    },
-    filterButtonActive: {
-        background: 'linear-gradient(135deg,rgb(35, 115, 243) 0%, #4facfe 100%)',
-        color: 'white',
-        border: '2px solid transparent',
-    },
-    clearButton: {
-        padding: '0.75rem 1.5rem',
-        background: '#718096',
-        color: 'white',
-        border: 'none',
-        borderRadius: '8px',
-        cursor: 'pointer',
-        fontSize: '0.95rem',
-        fontWeight: '600',
-        transition: 'background 0.3s'
-    },
-    sortContainer: {
-        display: 'flex',
-        gap: '1.5rem',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        padding: '1rem 2rem',
-        borderRadius: '16px',
-        marginBottom: '2rem',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
-    },
-    sortGroup: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.75rem',
-    },
-    sortLabel: {
-        fontSize: '0.95rem',
-        fontWeight: '600',
-        color: '#4a5568',
-    },
-    sortSelect: {
-        padding: '0.6rem 1rem',
-        borderRadius: '8px',
-        border: '2px solid #e2e8f0',
-        fontSize: '0.95rem',
-        fontWeight: '500',
-        color: '#2c3e50',
-        backgroundColor: 'white',
-        cursor: 'pointer',
-        outline: 'none',
-        transition: 'border-color 0.3s',
-        minWidth: '150px',
-    },
-    searchContainer: {
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        padding: '1rem 1.5rem',
-        borderRadius: '16px',
-        marginBottom: '2rem',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
-    },
-    searchIcon: {
-        position: 'absolute',
-        left: '2rem',
-        fontSize: '1.1rem',
-        color: '#9ca3af',
-        pointerEvents: 'none',
-    },
-    searchInput: {
-        flex: 1,
-        padding: '0.75rem 1rem 0.75rem 3rem',
-        borderRadius: '10px',
-        border: '2px solid #e2e8f0',
-        fontSize: '1rem',
-        outline: 'none',
-        transition: 'border-color 0.3s',
-        backgroundColor: 'white',
-    },
-    clearSearchButton: {
-        position: 'absolute',
-        right: '2rem',
-        background: 'none',
-        border: 'none',
-        fontSize: '1.2rem',
-        color: '#9ca3af',
-        cursor: 'pointer',
-        padding: '0.5rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: '50%',
-        transition: 'all 0.2s',
     },
 };
 
