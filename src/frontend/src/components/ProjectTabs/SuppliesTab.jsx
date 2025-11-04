@@ -23,7 +23,7 @@ const SuppliesTab = ({ project, userRole }) => {
                 const res = await projectsAPI.getSupplies(project.id)
 
                 const data = res.data;
-                if (res.status != 200) throw new Error(data.error || "Failed to load supplies");
+                if (res.status !== 200) throw new Error(data.error || "Failed to load supplies");
                 setSupplies(data.supplies || []);
             } catch (err) {
                 console.error(err);
@@ -51,7 +51,7 @@ const SuppliesTab = ({ project, userRole }) => {
 
             const res = await projectsAPI.postSupplies(project.id, payload)
             const data = res.data;
-            if (res.status != 201) throw new Error(data.error || "Failed to submit supply");
+            if (res.status !== 201) throw new Error(data.error || "Failed to submit supply");
             setSupplies((prev) => [data.supply, ...prev]);
             setShowModal(false);
             setNewSupply({ name: "", vendorId: "", budget: "" });
@@ -65,7 +65,7 @@ const SuppliesTab = ({ project, userRole }) => {
             const payload = JSON.stringify({ status })
             const res = await projectsAPI.patchSupplies(project.id, id, payload)
             const data = res.data;
-            if (res.status != 200) throw new Error(data.error || "Failed to update status");
+            if (res.status !== 200) throw new Error(data.error || "Failed to update status");
             setSupplies((prev) => prev.map((s) => (s.id === id ? data.supply : s)));
         } catch (err) {
             alert(err.message);
@@ -135,7 +135,7 @@ const SuppliesTab = ({ project, userRole }) => {
                   </span>
                             </td>
                             {console.log(userRole)}
-                            {userRole == "project_manager" && (
+                            {userRole === "project_manager" && (
                                 <td style={styles.td}>
                                     {supply.status === "pending" ? (
                                         <>
@@ -248,7 +248,7 @@ const styles = {
         alignItems: "center",
         gap: "0.5rem",
         padding: "0.7rem 1.5rem",
-        background: "linear-gradient(135deg, #2373f3 0%, #4facfe 100%)",
+        background: "#5692bc",
         color: "white",
         border: "none",
         borderRadius: "8px",
@@ -296,7 +296,7 @@ const styles = {
     emptyText: { fontSize: "1.1rem", color: "#6b7280", marginBottom: "1.5rem" },
     addFirstButton: {
         padding: "0.8rem 1.5rem",
-        background: "linear-gradient(135deg, #2373f3 0%, #4facfe 100%)",
+        background: "#5692bc",
         color: "white",
         border: "none",
         borderRadius: "8px",
@@ -336,7 +336,7 @@ const styles = {
     },
     modalActions: { display: "flex", justifyContent: "space-between", marginTop: "1rem" },
     saveButton: {
-        backgroundColor: "#10b981",
+        backgroundColor: "#77DD77",
         color: "white",
         border: "none",
         borderRadius: "8px",
@@ -348,9 +348,9 @@ const styles = {
         cursor: "pointer",
     },
     cancelButton: {
-        backgroundColor: "#6b7280",
-        color: "white",
-        border: "none",
+        backgroundColor: "white",
+        color: "#bc8056",
+        border: "2px solid #bc8056",
         borderRadius: "8px",
         padding: "0.7rem 1.2rem",
         display: "flex",
