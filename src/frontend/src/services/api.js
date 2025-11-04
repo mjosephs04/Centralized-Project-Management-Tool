@@ -29,7 +29,7 @@ apiClient.interceptors.request.use((config) => {
 
 export const projectsAPI = {
   getProjects: async () => {
-    const response = await apiClient.get("/projects/");
+    const response = await apiClient.get("/projects/my-projects");
     return response.data.projects;
   },
 
@@ -144,6 +144,21 @@ export const workOrdersAPI = {
     await apiClient.delete(`/workorders/${workOrderId}`);
     return true;
   },
+
+  assignWorker: async (workOrderId, userId) => {
+    const response = await apiClient.post(`/workorders/${workOrderId}/assign-worker`, { userId });
+    return response.data.workorder;
+  },
+
+  removeWorker: async (workOrderId, userId) => {
+    const response = await apiClient.post(`/workorders/${workOrderId}/remove-worker`, { userId });
+    return response.data.workorder;
+  },
+
+  assignWorkers: async (workOrderId, workerIds) => {
+    const response = await apiClient.put(`/workorders/${workOrderId}/assign-workers`, { workerIds });
+    return response.data.workorder;
+  },
 };
 
 export const usersAPI = {
@@ -184,5 +199,9 @@ export const authAPI = {
   uploadProfilePic: async (formData) => {
     const response = await apiClient.post("/auth/upload-profile", formData);
     return response;
+  },
+  updateProfile: async (updates) => {
+    const response = await apiClient.put("/auth/me", updates);
+    return response.data.user;
   }
 };

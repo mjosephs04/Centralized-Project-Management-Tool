@@ -200,6 +200,13 @@ class WorkOrder(db.Model):
     updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     isActive = db.Column(db.Boolean, default=True, nullable=False)
 
+    def get_assigned_workers(self) -> list:
+        """Get assigned workers as a list of user IDs from WorkOrderWorker relationships"""
+        try:
+            return [worker.userId for worker in self.workers if worker.isActive]
+        except Exception:
+            return []
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -217,8 +224,38 @@ class WorkOrder(db.Model):
             "actualCost": float(self.actualCost) if self.actualCost else None,
             "projectId": self.projectId,
             "project": self.project.to_dict() if self.project else None,
+            "assignedWorkers": self.get_assigned_workers(),
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+            "isActive": self.isActive,
+        }
+
+
+class WorkOrderWorker(db.Model):
+    __tablename__ = "work_order_workers"
+
+    id = db.Column(db.Integer, primary_key=True)
+    workOrderId = db.Column(db.Integer, db.ForeignKey('work_orders.id'), nullable=False)
+    userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    # Metadata
+    assignedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    isActive = db.Column(db.Boolean, default=True, nullable=False)
+
+    # Relationships
+    workOrder = db.relationship('WorkOrder', backref=db.backref('workers', lazy=True))
+    user = db.relationship('User', backref=db.backref('work_order_assignments', lazy=True))
+
+    # Ensure unique user-workorder combinations
+    __table_args__ = (db.UniqueConstraint('workOrderId', 'userId', name='unique_workorder_user'),)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "workOrderId": self.workOrderId,
+            "userId": self.userId,
+            "user": self.user.to_dict() if self.user else None,
+            "assignedAt": self.assignedAt.isoformat() if self.assignedAt else None,
             "isActive": self.isActive,
         }
 
@@ -324,7 +361,7 @@ class Audit(db.Model):
     project = db.relationship('Project', backref=db.backref('audit_logs', lazy=True))
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "id": self.id,
             "entityType": self.entityType.value if self.entityType else None,
             "entityId": self.entityId,
@@ -337,6 +374,12 @@ class Audit(db.Model):
             "projectId": self.projectId,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
         }
+        # Include work order name if this is a work order audit log
+        if self.entityType == AuditEntityType.WORK_ORDER:
+            work_order = WorkOrder.query.filter_by(id=self.entityId, isActive=True).first()
+            if work_order:
+                result["workOrderName"] = work_order.name
+        return result
 
 class Supply(db.Model):
     __tablename__ = "supplies"

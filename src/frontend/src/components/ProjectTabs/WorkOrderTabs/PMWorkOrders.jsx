@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FaPlus, FaTimes } from "react-icons/fa";
-import { workOrdersAPI } from "../../../services/api";
+import { workOrdersAPI, usersAPI } from "../../../services/api";
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 
 const STATUS_ORDER = ["pending", "in_progress", "on_hold", "completed", "cancelled"];
@@ -16,6 +16,8 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
   const { showSnackbar } = useSnackbar();
   const [workOrders, setWorkOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [allWorkers, setAllWorkers] = useState([]);
+  const [loadingWorkers, setLoadingWorkers] = useState(true);
 
   // Modals
   const [showCreate, setShowCreate] = useState(false);
@@ -33,12 +35,27 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
     priority: 3,
     status: "pending",
     estimatedBudget: "",
+    selectedWorkers: [],
   });
 
   useEffect(() => {
     fetchWorkOrders();
+    fetchWorkers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id]);
+
+  const fetchWorkers = async () => {
+    try {
+      setLoadingWorkers(true);
+      const workers = await usersAPI.getWorkers();
+      setAllWorkers(workers || []);
+    } catch (err) {
+      console.error("Error fetching workers:", err);
+      showSnackbar("Failed to load workers list", "error");
+    } finally {
+      setLoadingWorkers(false);
+    }
+  };
 
   const grouped = useMemo(() => {
     const by = Object.fromEntries(STATUS_ORDER.map((s) => [s, []]));
@@ -75,6 +92,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
       priority: 3,
       status: "pending",
       estimatedBudget: "",
+      selectedWorkers: [],
     });
     setFormErrors({});
     setShowCreate(true);
@@ -96,6 +114,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
       priority: wo.priority || 3,
       status: wo.status || "pending",
       estimatedBudget: wo.estimatedBudget ?? "",
+      selectedWorkers: wo.assignedWorkers || [],
     });
     setFormErrors({});
     setShowUpdate(true);
@@ -129,7 +148,13 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
       if (formData.location?.trim()) payload.location = formData.location;
       if (formData.estimatedBudget !== "") payload.estimatedBudget = parseFloat(formData.estimatedBudget);
 
-      await workOrdersAPI.createWorkOrder(payload);
+      const newWorkOrder = await workOrdersAPI.createWorkOrder(payload);
+      
+      // Assign workers if any were selected
+      if (formData.selectedWorkers && formData.selectedWorkers.length > 0) {
+        await workOrdersAPI.assignWorkers(newWorkOrder.id, formData.selectedWorkers);
+      }
+      
       await fetchWorkOrders();
       setShowCreate(false);
       showSnackbar('Work order created successfully!', 'success');
@@ -150,6 +175,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
       priority: 3,
       status: "pending",
       estimatedBudget: "",
+      selectedWorkers: [],
     });
     setFormErrors({});
     showSnackbar('Work order creation cancelled', 'warning');
@@ -169,6 +195,17 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
         status: formData.status,
         estimatedBudget: formData.estimatedBudget === "" ? null : parseFloat(formData.estimatedBudget),
       });
+      
+      // Update worker assignments only if they've changed
+      const originalWorkerIds = new Set(selectedWorkOrder.assignedWorkers || []);
+      const newWorkerIds = new Set(formData.selectedWorkers || []);
+      const workersChanged = originalWorkerIds.size !== newWorkerIds.size || 
+                             [...originalWorkerIds].some(id => !newWorkerIds.has(id));
+      
+      if (workersChanged) {
+        await workOrdersAPI.assignWorkers(selectedWorkOrder.id, formData.selectedWorkers || []);
+      }
+      
       await fetchWorkOrders();
       setShowUpdate(false);
       showSnackbar('Work order updated successfully!', 'success');
@@ -190,8 +227,28 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
       priority: 3,
       status: "pending",
       estimatedBudget: "",
+      selectedWorkers: [],
     });
     setFormErrors({});
+  };
+
+  const getWorkerName = (workerId) => {
+    const worker = allWorkers.find(w => w.id === workerId);
+    if (!worker) return `Worker #${workerId}`;
+    return `${worker.firstName || ''} ${worker.lastName || ''}`.trim() || worker.emailAddress || `Worker #${workerId}`;
+  };
+
+  const toggleWorkerSelection = (workerId) => {
+    setFormData(prev => {
+      const current = prev.selectedWorkers || [];
+      const isSelected = current.includes(workerId);
+      return {
+        ...prev,
+        selectedWorkers: isSelected
+          ? current.filter(id => id !== workerId)
+          : [...current, workerId]
+      };
+    });
   };
 
   const deleteWorkOrder = async (woId) => {
@@ -208,6 +265,18 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
       console.error('Error deleting work order:', err);
       showSnackbar(err.response?.data?.error || 'Failed to delete work order', 'error');
     }
+  };
+
+  const formatStatus = (status) => {
+    if (!status) return "Pending";
+    const statusMap = {
+      'pending': 'Pending',
+      'in_progress': 'In Progress',
+      'on_hold': 'On Hold',
+      'completed': 'Completed',
+      'cancelled': 'Cancelled',
+    };
+    return statusMap[status.toLowerCase()] || status;
   };
 
   const getStatusBadge = (status) => {
@@ -251,6 +320,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
                         <th style={styles.th}>Dates</th>
                         <th style={styles.th}>Priority</th>
                         <th style={styles.th}>Status</th>
+                        <th style={styles.th}>Assigned Workers</th>
                         <th style={styles.th}>Est. Budget</th>
                         <th style={styles.th}>Actual Cost</th>
                         <th style={styles.th}></th>
@@ -258,7 +328,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
                     </thead>
                     <tbody>
                       {list.length === 0 ? (
-                        <tr><td style={styles.td} colSpan={8}>&mdash; No items &mdash;</td></tr>
+                        <tr><td style={styles.td} colSpan={9}>&mdash; No items &mdash;</td></tr>
                       ) : (
                         list.map((wo) => {
                           const badge = getStatusBadge(wo.status);
@@ -275,8 +345,25 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
                               <td style={styles.td}>{priorityLabel(wo.priority)}</td>
                               <td style={styles.td}>
                                 <span style={{ ...styles.statusBadge, backgroundColor: badge.bg, color: badge.text }}>
-                                  {wo.status}
+                                  {formatStatus(wo.status)}
                                 </span>
+                              </td>
+                              <td style={styles.td}>
+                                {wo.assignedWorkers && wo.assignedWorkers.length > 0 ? (
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+                                    {wo.assignedWorkers.map(workerId => {
+                                      const worker = allWorkers.find(w => w.id === workerId);
+                                      const fullName = worker ? `${worker.firstName || ''} ${worker.lastName || ''}`.trim() || worker.emailAddress : `Worker #${workerId}`;
+                                      return (
+                                        <span key={workerId} style={styles.workerBadge}>
+                                          {fullName}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  "-"
+                                )}
                               </td>
                               <td style={styles.td}>{wo.estimatedBudget != null ? `$${wo.estimatedBudget.toLocaleString()}` : "-"}</td>
                               <td style={styles.td}>{wo.actualCost != null ? `$${wo.actualCost.toLocaleString()}` : "-"}</td>
@@ -434,6 +521,36 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
                 </div>
               </div>
 
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Assign Workers</label>
+                {loadingWorkers ? (
+                  <div style={{ padding: "0.5rem", color: "#6b7280" }}>Loading workers...</div>
+                ) : (
+                  <div style={styles.workerSelectContainer}>
+                    {allWorkers.length === 0 ? (
+                      <div style={{ padding: "0.5rem", color: "#6b7280" }}>No workers available</div>
+                    ) : (
+                      allWorkers.map(worker => {
+                        const isSelected = (formData.selectedWorkers || []).includes(worker.id);
+                        return (
+                          <label key={worker.id} style={styles.workerCheckbox}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleWorkerSelection(worker.id)}
+                              style={styles.checkboxInput}
+                            />
+                            <span>
+                              {`${worker.firstName || ''} ${worker.lastName || ''}`.trim() || worker.emailAddress || `Worker #${worker.id}`}
+                            </span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div style={styles.actions}>
                 <button type="button" style={styles.cancelBtn} onClick={handleCancelCreate}>Cancel</button>
                 <button type="submit" style={styles.submitBtn}>Create Work Order</button>
@@ -453,11 +570,28 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
             </div>
             <div style={styles.viewBody}>
               <div style={styles.viewRow}><strong>Name:</strong> {selectedWorkOrder.name}</div>
-              <div style={styles.viewRow}><strong>Status:</strong> {selectedWorkOrder.status}</div>
+              <div style={styles.viewRow}><strong>Status:</strong> {formatStatus(selectedWorkOrder.status)}</div>
               <div style={styles.viewRow}><strong>Priority:</strong> {priorityLabel(selectedWorkOrder.priority)}</div>
               <div style={styles.viewRow}><strong>Location:</strong> {selectedWorkOrder.location || "-"}</div>
               <div style={styles.viewRow}><strong>Dates:</strong> {selectedWorkOrder.startDate} — {selectedWorkOrder.endDate}</div>
               {selectedWorkOrder.description && <div style={styles.viewRow}><strong>Description:</strong><br />{selectedWorkOrder.description}</div>}
+              <div style={styles.viewRow}>
+                <strong>Assigned Workers:</strong>{" "}
+                {selectedWorkOrder.assignedWorkers && selectedWorkOrder.assignedWorkers.length > 0 ? (
+                  <div style={{ marginTop: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                    {selectedWorkOrder.assignedWorkers.map(workerId => {
+                      const worker = allWorkers.find(w => w.id === workerId);
+                      return (
+                        <span key={workerId} style={styles.workerBadge}>
+                          {worker ? `${worker.firstName || ''} ${worker.lastName || ''}`.trim() || worker.emailAddress : `Worker #${workerId}`}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  "None"
+                )}
+              </div>
               <div style={styles.viewRow}><strong>Estimated Budget:</strong> {selectedWorkOrder.estimatedBudget != null ? `$${selectedWorkOrder.estimatedBudget.toLocaleString()}` : "-"}</div>
               <div style={styles.viewRow}><strong>Actual Cost:</strong> {selectedWorkOrder.actualCost != null ? `$${selectedWorkOrder.actualCost.toLocaleString()}` : "-"}</div>
             </div>
@@ -583,6 +717,36 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
                 </div>
               </div>
 
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Assign Workers</label>
+                {loadingWorkers ? (
+                  <div style={{ padding: "0.5rem", color: "#6b7280" }}>Loading workers...</div>
+                ) : (
+                  <div style={styles.workerSelectContainer}>
+                    {allWorkers.length === 0 ? (
+                      <div style={{ padding: "0.5rem", color: "#6b7280" }}>No workers available</div>
+                    ) : (
+                      allWorkers.map(worker => {
+                        const isSelected = (formData.selectedWorkers || []).includes(worker.id);
+                        return (
+                          <label key={worker.id} style={styles.workerCheckbox}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleWorkerSelection(worker.id)}
+                              style={styles.checkboxInput}
+                            />
+                            <span>
+                              {`${worker.firstName || ''} ${worker.lastName || ''}`.trim() || worker.emailAddress || `Worker #${worker.id}`}
+                            </span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div style={styles.actions}>
                 <button type="button" style={styles.cancelBtn} onClick={handleCancelUpdate}>Close</button>
                 <button type="submit" style={styles.submitBtn}>Update Work Order</button>
@@ -626,7 +790,7 @@ const styles = {
   tableRow: { borderBottom: "1px solid #f3f4f6" },
   td: { padding: "0.9rem", color: "#374151", verticalAlign: "top" },
   description: { fontSize: "0.875rem", color: "#6b7280" },
-  statusBadge: { display: "inline-block", padding: "0.25rem 0.75rem", borderRadius: "12px", fontSize: "0.75rem", fontWeight: "600", textTransform: "capitalize" },
+  statusBadge: { display: "inline-block", padding: "0.25rem 0.75rem", borderRadius: "12px", fontSize: "0.75rem", fontWeight: "600", textTransform: "capitalize", textAlign: "center" },
   cardBtn: {padding: "0.35rem 0.6rem", background: "#dbeafe", color: "#111827", border: "none", borderRadius: "8px", fontSize: "0.85rem", fontWeight: "700", cursor: "pointer" },
   
   // Modals - Enhanced styling to match CalendarTab
@@ -813,6 +977,43 @@ const styles = {
     marginTop: "0.5rem", 
     color: "#dc2626", 
     fontSize: "0.875rem", 
+    fontWeight: "600"
+  },
+  workerSelectContainer: {
+    maxHeight: "200px",
+    overflowY: "auto",
+    border: "1.5px solid #e5e7eb",
+    borderRadius: "8px",
+    padding: "0.75rem",
+    backgroundColor: "#ffffff",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.5rem"
+  },
+  workerCheckbox: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    cursor: "pointer",
+    padding: "0.5rem",
+    borderRadius: "6px",
+    transition: "background-color 0.2s",
+    fontSize: "0.95rem",
+    color: "#374151"
+  },
+  checkboxInput: {
+    width: "18px",
+    height: "18px",
+    cursor: "pointer",
+    accentColor: "#0052D4"
+  },
+  workerBadge: {
+    display: "inline-block",
+    padding: "0.35rem 0.75rem",
+    backgroundColor: "#dbeafe",
+    color: "#1e40af",
+    borderRadius: "9999px",
+    fontSize: "0.8rem",
     fontWeight: "600"
   },
 };

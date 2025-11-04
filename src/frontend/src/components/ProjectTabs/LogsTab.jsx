@@ -6,7 +6,6 @@ const LogsTab = ({ project, refreshTrigger }) => {
     const [auditLogs, setAuditLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [filter, setFilter] = useState('all'); // 'all', 'project', 'workorder', 'team'
     const [timeFilter, setTimeFilter] = useState('all'); // 'all', 'today', 'week', 'month'
 
     useEffect(() => {
@@ -46,6 +45,7 @@ const LogsTab = ({ project, refreshTrigger }) => {
             case 'status':
                 return <FaFlag style={styles.fieldIcon} />;
             case 'crewMembers':
+            case 'assignedWorkers':
                 return <FaUser style={styles.fieldIcon} />;
             default:
                 return <FaCog style={styles.fieldIcon} />;
@@ -67,6 +67,7 @@ const LogsTab = ({ project, refreshTrigger }) => {
             'status': 'Status',
             'crewMembers': 'Team Members',
             'teamMembers': 'Team Members',
+            'assignedWorkers': 'Assigned Workers',
             'work_order_created': 'Work Order Created',
             'work_order_deleted': 'Work Order Deleted'
         };
@@ -93,6 +94,19 @@ const LogsTab = ({ project, refreshTrigger }) => {
                 'critical': 'Critical'
             };
             return priorityMap[value] || value;
+        }
+        
+        // Format status values
+        if (field === 'status') {
+            const statusMap = {
+                'pending': 'Pending',
+                'in_progress': 'In Progress',
+                'on_hold': 'On Hold',
+                'completed': 'Completed',
+                'cancelled': 'Cancelled',
+                'planning': 'Planning',
+            };
+            return statusMap[value.toLowerCase()] || value;
         }
         
         return value;
@@ -209,23 +223,39 @@ const LogsTab = ({ project, refreshTrigger }) => {
         );
     };
 
-    // Filter logs based on selected filter and time filter
-    const filteredLogs = auditLogs.filter(log => {
-        // Apply entity type filter
-        let matchesEntityFilter = true;
-        if (filter === 'all') matchesEntityFilter = true;
-        else if (filter === 'project') matchesEntityFilter = log.entityType === 'project' && log.field !== 'crewMembers' && log.field !== 'teamMembers';
-        else if (filter === 'workorder') matchesEntityFilter = log.entityType === 'work_order';
-        else if (filter === 'team') matchesEntityFilter = log.entityType === 'project' && (log.field === 'crewMembers' || log.field === 'teamMembers');
-        
-        // Apply time filter
-        const matchesTime = matchesTimeFilter(log);
-        
-        return matchesEntityFilter && matchesTime;
-    });
+    // Categorize logs into Project, Work Order, and Team
+    const categorizeLogs = (logs) => {
+        const projectLogs = [];
+        const workOrderLogs = [];
+        const teamLogs = [];
 
-    // Group the filtered logs
-    const groupedLogs = groupLogsBySession(filteredLogs);
+        logs.forEach(log => {
+            // Apply time filter first
+            if (!matchesTimeFilter(log)) return;
+
+            // Team logs: project crew members, team members, and work order assigned workers
+            if ((log.entityType === 'project' && (log.field === 'crewMembers' || log.field === 'teamMembers')) ||
+                (log.entityType === 'work_order' && log.field === 'assignedWorkers')) {
+                teamLogs.push(log);
+            }
+            // Work order logs: all other work order logs
+            else if (log.entityType === 'work_order') {
+                workOrderLogs.push(log);
+            }
+            // Project logs: all other project logs
+            else if (log.entityType === 'project') {
+                projectLogs.push(log);
+            }
+        });
+
+        return {
+            project: groupLogsBySession(projectLogs),
+            workOrder: groupLogsBySession(workOrderLogs),
+            team: groupLogsBySession(teamLogs)
+        };
+    };
+
+    const categorizedLogs = categorizeLogs(auditLogs);
 
     if (loading) {
         return (
@@ -252,114 +282,18 @@ const LogsTab = ({ project, refreshTrigger }) => {
         );
     }
 
-    return (
-        <div style={styles.container}>
-            <h2 style={styles.title}>Project Activity Logs</h2>
-            
-            {/* Filter Controls */}
-            <div style={styles.filterContainer}>
-                <div style={styles.filterLabel}>Filter by type:</div>
-                <div style={styles.filterButtons}>
-                    <button 
-                        style={{
-                            ...styles.filterButton,
-                            ...(filter === 'all' ? styles.filterButtonActive : {})
-                        }}
-                        onClick={() => setFilter('all')}
-                    >
-                        All ({auditLogs.length})
-                    </button>
-                    <button 
-                        style={{
-                            ...styles.filterButton,
-                            ...(filter === 'project' ? styles.filterButtonActive : {})
-                        }}
-                        onClick={() => setFilter('project')}
-                    >
-                        Project ({auditLogs.filter(log => log.entityType === 'project' && log.field !== 'crewMembers' && log.field !== 'teamMembers').length})
-                    </button>
-                    <button 
-                        style={{
-                            ...styles.filterButton,
-                            ...(filter === 'workorder' ? styles.filterButtonActive : {})
-                        }}
-                        onClick={() => setFilter('workorder')}
-                    >
-                        Work Orders ({auditLogs.filter(log => log.entityType === 'work_order').length})
-                    </button>
-                    <button 
-                        style={{
-                            ...styles.filterButton,
-                            ...(filter === 'team' ? styles.filterButtonActive : {})
-                        }}
-                        onClick={() => setFilter('team')}
-                    >
-                        Team ({auditLogs.filter(log => log.entityType === 'project' && (log.field === 'crewMembers' || log.field === 'teamMembers')).length})
-                    </button>
+    const renderLogSection = (title, logs, icon, color) => {
+        if (logs.length === 0) return null;
+
+        return (
+            <div style={styles.categorySection}>
+                <div style={styles.categoryHeader}>
+                    {icon}
+                    <h3 style={{ ...styles.categoryTitle, color }}>{title}</h3>
+                    <span style={styles.categoryCount}>({logs.length})</span>
                 </div>
-            </div>
-            
-            {/* Time Filter Controls */}
-            <div style={styles.timeFilterContainer}>
-                <div style={styles.filterLabel}>Filter by time:</div>
-                <div style={styles.filterButtons}>
-                    <button 
-                        style={{
-                            ...styles.filterButton,
-                            ...(timeFilter === 'all' ? styles.filterButtonActive : {})
-                        }}
-                        onClick={() => setTimeFilter('all')}
-                    >
-                        All Time
-                    </button>
-                    <button 
-                        style={{
-                            ...styles.filterButton,
-                            ...(timeFilter === 'today' ? styles.filterButtonActive : {})
-                        }}
-                        onClick={() => setTimeFilter('today')}
-                    >
-                        Today ({auditLogs.filter(log => isToday(log.createdAt)).length})
-                    </button>
-                    <button 
-                        style={{
-                            ...styles.filterButton,
-                            ...(timeFilter === 'week' ? styles.filterButtonActive : {})
-                        }}
-                        onClick={() => setTimeFilter('week')}
-                    >
-                        This Week ({auditLogs.filter(log => isThisWeek(log.createdAt)).length})
-                    </button>
-                    <button 
-                        style={{
-                            ...styles.filterButton,
-                            ...(timeFilter === 'month' ? styles.filterButtonActive : {})
-                        }}
-                        onClick={() => setTimeFilter('month')}
-                    >
-                        This Month ({auditLogs.filter(log => isThisMonth(log.createdAt)).length})
-                    </button>
-                </div>
-            </div>
-            
-            {groupedLogs.length === 0 ? (
-                <div style={styles.emptyBox}>
-                    <p style={styles.emptyText}>
-                        {timeFilter === 'all' 
-                            ? "No activity logs found for this project yet. Changes will appear here once you start updating project details."
-                            : timeFilter === 'today'
-                            ? "No activity logs found for today. Try selecting a different time period or check back later."
-                            : timeFilter === 'week'
-                            ? "No activity logs found for this week. Try selecting a different time period or check back later."
-                            : timeFilter === 'month'
-                            ? "No activity logs found for this month. Try selecting a different time period or check back later."
-                            : "No activity logs found matching your current filters."
-                        }
-                    </p>
-                </div>
-            ) : (
                 <div style={styles.logsContainer}>
-                    {groupedLogs.map((session, sessionIndex) => (
+                    {logs.map((session, sessionIndex) => (
                         <div key={session.sessionId || `session_${sessionIndex}`} style={styles.logEntry}>
                             <div style={styles.logHeader}>
                                 <div style={styles.logField}>
@@ -410,11 +344,33 @@ const LogsTab = ({ project, refreshTrigger }) => {
                                             </div>
                                         ) : (
                                             <>
-                                                <div style={styles.changeRow}>
-                                                    <span style={styles.changeLabel}>
-                                                        {formatFieldName(log.field)}:
-                                                    </span>
-                                                </div>
+                                                {(() => {
+                                                    // For multiple logs, always show field name
+                                                    if (session.logs.length > 1) return true;
+                                                    
+                                                    // Fields to hide labels for (single log only)
+                                                    const hiddenFields = ['status', 'priority', 'estimatedBudget', 'startDate', 'endDate', 'actualStartDate', 'actualEndDate', 'crewMembers', 'teamMembers', 'location'];
+                                                    
+                                                    // Hide if in hidden fields list
+                                                    if (hiddenFields.includes(log.field)) return false;
+                                                    
+                                                    // For assignedWorkers: show label if it's a work order, hide if it's a project
+                                                    if (log.field === 'assignedWorkers') {
+                                                        return log.entityType === 'work_order';
+                                                    }
+                                                    
+                                                    // Show label for all other fields
+                                                    return true;
+                                                })() && (
+                                                    <div style={styles.changeRow}>
+                                                        <span style={styles.changeLabel}>
+                                                            {formatFieldName(log.field)}
+                                                            {log.field === 'assignedWorkers' && log.workOrderName && (
+                                                                <span style={styles.workOrderName}> for "{log.workOrderName}"</span>
+                                                            )}:
+                                                        </span>
+                                                    </div>
+                                                )}
                                                  <div style={styles.changeRow}>
                                                      <span style={styles.changeLabel}>From:</span>
                                                      <span style={styles.oldValue}>{formatValue(log.oldValue, log.field)}</span>
@@ -442,6 +398,95 @@ const LogsTab = ({ project, refreshTrigger }) => {
                         </div>
                     ))}
                 </div>
+            </div>
+        );
+    };
+
+    const totalLogs = categorizedLogs.project.length + categorizedLogs.workOrder.length + categorizedLogs.team.length;
+
+    return (
+        <div style={styles.container}>
+            <h2 style={styles.title}>Project Activity Logs</h2>
+            
+            {/* Time Filter Controls */}
+            <div style={styles.timeFilterContainer}>
+                <div style={styles.filterLabel}>Filter by time:</div>
+                <div style={styles.filterButtons}>
+                    <button 
+                        style={{
+                            ...styles.filterButton,
+                            ...(timeFilter === 'all' ? styles.filterButtonActive : {})
+                        }}
+                        onClick={() => setTimeFilter('all')}
+                    >
+                        All Time
+                    </button>
+                    <button 
+                        style={{
+                            ...styles.filterButton,
+                            ...(timeFilter === 'today' ? styles.filterButtonActive : {})
+                        }}
+                        onClick={() => setTimeFilter('today')}
+                    >
+                        Today ({auditLogs.filter(log => isToday(log.createdAt)).length})
+                    </button>
+                    <button 
+                        style={{
+                            ...styles.filterButton,
+                            ...(timeFilter === 'week' ? styles.filterButtonActive : {})
+                        }}
+                        onClick={() => setTimeFilter('week')}
+                    >
+                        This Week ({auditLogs.filter(log => isThisWeek(log.createdAt)).length})
+                    </button>
+                    <button 
+                        style={{
+                            ...styles.filterButton,
+                            ...(timeFilter === 'month' ? styles.filterButtonActive : {})
+                        }}
+                        onClick={() => setTimeFilter('month')}
+                    >
+                        This Month ({auditLogs.filter(log => isThisMonth(log.createdAt)).length})
+                    </button>
+                </div>
+            </div>
+            
+            {totalLogs === 0 ? (
+                <div style={styles.emptyBox}>
+                    <p style={styles.emptyText}>
+                        {timeFilter === 'all' 
+                            ? "No activity logs found for this project yet. Changes will appear here once you start updating project details."
+                            : timeFilter === 'today'
+                            ? "No activity logs found for today. Try selecting a different time period or check back later."
+                            : timeFilter === 'week'
+                            ? "No activity logs found for this week. Try selecting a different time period or check back later."
+                            : timeFilter === 'month'
+                            ? "No activity logs found for this month. Try selecting a different time period or check back later."
+                            : "No activity logs found matching your current filters."
+                        }
+                    </p>
+                </div>
+            ) : (
+                <div style={styles.categoriesContainer}>
+                    {renderLogSection(
+                        'Project',
+                        categorizedLogs.project,
+                        <FaCog style={styles.categoryIcon} />,
+                        '#3b82f6'
+                    )}
+                    {renderLogSection(
+                        'Work Orders',
+                        categorizedLogs.workOrder,
+                        <FaCalendarAlt style={styles.categoryIcon} />,
+                        '#10b981'
+                    )}
+                    {renderLogSection(
+                        'Team',
+                        categorizedLogs.team,
+                        <FaUser style={styles.categoryIcon} />,
+                        '#8b5cf6'
+                    )}
+                </div>
             )}
         </div>
     );
@@ -449,8 +494,8 @@ const LogsTab = ({ project, refreshTrigger }) => {
 
 const styles = {
     container: {
-        maxWidth: '1200px',
-        margin: '0 auto',
+        width: '100%',
+        padding: '0 1rem',
     },
     title: {
         fontSize: '1.8rem',
@@ -513,23 +558,59 @@ const styles = {
         color: '#6b7280',
         lineHeight: 1.6,
     },
-    logsContainer: {
+    categoriesContainer: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: '1.5rem',
         marginTop: '1rem',
+    },
+    categorySection: {
+        display: 'flex',
+        flexDirection: 'column',
+    },
+    categoryHeader: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        marginBottom: '0.75rem',
+        paddingBottom: '0.5rem',
+        borderBottom: '2px solid #e5e7eb',
+    },
+    categoryIcon: {
+        fontSize: '1.1rem',
+    },
+    categoryTitle: {
+        fontSize: '1.2rem',
+        fontWeight: '700',
+        margin: 0,
+    },
+    categoryCount: {
+        fontSize: '0.85rem',
+        color: '#6b7280',
+        fontWeight: '500',
+    },
+    logsContainer: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.5rem',
+        maxHeight: 'calc(100vh - 280px)',
+        overflowY: 'auto',
+        paddingRight: '0.5rem',
     },
     logEntry: {
         backgroundColor: '#ffffff',
         borderRadius: '12px',
         border: '1px solid #e5e7eb',
-        padding: '1.5rem',
-        marginBottom: '1rem',
+        padding: '0.75rem',
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+        flexShrink: 0,
     },
     logHeader: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '1rem',
-        paddingBottom: '0.75rem',
+        marginBottom: '0.5rem',
+        paddingBottom: '0.5rem',
         borderBottom: '1px solid #f3f4f6',
     },
     logField: {
@@ -542,7 +623,7 @@ const styles = {
         fontSize: '1rem',
     },
     fieldName: {
-        fontSize: '1.1rem',
+        fontSize: '1rem',
         fontWeight: '600',
         color: '#1f2937',
     },
@@ -553,7 +634,7 @@ const styles = {
     logContent: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '0.75rem',
+        gap: '0.5rem',
     },
     changeRow: {
         display: 'flex',
@@ -561,24 +642,24 @@ const styles = {
         gap: '0.75rem',
     },
     changeLabel: {
-        fontSize: '0.9rem',
+        fontSize: '0.85rem',
         fontWeight: '600',
         color: '#6b7280',
         minWidth: '40px',
     },
     oldValue: {
-        fontSize: '0.9rem',
+        fontSize: '0.85rem',
         color: '#dc2626',
         backgroundColor: '#fef2f2',
-        padding: '0.25rem 0.5rem',
+        padding: '0.2rem 0.4rem',
         borderRadius: '4px',
         border: '1px solid #fecaca',
     },
     newValue: {
-        fontSize: '0.9rem',
+        fontSize: '0.85rem',
         color: '#059669',
         backgroundColor: '#ecfdf5',
-        padding: '0.25rem 0.5rem',
+        padding: '0.2rem 0.4rem',
         borderRadius: '4px',
         border: '1px solid #a7f3d0',
     },
@@ -586,8 +667,8 @@ const styles = {
         display: 'flex',
         alignItems: 'center',
         gap: '0.5rem',
-        marginTop: '0.5rem',
-        paddingTop: '0.75rem',
+        marginTop: '0.25rem',
+        paddingTop: '0.5rem',
         borderTop: '1px solid #f3f4f6',
     },
     userIcon: {
@@ -600,12 +681,12 @@ const styles = {
         fontWeight: '500',
     },
     changeGroup: {
-        marginBottom: '0.5rem',
+        marginBottom: '0.25rem',
     },
     changeSeparator: {
         height: '1px',
         backgroundColor: '#e5e7eb',
-        margin: '0.75rem 0',
+        margin: '0.5rem 0',
     },
     filterContainer: {
         display: 'flex',
@@ -621,8 +702,8 @@ const styles = {
         display: 'flex',
         alignItems: 'center',
         gap: '1rem',
-        marginBottom: '1.5rem',
-        padding: '1rem',
+        marginBottom: '1rem',
+        padding: '0.75rem 1rem',
         backgroundColor: '#f0f9ff',
         borderRadius: '8px',
         border: '1px solid #bae6fd',
@@ -690,6 +771,10 @@ const styles = {
         fontSize: '1rem',
         fontWeight: '500',
         color: '#374151',
+    },
+    workOrderName: {
+        fontWeight: '600',
+        color: '#6b7280',
     }
 };
 

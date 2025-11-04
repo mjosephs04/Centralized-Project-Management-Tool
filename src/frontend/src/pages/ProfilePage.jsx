@@ -10,6 +10,14 @@ const ProfilePage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [uploading, setUploading] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState({
+        firstName: "",
+        lastName: "",
+        emailAddress: "",
+        phoneNumber: ""
+    });
+    const [saving, setSaving] = useState(false);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -21,6 +29,12 @@ const ProfilePage = () => {
             setLoading(true);
             const data = await authAPI.me();
             setUser(data);
+            setFormData({
+                firstName: data.firstName || "",
+                lastName: data.lastName || "",
+                emailAddress: data.emailAddress || "",
+                phoneNumber: data.phoneNumber || ""
+            });
         } catch (err) {
             console.error("Error fetching profile:", err);
             setError("Failed to load profile data.");
@@ -28,6 +42,61 @@ const ProfilePage = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleEdit = () => {
+        setIsEditing(true);
+    };
+
+    const handleCancel = () => {
+        setIsEditing(false);
+        if (user) {
+            setFormData({
+                firstName: user.firstName || "",
+                lastName: user.lastName || "",
+                emailAddress: user.emailAddress || "",
+                phoneNumber: user.phoneNumber || ""
+            });
+        }
+    };
+
+    const handleSave = async () => {
+        try {
+            setSaving(true);
+            const updatedUser = await authAPI.updateProfile(formData);
+            setUser(updatedUser);
+            setIsEditing(false);
+            showSnackbar("Profile updated successfully", "success");
+        } catch (err) {
+            console.error("Error updating profile:", err);
+            const errorMessage = err.response?.data?.error || "Failed to update profile";
+            showSnackbar(errorMessage, "error");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleInputChange = (field, value) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    const formatRole = (role) => {
+        if (!role) return "Not set";
+        const roleMap = {
+            "project_manager": "Project Manager",
+            "worker": "Worker",
+            "admin": "Admin"
+        };
+        return roleMap[role] || role;
+    };
+
+    const formatWorkerType = (workerType) => {
+        if (!workerType) return "Not set";
+        const workerTypeMap = {
+            "crew_member": "Crew Member",
+            "contractor": "Contractor"
+        };
+        return workerTypeMap[workerType] || workerType;
     };
 
     const handleLogout = () => {
@@ -104,27 +173,104 @@ const ProfilePage = () => {
                             />
                         </div>
 
-                        <h3 style={styles.cardTitle}>
-                            {user.firstName} {user.lastName}
-                        </h3>
+                        {!isEditing ? (
+                            <>
+                                <h3 style={styles.cardTitle}>
+                                    {user.firstName} {user.lastName}
+                                </h3>
 
-                        <div style={styles.infoRow}>
-                            <strong>Email:</strong> <span>{user.emailAddress}</span>
-                        </div>
-                        <div style={styles.infoRow}>
-                            <strong>Phone Number:</strong>{" "}
-                            <span>{user.phoneNumber || "Not provided"}</span>
-                        </div>
-                        <div style={styles.infoRow}>
-                            <strong>Worker Type:</strong> <span>{user.workerType}</span>
-                        </div>
-                        <div style={styles.infoRow}>
-                            <strong>Role:</strong> <span>{user.role}</span>
-                        </div>
-                        <div style={styles.infoRow}>
-                            <strong>Account Created:</strong>{" "}
-                            <span>{new Date(user.createdAt).toLocaleDateString()}</span>
-                        </div>
+                                <div style={styles.infoRow}>
+                                    <strong>First Name:</strong> <span>{user.firstName}</span>
+                                </div>
+                                <div style={styles.infoRow}>
+                                    <strong>Last Name:</strong> <span>{user.lastName}</span>
+                                </div>
+                                <div style={styles.infoRow}>
+                                    <strong>Email:</strong> <span>{user.emailAddress}</span>
+                                </div>
+                                <div style={styles.infoRow}>
+                                    <strong>Phone Number:</strong>{" "}
+                                    <span>{user.phoneNumber || "Not provided"}</span>
+                                </div>
+                                <div style={styles.infoRow}>
+                                    <strong>Worker Type:</strong> <span>{formatWorkerType(user.workerType)}</span>
+                                </div>
+                                <div style={styles.infoRow}>
+                                    <strong>Role:</strong> <span>{formatRole(user.role)}</span>
+                                </div>
+                                <div style={styles.infoRow}>
+                                    <strong>Account Created:</strong>{" "}
+                                    <span>{new Date(user.createdAt).toLocaleDateString()}</span>
+                                </div>
+                                <div style={styles.buttonContainer}>
+                                    <button onClick={handleEdit} style={styles.editButton}>
+                                        Edit Profile
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <h3 style={styles.cardTitle}>Edit Profile</h3>
+                                
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>First Name:</label>
+                                    <input
+                                        type="text"
+                                        value={formData.firstName}
+                                        onChange={(e) => handleInputChange("firstName", e.target.value)}
+                                        style={styles.input}
+                                    />
+                                </div>
+                                
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Last Name:</label>
+                                    <input
+                                        type="text"
+                                        value={formData.lastName}
+                                        onChange={(e) => handleInputChange("lastName", e.target.value)}
+                                        style={styles.input}
+                                    />
+                                </div>
+                                
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Email:</label>
+                                    <input
+                                        type="email"
+                                        value={formData.emailAddress}
+                                        onChange={(e) => handleInputChange("emailAddress", e.target.value)}
+                                        style={styles.input}
+                                    />
+                                </div>
+                                
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Phone Number:</label>
+                                    <input
+                                        type="tel"
+                                        value={formData.phoneNumber}
+                                        onChange={(e) => handleInputChange("phoneNumber", e.target.value)}
+                                        style={styles.input}
+                                        placeholder="Not provided"
+                                    />
+                                </div>
+                                
+                                <div style={styles.buttonContainer}>
+                                    <button 
+                                        onClick={handleSave} 
+                                        style={styles.saveButton}
+                                        disabled={saving}
+                                    >
+                                        {saving ? "Saving..." : "Save"}
+                                    </button>
+                                    <button 
+                                        onClick={handleCancel} 
+                                        style={styles.cancelButton}
+                                        disabled={saving}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
             </div>
@@ -227,6 +373,73 @@ const styles = {
         fontWeight: "bold",
         fontSize: "1rem",
         transition: "background-color 0.2s ease-in-out",
+    },
+    buttonContainer: {
+        display: "flex",
+        gap: "1rem",
+        justifyContent: "center",
+        marginTop: "2rem",
+    },
+    editButton: {
+        backgroundColor: "#0052D4",
+        color: "white",
+        border: "none",
+        borderRadius: "8px",
+        padding: "0.8rem 1.5rem",
+        cursor: "pointer",
+        fontWeight: "bold",
+        fontSize: "1rem",
+        transition: "background-color 0.2s ease-in-out",
+    },
+    saveButton: {
+        backgroundColor: "#10b981",
+        color: "white",
+        border: "none",
+        borderRadius: "8px",
+        padding: "0.8rem 1.5rem",
+        cursor: "pointer",
+        fontWeight: "bold",
+        fontSize: "1rem",
+        transition: "background-color 0.2s ease-in-out",
+    },
+    cancelButton: {
+        backgroundColor: "#6b7280",
+        color: "white",
+        border: "none",
+        borderRadius: "8px",
+        padding: "0.8rem 1.5rem",
+        cursor: "pointer",
+        fontWeight: "bold",
+        fontSize: "1rem",
+        transition: "background-color 0.2s ease-in-out",
+    },
+    formGroup: {
+        margin: "1rem 0",
+        textAlign: "left",
+    },
+    label: {
+        display: "block",
+        marginBottom: "0.5rem",
+        fontWeight: "bold",
+        color: "#333",
+        fontSize: "1rem",
+    },
+    input: {
+        width: "100%",
+        padding: "0.75rem",
+        borderRadius: "8px",
+        border: "1px solid #d1d5db",
+        fontSize: "1rem",
+        boxSizing: "border-box",
+    },
+    select: {
+        width: "100%",
+        padding: "0.75rem",
+        borderRadius: "8px",
+        border: "1px solid #d1d5db",
+        fontSize: "1rem",
+        boxSizing: "border-box",
+        backgroundColor: "white",
     },
 };
 

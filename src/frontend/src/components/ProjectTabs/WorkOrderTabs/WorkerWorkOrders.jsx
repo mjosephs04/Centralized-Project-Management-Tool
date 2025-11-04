@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FaEye, FaTimes } from "react-icons/fa";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { workOrdersAPI } from "../../../services/api";
+import { workOrdersAPI, usersAPI } from "../../../services/api";
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 
 const COLUMNS = [
@@ -16,6 +16,8 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
   const { showSnackbar } = useSnackbar();
   const [workOrders, setWorkOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [allWorkers, setAllWorkers] = useState([]);
+  const [loadingWorkers, setLoadingWorkers] = useState(true);
 
   // Modals
   const [showUpdate, setShowUpdate] = useState(false);
@@ -52,8 +54,21 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
 
   useEffect(() => {
     fetchWorkOrders();
+    fetchWorkers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id]);
+
+  const fetchWorkers = async () => {
+    try {
+      setLoadingWorkers(true);
+      const workers = await usersAPI.getWorkers();
+      setAllWorkers(workers || []);
+    } catch (err) {
+      console.error("Error fetching workers:", err);
+    } finally {
+      setLoadingWorkers(false);
+    }
+  };
 
   const fetchWorkOrders = async () => {
     try {
@@ -165,6 +180,18 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
     }
   };
 
+  const formatStatus = (status) => {
+    if (!status) return "Pending";
+    const statusMap = {
+      'pending': 'Pending',
+      'in_progress': 'In Progress',
+      'on_hold': 'On Hold',
+      'completed': 'Completed',
+      'cancelled': 'Cancelled',
+    };
+    return statusMap[status.toLowerCase()] || status;
+  };
+
   const getStatusColor = (status) => {
     switch ((status || "").toLowerCase()) {
       case "pending": return { bg: "#fef3c7", text: "#92400e" };
@@ -177,6 +204,12 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
   };
   const getPriorityLabel = (p) => ["", "Very Low", "Low", "Medium", "High", "Critical"][p] || "Medium";
   const getPriorityColor = (p) => (p >= 4 ? "#ef4444" : p === 3 ? "#f59e0b" : "#10b981");
+
+  const getWorkerName = (workerId) => {
+    const worker = allWorkers.find(w => w.id === workerId);
+    if (!worker) return `Worker #${workerId}`;
+    return `${worker.firstName || ''} ${worker.lastName || ''}`.trim() || worker.emailAddress || `Worker #${workerId}`;
+  };
 
   return (
     <div style={styles.container}>
@@ -233,7 +266,7 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
                                         backgroundColor: statusStyle.bg,
                                         color: statusStyle.text,
                                       }}>
-                                        {wo.status}
+                                        {formatStatus(wo.status)}
                                       </span>
                                     </div>
 
@@ -248,6 +281,19 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
                                         <span style={styles.smallLabel}></span>&nbsp;{wo.location || "-"}
                                       </span>
                                     </div>
+
+                                    {wo.assignedWorkers && wo.assignedWorkers.length > 0 && (
+                                      <div style={styles.cardAssignedWorkers}>
+                                        <span style={styles.assignedLabel}>Assigned:</span>
+                                        <div style={styles.workerBadgesContainer}>
+                                          {wo.assignedWorkers.map(workerId => (
+                                            <span key={workerId} style={styles.workerBadge}>
+                                              {getWorkerName(workerId)}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
 
                                     <div style={styles.cardFooter}>
                                       <button
@@ -290,7 +336,7 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
             </div>
             <div style={styles.viewBody}>
               <div style={styles.viewRow}><strong>Name:</strong> {selectedWorkOrder.name}</div>
-              <div style={styles.viewRow}><strong>Status:</strong> {selectedWorkOrder.status}</div>
+              <div style={styles.viewRow}><strong>Status:</strong> {formatStatus(selectedWorkOrder.status)}</div>
               <div style={styles.viewRow}><strong>Priority:</strong> {getPriorityLabel(selectedWorkOrder.priority)}</div>
               <div style={styles.viewRow}><strong>Location:</strong> {selectedWorkOrder.location || "-"}</div>
               <div style={styles.viewRow}><strong>Dates:</strong> {selectedWorkOrder.startDate} — {selectedWorkOrder.endDate}</div>
@@ -301,6 +347,21 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
                 <strong>Actual Cost:</strong>{" "}
                 {selectedWorkOrder.actualCost != null ? `$${selectedWorkOrder.actualCost.toLocaleString()}` : "-"}
               </div>
+              {selectedWorkOrder.assignedWorkers && selectedWorkOrder.assignedWorkers.length > 0 && (
+                <div style={styles.viewRow}>
+                  <strong>Assigned Workers:</strong>{" "}
+                  <div style={{ marginTop: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                    {selectedWorkOrder.assignedWorkers.map(workerId => {
+                      const worker = allWorkers.find(w => w.id === workerId);
+                      return (
+                        <span key={workerId} style={styles.workerBadge}>
+                          {worker ? `${worker.firstName || ''} ${worker.lastName || ''}`.trim() || worker.emailAddress : `Worker #${workerId}`}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -456,7 +517,7 @@ const styles = {
   metaClamp: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: "1 1 auto" },
   cardFooter: { marginTop: "0.6rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" },
   smallLabel: { color: "#6b7280", fontWeight: 600 },
-  statusBadge: { display: "inline-block", padding: "0.2rem 0.6rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: "700", textTransform: "capitalize" },
+  statusBadge: { display: "inline-block", padding: "0.2rem 0.6rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: "700", textTransform: "capitalize", textAlign: "center" },
   cardBtn: { padding: "0.35rem 0.6rem", background: "#dbeafe", color: "#111827", border: "none", borderRadius: "8px", fontSize: "0.85rem", fontWeight: "700", cursor: "pointer" },
   
   // Modals - Enhanced styling to match PMWorkOrders

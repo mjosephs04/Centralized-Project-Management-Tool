@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { FaEdit, FaSave, FaTimes, FaMapMarkerAlt, FaCalendarAlt, FaDollarSign, FaFlag, FaChartLine, FaTrashAlt } from "react-icons/fa";
+import { FaEdit, FaSave, FaTimes, FaMapMarkerAlt, FaCalendarAlt, FaDollarSign, FaFlag, FaChartLine, FaTrashAlt, FaFileAlt } from "react-icons/fa";
 import { projectsAPI } from "../../services/api";
 import { useSnackbar } from '../../contexts/SnackbarContext';
 
@@ -181,7 +181,6 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                     </div>
                 )}
             </div>
-
             {isEditing ? (
                 // Edit Mode - Clean Form Layout
                 <div style={styles.editForm}>
@@ -539,7 +538,15 @@ const styles = {
         borderRadius: '10px',
         boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
         transition: 'transform 0.2s, box-shadow 0.2s',
-        height: '100px',
+        minHeight: '100px',
+        display: 'flex',
+        flexDirection: 'column',
+    },
+    textarea: {
+        resize: 'vertical',
+        minHeight: '80px',
+        fontFamily: 'inherit',
+        marginTop: 'auto',
     },
     cardHeader: {
         display: 'flex',
