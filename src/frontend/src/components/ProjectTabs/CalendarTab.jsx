@@ -460,6 +460,7 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                                     </select>
                                 </div>
                             </div>
+
                             <div style={styles.formRow}>
                                 <div style={styles.formGroup}>
                                     <label style={styles.label}>Start Date *</label>
@@ -483,18 +484,35 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                                 </div>
                             </div>
 
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>Estimated Budget</label>
-                                <div style={styles.inputWrapper}>
-                                    <span style={styles.inputPrefix}>$</span>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={formData.estimatedBudget}
-                                        onChange={(e) => setFormData({...formData, estimatedBudget: e.target.value})}
-                                        style={styles.inputWithPrefix}
-                                        placeholder="0.00"
-                                    />
+                            <div style={styles.formRow}>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Status *</label>
+                                    <select
+                                        required
+                                        value={formData.status}
+                                        onChange={(e) => setFormData({...formData, status: e.target.value})}
+                                        style={styles.select}
+                                    >
+                                        <option value="pending">Pending</option>
+                                        <option value="in_progress">In Progress</option>
+                                        <option value="on_hold">On Hold</option>
+                                        <option value="completed">Completed</option>
+                                        <option value="cancelled">Cancelled</option>
+                                    </select>
+                                </div>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Estimated Budget</label>
+                                    <div style={styles.inputWrapper}>
+                                        <span style={styles.inputPrefix}>$</span>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={formData.estimatedBudget}
+                                            onChange={(e) => setFormData({...formData, estimatedBudget: e.target.value})}
+                                            style={styles.inputWithPrefix}
+                                            placeholder="0.00"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
@@ -1000,9 +1018,9 @@ const styles = {
     },
     cancelBtn: {
         padding: '0.875rem 1.75rem',
-        backgroundColor: '#f3f4f6',
-        color: '#4b5563',
-        border: 'none',
+        backgroundColor: 'white',
+        color: '#bc8056',
+        border: '2px solid #bc8056',
         borderRadius: '8px',
         fontSize: '0.95rem',
         fontWeight: '600',
@@ -1012,7 +1030,7 @@ const styles = {
     },
     submitBtn: {
         padding: '0.875rem 1.75rem',
-        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+        background: '#5692bc',
         color: 'white',
         border: 'none',
         borderRadius: '8px',
@@ -1028,7 +1046,7 @@ const styles = {
         alignItems: 'center',
         gap: '0.5rem',
         padding: '0.7rem 1.5rem',
-        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+        background: '#5692bc',
         color: 'white',
         border: 'none',
         borderRadius: '8px',
@@ -1042,7 +1060,7 @@ const styles = {
         alignItems: 'center',
         justifyContent: 'center',
         padding: '0.5rem',
-        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+        background: '#b356bc',
         color: 'white',
         border: 'none',
         borderRadius: '8px',
@@ -1099,7 +1117,7 @@ const styles = {
         alignItems: 'center',
         justifyContent: 'center',
         padding: '0.875rem 1.5rem',
-        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+        background: '#b356bc',
         color: 'white',
         border: 'none',
         borderRadius: '8px',
@@ -1128,7 +1146,7 @@ const styles = {
         alignItems: 'center',
         justifyContent: 'center',
         padding: '0.7rem 1.2rem',
-        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+        background: '#5692bc',
         color: 'white',
         border: 'none',
         borderRadius: '8px',
@@ -1211,7 +1229,7 @@ const styles = {
         alignItems: 'center',
         justifyContent: 'center',
         padding: '0.5rem 1rem',
-        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+        background: '#5692bc',
         color: 'white',
         border: 'none',
         borderRadius: '6px',

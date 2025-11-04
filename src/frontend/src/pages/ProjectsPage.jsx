@@ -477,7 +477,7 @@ const ProjectsPage = () => {
 const styles = {
     pageContainer: {
         padding: '1.5rem 1rem',
-        background: '#5692bc',
+        background: 'rgb(219, 219, 219)',
         minHeight: 'calc(100vh - 80px)',
         fontFamily: 'sans-serif',
     },
@@ -560,7 +560,7 @@ const styles = {
     },
     retryButton: {
         padding: '0.9rem 1.8rem',
-        background: 'linear-gradient(135deg, rgb(35, 115, 243) 0%, #4facfe 100%)',
+        background: '#5692bc',
         color: 'white',
         border: 'none',
         borderRadius: '10px',
@@ -794,7 +794,7 @@ const styles = {
         left: '50%',
         transform: 'translateX(-70px)',
         zIndex: 10,
-        background: 'linear-gradient(135deg, rgb(35, 115, 243) 0%, #4facfe 100%)',
+        background: '#5692bc',
         border: 'none',
         borderRadius: '12px',
         width: '56px',

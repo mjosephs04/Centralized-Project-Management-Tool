@@ -12,21 +12,33 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
 
     // Helper functions defined before use
     const parseLocation = (locationString) => {
-        if (!locationString) return { address: '', city: '', state: '', zipCode: '' };
+        if (!locationString) return { address: '', address2: '', city: '', state: '', zipCode: '' };
         
         const parts = locationString.split(',').map(part => part.trim());
         
-        // Expected format: "123 Main St, City, State, 12345"
-        return {
-            address: parts[0] || '',
-            city: parts[1] || '',
-            state: parts[2] || '',
-            zipCode: parts[3] || ''
-        };
+        // Expected format: "123 Main St, Unit 4B, City, State, 12345" or "123 Main St, City, State, 12345"
+        // Check if we have 5 parts (with address2) or 4 parts (without address2)
+        if (parts.length >= 5) {
+            return {
+                address: parts[0] || '',
+                address2: parts[1] || '',
+                city: parts[2] || '',
+                state: parts[3] || '',
+                zipCode: parts[4] || ''
+            };
+        } else {
+            return {
+                address: parts[0] || '',
+                address2: '',
+                city: parts[1] || '',
+                state: parts[2] || '',
+                zipCode: parts[3] || ''
+            };
+        }
     };
 
-    const formatLocation = (address, city, state, zipCode) => {
-        const parts = [address, city, state, zipCode].filter(part => part && part.trim());
+    const formatLocation = (address, address2, city, state, zipCode) => {
+        const parts = [address, address2, city, state, zipCode].filter(part => part && part.trim());
         return parts.join(', ');
     };
 
@@ -49,6 +61,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
             if (onUpdate) {
                 const location = formatLocation(
                     editedData.address,
+                    editedData.address2,
                     editedData.city,
                     editedData.state,
                     editedData.zipCode
@@ -159,7 +172,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                         <button style={styles.deleteButton} onClick={handleDeleteClick}>
                             <FaTrashAlt /> Delete Project
                         </button>
-                        <button style={styles.editButton} onClick={handleSave}>
+                        <button style={styles.saveButton} onClick={handleSave}>
                             <FaSave /> Save
                         </button>
                         <button style={styles.cancelButton} onClick={handleCancel}>
@@ -169,58 +182,146 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                 )}
             </div>
 
-            <div style={styles.grid}>
-                <div style={{ ...styles.card, gridColumn: isEditing ? '1 / -1' : 'auto' }}>
-                    <div style={styles.cardHeader}>
-                        <FaMapMarkerAlt style={styles.icon} />
-                        <span style={styles.label}>Location</span>
-                    </div>
-                    {isEditing ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
-                            <div>
-                                <label style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '0.5rem', display: 'block' }}>Street Address</label>
+            {isEditing ? (
+                // Edit Mode - Clean Form Layout
+                <div style={styles.editForm}>
+                    {/* Location Section */}
+                    <div style={styles.formSection}>
+                        <h3 style={styles.sectionTitle}>
+                            <FaMapMarkerAlt style={styles.sectionIcon} />
+                            Location
+                        </h3>
+                        <div style={styles.formGrid}>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={styles.inputLabel}>Street Address *</label>
                                 <input
                                     type='text'
                                     value={editedData.address}
                                     onChange={(e) => setEditedData({...editedData, address: e.target.value})}
-                                    style={styles.input}
-                                    placeholder="123 Main St"
+                                    style={styles.formInput}
+                                    placeholder="123 Main Street"
+                                />
+                            </div>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={styles.inputLabel}>Unit/Suite/Apt (Optional)</label>
+                                <input
+                                    type='text'
+                                    value={editedData.address2}
+                                    onChange={(e) => setEditedData({...editedData, address2: e.target.value})}
+                                    style={styles.formInput}
+                                    placeholder="Unit 4B, Suite 200, Apt 5, etc."
                                 />
                             </div>
                             <div>
-                                <label style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '0.5rem', display: 'block' }}>City</label>
+                                <label style={styles.inputLabel}>City *</label>
                                 <input
                                     type='text'
                                     value={editedData.city}
                                     onChange={(e) => setEditedData({...editedData, city: e.target.value})}
-                                    style={styles.input}
-                                    placeholder="City"
+                                    style={styles.formInput}
+                                    placeholder="Austin"
                                 />
                             </div>
                             <div>
-                                <label style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '0.5rem', display: 'block' }}>State</label>
+                                <label style={styles.inputLabel}>State *</label>
                                 <input
                                     type='text'
                                     value={editedData.state}
                                     onChange={(e) => setEditedData({...editedData, state: e.target.value})}
-                                    style={styles.input}
-                                    placeholder="State"
+                                    style={styles.formInput}
+                                    placeholder="TX"
                                 />
                             </div>
                             <div>
-                                <label style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '0.5rem', display: 'block' }}>ZIP Code</label>
+                                <label style={styles.inputLabel}>ZIP Code *</label>
                                 <input
                                     type='text'
                                     value={editedData.zipCode}
                                     onChange={(e) => setEditedData({...editedData, zipCode: e.target.value})}
-                                    style={styles.input}
-                                    placeholder="12345"
+                                    style={styles.formInput}
+                                    placeholder="78701"
                                 />
                             </div>
                         </div>
-                    ) : (
+                    </div>
+
+                    {/* Dates Section */}
+                    <div style={styles.formSection}>
+                        <h3 style={styles.sectionTitle}>
+                            <FaCalendarAlt style={styles.sectionIcon} />
+                            Dates
+                        </h3>
+                        <div style={styles.formGrid}>
+                            <div>
+                                <label style={styles.inputLabel}>Actual Start Date</label>
+                                <input
+                                    type='date'
+                                    value={editedData.actualStartDate}
+                                    onChange={(e) => setEditedData({...editedData, actualStartDate: e.target.value})}
+                                    style={styles.formInput}
+                                />
+                            </div>
+                            <div>
+                                <label style={styles.inputLabel}>Scheduled End Date</label>
+                                <input
+                                    type='date'
+                                    value={editedData.endDate}
+                                    onChange={(e) => setEditedData({...editedData, endDate: e.target.value})}
+                                    style={styles.formInput}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Budget & Priority Section */}
+                    <div style={styles.formSection}>
+                        <h3 style={styles.sectionTitle}>
+                            <FaDollarSign style={styles.sectionIcon} />
+                            Budget & Priority
+                        </h3>
+                        <div style={styles.formGrid}>
+                            {userRole !== 'worker' && (
+                                <div>
+                                    <label style={styles.inputLabel}>Allocated Budget</label>
+                                    <input
+                                        type='number'
+                                        value={editedData.estimatedBudget}
+                                        onChange={(e) => setEditedData({...editedData, estimatedBudget: e.target.value})}
+                                        style={styles.formInput}
+                                        placeholder="50000"
+                                    />
+                                </div>
+                            )}
+                            <div>
+                                <label style={styles.inputLabel}>Priority</label>
+                                <select
+                                    value={editedData.priority}
+                                    onChange={(e) => setEditedData({...editedData, priority: e.target.value})}
+                                    style={styles.formSelect}
+                                >
+                                    <option value="Low">Low</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="High">High</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                // View Mode - Original Card Grid
+                <div style={styles.grid}>
+                    <div style={styles.card}>
+                        <div style={styles.cardHeader}>
+                            <FaMapMarkerAlt style={styles.icon} />
+                            <span style={styles.label}>Location</span>
+                        </div>
                         <div>
                             <p style={styles.value}>{parseLocation(project.location).address || 'Not specified'}</p>
+                            {parseLocation(project.location).address2 && (
+                                <p style={{ ...styles.value, fontSize: '1.1rem', color: '#4a5568', marginTop: '0.25rem' }}>
+                                    {parseLocation(project.location).address2}
+                                </p>
+                            )}
                             <p style={{ ...styles.value, fontSize: '0.95rem', color: '#718096', marginTop: '0.25rem' }}>
                                 {(() => {
                                     const loc = parseLocation(project.location);
@@ -230,109 +331,69 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                                 })()}
                             </p>
                         </div>
-                    )}
-                </div>
-
-                <div style={styles.card}>
-                    <div style={styles.cardHeader}>
-                        <FaCalendarAlt style={styles.icon} />
-                        <span style={styles.label}>Actual Start Date</span>
                     </div>
-                    {isEditing ? (
-                        <input
-                            type='date'
-                            value={editedData.actualStartDate}
-                            onChange={(e) => setEditedData({...editedData, actualStartDate: e.target.value})}
-                            style={styles.input}
-                        />
-                    ) : (
-                        <p style={styles.value}>{project.actualStartDate || 'Not specified'}</p>
-                    )}
-                </div>
 
-                <div style={styles.card}>
-                    <div style={styles.cardHeader}>
-                        <FaCalendarAlt style={styles.icon} />
-                        <span style={styles.label}>Estimated End Date</span>
-                    </div>
-                    <p style={styles.value}>Not Specified, will be added with algorithm introduction</p> 
-                </div>
-
-                <div style={styles.card}>
-                    <div style={styles.cardHeader}>
-                        <FaCalendarAlt style={styles.icon} />
-                        <span style={styles.label}>Scheduled End Date</span>
-                    </div>
-                    {isEditing ? (
-                        <input
-                            type='date'
-                            value={editedData.endDate}
-                            onChange={(e) => setEditedData({...editedData, endDate: e.target.value})}
-                            style={styles.input}
-                        />
-                    ) : (
-                        <p style={styles.value}>{project.endDate || 'Not specified'}</p>
-                    )}
-                </div>
-
-                {userRole !== 'worker' && (
                     <div style={styles.card}>
                         <div style={styles.cardHeader}>
-                            <FaDollarSign style={styles.icon} />
-                            <span style={styles.label}>Allocated Budget</span>
+                            <FaCalendarAlt style={styles.icon} />
+                            <span style={styles.label}>Actual Start Date</span>
                         </div>
-                        {isEditing ? (
-                            <input
-                                type='text'
-                                value={editedData.estimatedBudget}
-                                onChange={(e) => setEditedData({...editedData, estimatedBudget: e.target.value})}
-                                style={styles.input}
-                                placeholder="$0.00"
-                            />
-                        ) : (
+                        <p style={styles.value}>{project.actualStartDate || 'Not specified'}</p>
+                    </div>
+
+                    <div style={styles.card}>
+                        <div style={styles.cardHeader}>
+                            <FaCalendarAlt style={styles.icon} />
+                            <span style={styles.label}>Estimated End Date</span>
+                        </div>
+                        <p style={styles.value}>Not Specified, will be added with algorithm introduction</p> 
+                    </div>
+
+                    <div style={styles.card}>
+                        <div style={styles.cardHeader}>
+                            <FaCalendarAlt style={styles.icon} />
+                            <span style={styles.label}>Scheduled End Date</span>
+                        </div>
+                        <p style={styles.value}>{project.endDate || 'Not specified'}</p>
+                    </div>
+
+                    {userRole !== 'worker' && (
+                        <div style={styles.card}>
+                            <div style={styles.cardHeader}>
+                                <FaDollarSign style={styles.icon} />
+                                <span style={styles.label}>Allocated Budget</span>
+                            </div>
                             <p style={styles.value}>
                                 {project.estimatedBudget ? `$${parseFloat(project.estimatedBudget).toFixed(2)}` : 'Not specified'}
                             </p>
-                        )}
-                    </div>
-                )}
+                        </div>
+                    )}
 
-                {userRole !== 'worker' && (
+                    {userRole !== 'worker' && (
+                        <div style={styles.card}>
+                            <div style={styles.cardHeader}>
+                                <FaDollarSign style={styles.icon} />
+                                <span style={styles.label}>Current Cost</span>
+                            </div>
+                            <p style={styles.value}>Not specified will be introduced with database update and work orders.</p>
+                        </div>
+                    )}
+
+                    {userRole !== 'worker' && (
+                        <div style={styles.card}>
+                            <div style={styles.cardHeader}>
+                                <FaDollarSign style={styles.icon} />
+                                <span style={styles.label}>Estimated Cost</span>
+                            </div>
+                            <p style={styles.value}>Not specified, will be added with algorithm introduction.</p>
+                        </div>
+                    )}
+
                     <div style={styles.card}>
                         <div style={styles.cardHeader}>
-                            <FaDollarSign style={styles.icon} />
-                            <span style={styles.label}>Current Cost</span>
+                            <FaFlag style={styles.icon} />
+                            <span style={styles.label}>Priority</span>
                         </div>
-                        <p style={styles.value}>Not specified will be introduced with database update and work orders.</p>
-                    </div>
-                )}
-
-                {userRole !== 'worker' && (
-                    <div style={styles.card}>
-                        <div style={styles.cardHeader}>
-                            <FaDollarSign style={styles.icon} />
-                            <span style={styles.label}>Estimated Cost</span>
-                        </div>
-                        <p style={styles.value}>Not specified, will be added with algorithm introduction.</p>
-                    </div>
-                )}
-
-                <div style={styles.card}>
-                    <div style={styles.cardHeader}>
-                        <FaFlag style={styles.icon} />
-                        <span style={styles.label}>Priority</span>
-                    </div>
-                    {isEditing ? (
-                        <select
-                            value={editedData.priority}
-                            onChange={(e) => setEditedData({...editedData, priority: e.target.value})}
-                            style={styles.select}
-                        >
-                            <option value="Low">Low</option>
-                            <option value="Medium">Medium</option>
-                            <option value="High">High</option>
-                        </select>
-                    ) : (
                         <div style={{
                             ...styles.priorityBadge,
                             backgroundColor: priorityStyle.bg,
@@ -341,24 +402,25 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                             <span style={styles.priorityIcon}>{priorityStyle.icon}</span>
                             {capitalizePriority(project.priority)}
                         </div>
-                    )}
-                </div>
+                    </div>
 
-                <div style={styles.card}>
-                    <div style={styles.cardHeader}>
-                        <FaChartLine style={styles.icon} />
-                        <span style={styles.label}>Status</span>
-                    </div>
-                    <div style={{
-                        ...styles.statusBadge,
-                        background: statusColors.bg,
-                        color: statusColors.text,
-                        border: `2px solid ${statusColors.border}`
-                    }}>
-                        {project.status || 'Not Set'}
+                    <div style={styles.card}>
+                        <div style={styles.cardHeader}>
+                            <FaChartLine style={styles.icon} />
+                            <span style={styles.label}>Status</span>
+                        </div>
+                        <div style={{
+                            ...styles.statusBadge,
+                            background: statusColors.bg,
+                            color: statusColors.text,
+                            border: `2px solid ${statusColors.border}`
+                        }}>
+                            {project.status || 'Not Set'}
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
+
             {showDeleteConfirm && (
                 <div style={styles.modalOverlay} onClick={handleDeleteCancel}>
                     <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -442,7 +504,7 @@ const styles = {
         alignItems: 'center',
         gap: '0.5rem',
         padding: '0.6rem 1.2rem',
-        backgroundColor: '#10b981',
+        backgroundColor: '#77DD77',
         color: 'white',
         border: 'none',
         borderRadius: '8px',
@@ -456,15 +518,16 @@ const styles = {
         alignItems: 'center',
         gap: '0.5rem',
         padding: '0.6rem 1.2rem',
-        backgroundColor: '#6b7280',
-        color: 'white',
-        border: 'none',
+        backgroundColor: 'white',
+        color: '#bc8056',
+        border: '2px solid #bc8056',
         borderRadius: '8px',
         fontSize: '0.9rem',
         fontWeight: '600',
         cursor: 'pointer',
         transition: 'background-color 0.2s',
     },
+    // View Mode Styles
     grid: {
         display: 'grid',
         gridTemplateColumns: 'repeat(3, 1fr)',
@@ -485,7 +548,7 @@ const styles = {
         marginBottom: '0.5rem',
     },
     icon: {
-        color: '#0052D4',
+        color: '#b356bc',
         fontSize: '1rem',
     },
     label: {
@@ -501,38 +564,6 @@ const styles = {
         color: '#2c3e50',
         margin: 0,
         wordBreak: 'break-word'
-    },
-    placeholderValue: {
-        fontSize: '0.95rem',
-        fontWeight: '500',
-        color: '#9ca3af',
-        margin: 0,
-        fontStyle: 'italic',
-    },
-    input: {
-        width: '100%',
-        padding: '0.5rem',
-        fontSize: '1rem',
-        border: '2px solid #e5e7eb',
-        borderRadius: '6px',
-        fontWeight: '600',
-        color: '#2c3e50',
-        transition: 'border-color 0.2s',
-        outline: 'none',
-        boxSizing: 'border-box',
-    },
-    select: {
-        width: '100%',
-        padding: '0.5rem',
-        fontSize: '1rem',
-        border: '2px solid #e5e7eb',
-        borderRadius: '6px',
-        fontWeight: '600',
-        color: '#2c3e50',
-        backgroundColor: 'white',
-        cursor: 'pointer',
-        outline: 'none',
-        boxSizing: 'border-box',
     },
     statusBadge: {
         display: 'inline-flex',
@@ -568,7 +599,7 @@ const styles = {
         alignItems: 'center',
         gap: '0.5rem',
         padding: '0.6rem 1.2rem',
-        backgroundColor: '#dc2626',
+        backgroundColor: '#FF6961',
         color: 'white',
         border: 'none',
         borderRadius: '8px',
@@ -577,6 +608,72 @@ const styles = {
         cursor: 'pointer',
         transition: 'background-color 0.2s',
     },
+    // Edit Mode Styles
+    editForm: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2rem',
+    },
+    formSection: {
+        backgroundColor: 'white',
+        padding: '2rem',
+        borderRadius: '12px',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+    },
+    sectionTitle: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+        fontSize: '1.2rem',
+        fontWeight: '600',
+        color: '#2c3e50',
+        marginBottom: '1.5rem',
+        paddingBottom: '0.75rem',
+        borderBottom: '2px solid #f0f0f0',
+    },
+    sectionIcon: {
+        color: '#b356bc',
+        fontSize: '1.1rem',
+    },
+    formGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: '1.5rem',
+    },
+    inputLabel: {
+        display: 'block',
+        fontSize: '0.9rem',
+        fontWeight: '600',
+        color: '#4a5568',
+        marginBottom: '0.5rem',
+    },
+    formInput: {
+        width: '100%',
+        padding: '0.75rem',
+        fontSize: '1rem',
+        border: '2px solid #e5e7eb',
+        borderRadius: '8px',
+        fontWeight: '500',
+        color: '#2c3e50',
+        transition: 'all 0.2s',
+        outline: 'none',
+        boxSizing: 'border-box',
+    },
+    formSelect: {
+        width: '100%',
+        padding: '0.75rem',
+        fontSize: '1rem',
+        border: '2px solid #e5e7eb',
+        borderRadius: '8px',
+        fontWeight: '500',
+        color: '#2c3e50',
+        backgroundColor: 'white',
+        cursor: 'pointer',
+        outline: 'none',
+        boxSizing: 'border-box',
+        transition: 'all 0.2s',
+    },
+    // Modal Styles
     modalOverlay: {
         position: 'fixed',
         top: 0,

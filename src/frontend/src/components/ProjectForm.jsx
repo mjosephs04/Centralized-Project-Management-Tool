@@ -92,8 +92,8 @@ const ProjectCreationForm = ({ onCreate }) => {
 
     const styles = {
         pageContainer: {
-            padding: '2.5rem 2.5rem',
-            background: 'linear-gradient(135deg, rgb(35, 115, 243) 0%, #4facfe 100%)',
+            padding: '1.5rem 1rem',
+            background: 'rgb(219, 219, 219)',
             minHeight: 'calc(100vh - 80px)',
             fontFamily: 'sans-serif',
         },
@@ -101,7 +101,7 @@ const ProjectCreationForm = ({ onCreate }) => {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '2rem',
+            marginBottom: '1rem',
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
             padding: '2rem',
             borderRadius: '16px',
@@ -115,7 +115,7 @@ const ProjectCreationForm = ({ onCreate }) => {
             fontWeight: '700',
             color: '#1a202c',
             margin: '0 0 0.5rem 0',
-            background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+            background: '#515557',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             MozBackgroundClip: 'text',
@@ -134,7 +134,7 @@ const ProjectCreationForm = ({ onCreate }) => {
             padding: '0.9rem 2rem',
             border: 'none',
             borderRadius: '10px',
-            background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+            background: '#5692bc',
             color: 'white',
             fontSize: '1rem',
             fontWeight: '600',
@@ -252,11 +252,11 @@ const ProjectCreationForm = ({ onCreate }) => {
             fontWeight: '600',
         },
         addButton: {
-            color: '#2373f3',
+            color: '#5692bc',
             marginTop: '0.5rem',
         },
         removeButton: {
-            color: '#dc2626',
+            color: '#FF6961',
             padding: '0.5rem',
         },
         errorBanner: {

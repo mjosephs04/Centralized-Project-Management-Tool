@@ -64,7 +64,7 @@ const styles = {
         alignItems: 'center',
         gap: '0.5rem',
         padding: '0.5rem 1rem',
-        background: 'linear-gradient(135deg, #0052D4 0%, #4facfe 100%)',
+        background: '#bc8056',
         borderRadius: '8px',
         boxShadow: '0 2px 8px rgba(0, 82, 212, 0.25)',
     },
@@ -173,7 +173,7 @@ const styles = {
         background: 'transparent',
         border: '1px solid rgba(239, 68, 68, 0.3)',
         borderRadius: '8px',
-        color: '#dc2626',
+        color: '#FF6961',
         fontSize: '0.9rem',
         fontWeight: '600',
         cursor: 'pointer',
@@ -182,9 +182,9 @@ const styles = {
     },
 
     logoutButtonHover: {
-        background: '#dc2626',
+        background: '#FF6961',
         color: 'white',
-        borderColor: '#dc2626',
+        borderColor: '#FF6961',
     }
 };
 

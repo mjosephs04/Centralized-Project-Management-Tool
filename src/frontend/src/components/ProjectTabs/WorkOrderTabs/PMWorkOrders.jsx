@@ -283,21 +283,21 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
                               <td style={styles.td}>
                                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                                   <button
-                                    style={{ ...styles.cardBtn, background: "#e5e7eb" }}
+                                    style={{ ...styles.cardBtn, background: "#5692bc", color: 'white' }}
                                     onClick={() => openView(wo)}
                                     title="View"
                                   >
                                     View
                                   </button>
                                   <button
-                                    style={styles.cardBtn}
+                                    style={{...styles.cardBtn, background: '#b356bc', color: 'white'}}
                                     onClick={() => openUpdate(wo)}
                                     title="Update"
                                   >
                                     Update
                                   </button>
                                   <button
-                                    style={{ ...styles.cardBtn, background: "#ef4444", color: "#fff" }}
+                                    style={{ ...styles.cardBtn, background: "#FF6961", color: "#fff" }}
                                     onClick={() => deleteWorkOrder(wo.id)}
                                     title="Delete"
                                   >
@@ -599,8 +599,20 @@ const styles = {
   container: { maxWidth: "1400px", margin: "0 auto" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" },
   title: { fontSize: "1.8rem", fontWeight: "600", color: "#2c3e50", margin: 0 },
-  createButton: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.7rem 1.5rem", backgroundColor: "#0052D4", color: "white", border: "none", borderRadius: "8px", fontSize: "0.95rem", fontWeight: "600", cursor: "pointer" },
-
+  createButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    padding: '0.7rem 1.5rem',
+    background: '#5692bc',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '0.95rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+  },
   groupWrap: { display: "grid", gap: "1.25rem" },
   group: { background: "#ffffff", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" },
   groupHead: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.9rem 1rem", borderBottom: "1px solid #e5e7eb" },
@@ -759,28 +771,30 @@ const styles = {
     paddingTop: "1.5rem",
     borderTop: "1px solid #f3f4f6"
   },
-  cancelBtn: { 
-    padding: "0.875rem 1.75rem", 
-    backgroundColor: "#f3f4f6", 
-    color: "#4b5563", 
-    border: "none", 
-    borderRadius: "8px", 
-    fontWeight: "600", 
-    cursor: "pointer",
-    transition: "all 0.2s",
-    letterSpacing: "0.01em"
+  cancelBtn: {
+    padding: '0.875rem 1.75rem',
+    backgroundColor: 'white',
+    color: '#bc8056',
+    border: '2px solid #bc8056',
+    borderRadius: '8px',
+    fontSize: '0.95rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    letterSpacing: '0.01em',
   },
-  submitBtn: { 
-    padding: "0.875rem 1.75rem", 
-    backgroundColor: "#0052D4", 
-    color: "white", 
-    border: "none", 
-    borderRadius: "8px", 
-    fontWeight: "600", 
-    cursor: "pointer",
-    transition: "all 0.2s",
-    letterSpacing: "0.01em",
-    boxShadow: "0 4px 6px -1px rgba(0, 82, 212, 0.2), 0 2px 4px -1px rgba(0, 82, 212, 0.1)"
+  submitBtn: {
+    padding: '0.875rem 1.75rem',
+    background: '#5692bc',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '0.95rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    letterSpacing: '0.01em',
+    boxShadow: '0 4px 6px -1px rgba(35, 115, 243, 0.2), 0 2px 4px -1px rgba(35, 115, 243, 0.1)',
   },
   viewBody: { 
     padding: "2rem", 
