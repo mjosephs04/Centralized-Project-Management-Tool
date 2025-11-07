@@ -848,18 +848,24 @@ def get_project_members(project_id: int):
     # Get project managers (all)
     members = []
     managers = ProjectManager.query.filter_by(projectId=project_id, isActive=True).all()
-    if not managers and project.projectManager:  # fallback legacy
-        managers = []
-        legacy = project.projectManager
-        manager_data = legacy.to_dict()
+    
+    # Add all managers from ProjectManager table
+    for pm in managers:
+        manager_data = pm.user.to_dict()
         manager_data["role"] = "project_manager"
-        manager_data["joinedAt"] = project.createdAt.isoformat() if project.createdAt else None
+        manager_data["joinedAt"] = pm.addedAt.isoformat() if pm.addedAt else None
         members.append(manager_data)
-    else:
-        for pm in managers:
-            manager_data = pm.user.to_dict()
+    
+    # Also include legacy projectManagerId if it exists and is not already in the list
+    # This ensures we show all managers even if some are only in the legacy field
+    if project.projectManager:
+        legacy_manager_id = project.projectManagerId
+        # Only add if not already in members (to avoid duplicates)
+        if not any(m.get("id") == legacy_manager_id for m in members):
+            legacy = project.projectManager
+            manager_data = legacy.to_dict()
             manager_data["role"] = "project_manager"
-            manager_data["joinedAt"] = pm.addedAt.isoformat() if pm.addedAt else None
+            manager_data["joinedAt"] = project.createdAt.isoformat() if project.createdAt else None
             members.append(manager_data)
 
     # Get project members
