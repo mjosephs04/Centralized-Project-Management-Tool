@@ -81,6 +81,26 @@ export const projectsAPI = {
     return response;
   },
 
+  getProjectMembers: async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/members`);
+    return response.data.members;
+  },
+
+  getProjectInvitations: async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/invitations`);
+    return response.data.invitations;
+  },
+
+  removeProjectMember: async (projectId, memberId) => {
+    const response = await apiClient.delete(`/projects/${projectId}/members/${memberId}`);
+    return response.data;
+  },
+
+  removeProjectManager: async (projectId, managerId) => {
+    const response = await apiClient.delete(`/projects/${projectId}/managers/${managerId}`);
+    return response.data;
+  },
+
   inviteUser: async (projectId, invitationData) => {
     const response = await apiClient.post(`/projects/${projectId}/invite`, invitationData);
     return response.data;
@@ -182,8 +202,18 @@ export const authAPI = {
     return response;
   },
   forgotPassword: async (payload) => {
-    const response = await apiClient.post("/auth/forgot-password", payload)
-    return response;
+    const response = await apiClient.post("/auth/forgot-password", payload);
+    return response.data;
+  },
+
+  resetPassword: async (payload) => {
+    const response = await apiClient.post("/auth/reset-password", payload);
+    return response.data;
+  },
+
+  validateResetToken: async (token) => {
+    const response = await apiClient.get(`/auth/reset-password/validate/${token}`);
+    return response.data;
   },
   
   validateInvitationToken: async (token) => {

@@ -22,7 +22,9 @@ services:
       retries: 20
 
   backend:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile-backend
     container_name: todd-backend
     restart: unless-stopped
     env_file:
@@ -38,6 +40,18 @@ services:
     volumes:
       - ./src:/app/src
       - ./eng-copilot-471923-g2-0495f536051b.json:/eng-copilot-471923-g2-0495f536051b.json
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile-frontend
+    container_name: todd-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_started
 
 volumes:
   mysql_data:

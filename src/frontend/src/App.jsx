@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import LoginPage from "./pages/LoginPage";
 import ForgotPassword from "./components/ForgotPassword";
+import ResetPassword from "./components/ResetPassword";
 import CreateAccountPage from "./pages/CreateAccountPage";
 import RegisterWithTokenPage from "./pages/RegisterWithTokenPage";
 import HomePage from "./pages/Home"
@@ -25,6 +26,7 @@ const App = () => {
           <Route path="/create-account" element={<CreateAccountPage />} />
           <Route path="/register" element={<RegisterWithTokenPage />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           
           <Route path="/profile" element={<RouteProtector>{<ProfilePage />}</RouteProtector>} />

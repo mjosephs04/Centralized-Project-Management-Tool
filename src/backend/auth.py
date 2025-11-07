@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
-from .models import db, User, UserRole, WorkerType, ProjectInvitation, ProjectMember
-from .email_service import validate_invitation_token, accept_invitation
+from .models import db, User, UserRole, WorkerType, ProjectInvitation, ProjectMember, ProjectManager, PasswordReset
+from .email_service import validate_invitation_token, accept_invitation, create_password_reset_token, send_password_reset_email, validate_password_reset_token
 from google.cloud import storage
 import uuid
 
@@ -139,12 +139,11 @@ def register_with_invitation():
         
         # Accept the invitation and add user to project
         if accept_invitation(invitation, user.id):
-            # Add user to project as a member
-            project_member = ProjectMember(
-                projectId=invitation.projectId,
-                userId=user.id
-            )
-            db.session.add(project_member)
+            # Add user to project based on role
+            if role == UserRole.PROJECT_MANAGER:
+                db.session.add(ProjectManager(projectId=invitation.projectId, userId=user.id))
+            elif role == UserRole.WORKER:
+                db.session.add(ProjectMember(projectId=invitation.projectId, userId=user.id))
             db.session.commit()
             
             # Create access token
@@ -191,18 +190,17 @@ def accept_invitation_existing_user():
     
     # Check if user is already a member of this project
     existing_member = ProjectMember.query.filter_by(projectId=invitation.projectId, userId=user_id, isActive=True).first()
-    if existing_member:
+    if existing_member and invitation.role != UserRole.PROJECT_MANAGER:
         return jsonify({"error": "You are already a member of this project"}), 400
     
     try:
         # Accept the invitation and add user to project
         if accept_invitation(invitation, user_id):
-            # Add user to project as a member
-            project_member = ProjectMember(
-                projectId=invitation.projectId,
-                userId=user_id
-            )
-            db.session.add(project_member)
+            # Add user to project based on role
+            if invitation.role == UserRole.PROJECT_MANAGER:
+                db.session.add(ProjectManager(projectId=invitation.projectId, userId=user_id))
+            elif invitation.role == UserRole.WORKER:
+                db.session.add(ProjectMember(projectId=invitation.projectId, userId=user_id))
             db.session.commit()
             
             return jsonify({
@@ -235,6 +233,97 @@ def get_all_workers():
     
     except Exception as e:
         return jsonify({"error": f"Failed to retrieve workers: {str(e)}"}), 500
+
+
+@auth_bp.post("/forgot-password")
+def forgot_password():
+    """Request a password reset - sends email with reset link"""
+    payload = request.get_json(silent=True) or request.form.to_dict() or {}
+    
+    email = payload.get("emailAddress")
+    if not email:
+        return jsonify({"error": "emailAddress is required"}), 400
+    
+    # Find user by email
+    user = User.query.filter_by(emailAddress=email, isActive=True).first()
+    
+    # Always return success message (security best practice - don't reveal if email exists)
+    if user:
+        try:
+            # Create password reset token
+            password_reset = create_password_reset_token(user.id, expires_in_hours=1)
+            
+            # Send reset email
+            email_sent = send_password_reset_email(password_reset)
+            
+            if not email_sent:
+                current_app.logger.error(f"Failed to send password reset email to {email}")
+        except Exception as e:
+            current_app.logger.error(f"Failed to create password reset: {str(e)}")
+    
+    # Always return success message (for security)
+    return jsonify({
+        "message": "If an account exists for that email, a password reset link has been sent."
+    }), 200
+
+
+@auth_bp.post("/reset-password")
+def reset_password():
+    """Reset password using a reset token"""
+    payload = request.get_json(silent=True) or request.form.to_dict() or {}
+    
+    token = payload.get("token")
+    new_password = payload.get("password")
+    
+    if not token:
+        return jsonify({"error": "token is required"}), 400
+    
+    if not new_password:
+        return jsonify({"error": "password is required"}), 400
+    
+    # Validate password length
+    if len(new_password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters long"}), 400
+    
+    # Validate token
+    password_reset = validate_password_reset_token(token)
+    if not password_reset:
+        return jsonify({"error": "Invalid or expired reset token"}), 400
+    
+    try:
+        # Get user and update password
+        user = User.query.filter_by(id=password_reset.userId, isActive=True).first()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        # Update password
+        user.passwordHash = generate_password_hash(new_password)
+        
+        # Mark token as used
+        password_reset.used = True
+        
+        db.session.commit()
+        
+        return jsonify({"message": "Password reset successfully"}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to reset password: {str(e)}")
+        return jsonify({"error": f"Failed to reset password: {str(e)}"}), 500
+
+
+@auth_bp.get("/reset-password/validate/<token>")
+def validate_reset_token(token: str):
+    """Validate a password reset token (public endpoint)"""
+    password_reset = validate_password_reset_token(token)
+    
+    if not password_reset:
+        return jsonify({"valid": False, "error": "Invalid or expired token"}), 200
+    
+    return jsonify({
+        "valid": True,
+        "email": password_reset.user.emailAddress if password_reset.user else None
+    }), 200
 
 
 @auth_bp.post("/upload-profile")
