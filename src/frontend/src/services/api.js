@@ -68,8 +68,11 @@ export const projectsAPI = {
     const response = await apiClient.post(`/projects/${projectId}/supplies`, payload);
     return response;
   },
-  getSupplies:  async (projectId) => {
-    const response = await apiClient.get(`/projects/${projectId}/supplies`);
+  getSupplies:  async (projectId, workOrderId = null) => {
+    const url = workOrderId 
+      ? `/projects/${projectId}/supplies?workOrderId=${workOrderId}`
+      : `/projects/${projectId}/supplies`;
+    const response = await apiClient.get(url);
     return response;
   },
   patchSupplies: async (projectId, supplyID, payload) => {
@@ -79,6 +82,16 @@ export const projectsAPI = {
   deleteSupplies:  async (projectId, supplyID) => {
     const response = await apiClient.delete(`/projects/${projectId}/supplies/${supplyID}`);
     return response;
+  },
+
+  getSuppliesCatalog: async (search = "", category = "", supplyType = "building") => {
+    const params = new URLSearchParams();
+    params.append("supplyType", supplyType);
+    if (search) params.append("search", search);
+    if (category) params.append("category", category);
+    const url = `/projects/supplies/catalog?${params.toString()}`;
+    const response = await apiClient.get(url);
+    return response.data;
   },
 
   inviteUser: async (projectId, invitationData) => {

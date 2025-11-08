@@ -53,6 +53,7 @@ const SingleProjectPage = ({ projects }) => {
     const [userRole, setUserRole] = useState(null);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [highlightedWorkOrderId, setHighlightedWorkOrderId] = useState(null);
+    const [selectedWorkOrderForSupplies, setSelectedWorkOrderForSupplies] = useState(null);
 
     useEffect(() => {
         fetchInitialData();
@@ -200,11 +201,14 @@ const SingleProjectPage = ({ projects }) => {
             case 'calendar':
                 return <CalendarTab project={project} onNavigateToWorkOrder={handleNavigateToWorkOrder} userRole={userRole} />
             case 'workorders':
-                return <WorkOrdersTab project={project} userRole={userRole} onWorkOrderUpdate={triggerRefresh} highlightedWorkOrderId={highlightedWorkOrderId} />
+                return <WorkOrdersTab project={project} userRole={userRole} onWorkOrderUpdate={triggerRefresh} highlightedWorkOrderId={highlightedWorkOrderId} onNavigateToSupplies={(workOrderId) => {
+                    setSelectedWorkOrderForSupplies(workOrderId);
+                    setActiveTab('supplies');
+                }} />
             case 'logs':
                 return <LogsTab project={project} refreshTrigger={refreshTrigger} />
             case 'supplies':
-                return <SuppliesTab project={project} userRole={userRole}/>
+                return <SuppliesTab project={project} userRole={userRole} selectedWorkOrderId={selectedWorkOrderForSupplies} onWorkOrderChange={setSelectedWorkOrderForSupplies}/>
             default:
                 return <p>Nothing to show here...</p>
         }

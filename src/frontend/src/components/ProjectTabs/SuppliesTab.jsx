@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { FaBox, FaPlus, FaSave, FaTimes, FaTrash, FaCheck, FaBan } from "react-icons/fa";
-import {projectsAPI} from "../../services/api";
+import {projectsAPI, workOrdersAPI} from "../../services/api";
 
 const fakeVendors = [
     { id: 1, name: "Home Depot" },
@@ -10,17 +10,57 @@ const fakeVendors = [
     { id: 5, name: "Amazon Business" },
 ];
 
-const SuppliesTab = ({ project, userRole }) => {
+const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkOrderId, onWorkOrderChange }) => {
     const [supplies, setSupplies] = useState([]);
+    const [workOrders, setWorkOrders] = useState([]);
+    const [selectedWorkOrderId, setSelectedWorkOrderId] = useState(propSelectedWorkOrderId || null);
     const [showModal, setShowModal] = useState(false);
-    const [newSupply, setNewSupply] = useState({ name: "", vendorId: "", budget: "" });
+    const [newSupply, setNewSupply] = useState({ 
+        selectedSupplyId: "", 
+        name: "", 
+        vendor: "", 
+        budget: "",
+        supplyCategory: "",
+        supplyType: "",
+        supplySubtype: "",
+        referenceCode: "",
+        unitOfMeasure: "",
+        selectedWorkOrderIds: []  // Support multiple work orders
+    });
     const [loading, setLoading] = useState(false);
+    
+    // Catalog supplies and categories
+    const [catalogSupplies, setCatalogSupplies] = useState([]);
+    const [categories, setCategories] = useState([]);
+    const [supplySearchTerm, setSupplySearchTerm] = useState("");
+    const [selectedCategory, setSelectedCategory] = useState("");
+    const [selectedSupplyType, setSelectedSupplyType] = useState("building"); // 'building' or 'electrical'
+    const [showSupplyDropdown, setShowSupplyDropdown] = useState(false);
+
+    // Update local state when prop changes
+    useEffect(() => {
+        if (propSelectedWorkOrderId !== undefined) {
+            setSelectedWorkOrderId(propSelectedWorkOrderId);
+        }
+    }, [propSelectedWorkOrderId]);
+
+    useEffect(() => {
+        const fetchWorkOrders = async () => {
+            try {
+                const data = await workOrdersAPI.getWorkOrdersByProject(project.id);
+                setWorkOrders(data || []);
+            } catch (err) {
+                console.error("Error fetching work orders:", err);
+            }
+        };
+        if (project?.id) fetchWorkOrders();
+    }, [project?.id]);
 
     useEffect(() => {
         const fetchSupplies = async () => {
             try {
                 setLoading(true);
-                const res = await projectsAPI.getSupplies(project.id)
+                const res = await projectsAPI.getSupplies(project.id, selectedWorkOrderId)
 
                 const data = res.data;
                 if (res.status != 200) throw new Error(data.error || "Failed to load supplies");
@@ -32,21 +72,90 @@ const SuppliesTab = ({ project, userRole }) => {
             }
         };
         if (project?.id) fetchSupplies();
-    }, [project?.id]);
+    }, [project?.id, selectedWorkOrderId]);
+
+    // Fetch catalog supplies and categories
+    useEffect(() => {
+        const fetchCatalog = async () => {
+            try {
+                console.log("Fetching catalog supplies with search:", supplySearchTerm, "category:", selectedCategory, "type:", selectedSupplyType);
+                const data = await projectsAPI.getSuppliesCatalog(supplySearchTerm, selectedCategory, selectedSupplyType);
+                console.log("Catalog data received:", data);
+                console.log("Supplies count:", data.supplies?.length || 0);
+                console.log("Categories count:", data.categories?.length || 0);
+                setCatalogSupplies(data.supplies || []);
+                if (data.categories) {
+                    setCategories(data.categories);
+                }
+            } catch (err) {
+                console.error("Error fetching catalog supplies:", err);
+                console.error("Error details:", err.response?.data || err.message);
+                setCatalogSupplies([]);
+                setCategories([]);
+            }
+        };
+        // Fetch when modal opens or when search/category/supplyType changes
+        if (showModal) {
+            fetchCatalog();
+        }
+    }, [supplySearchTerm, selectedCategory, selectedSupplyType, showModal]);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (showSupplyDropdown && !event.target.closest('[data-supply-dropdown]')) {
+                setShowSupplyDropdown(false);
+            }
+        };
+        if (showSupplyDropdown) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+        }
+    }, [showSupplyDropdown]);
+
+    const handleSupplySelect = (supply) => {
+        if (supply) {
+            setNewSupply({
+                selectedSupplyId: supply.id,
+                name: supply.name || "",
+                vendor: supply.vendor || "",
+                budget: supply.budget ? supply.budget.toString() : "",
+                supplyCategory: supply.supplyCategory || "",
+                supplyType: supply.supplyType || "",
+                supplySubtype: supply.supplySubtype || "",
+                referenceCode: supply.referenceCode || "",
+                unitOfMeasure: supply.unitOfMeasure || ""
+            });
+            setSupplySearchTerm(supply.name || "");
+            setShowSupplyDropdown(false);
+        }
+    };
+
+    const handleCategoryChange = (category) => {
+        setSelectedCategory(category);
+        setSupplySearchTerm(""); // Reset search when category changes
+    };
 
     const handleAddSupply = async () => {
-        if (!newSupply.name || !newSupply.vendorId || !newSupply.budget) {
-            alert("Please fill out all fields");
+        if (!newSupply.selectedSupplyId || !newSupply.name || !newSupply.budget) {
+            alert("Please select a supply from the catalog");
             return;
         }
 
-        const vendor = fakeVendors.find((v) => v.id === parseInt(newSupply.vendorId));
         try {
+            // Use selected work order from dropdown if available
+            const workOrderIds = selectedWorkOrderId ? [selectedWorkOrderId] : [];
 
             const payload = JSON.stringify({
                 name: newSupply.name.trim(),
-                vendor: vendor.name,
+                vendor: newSupply.vendor || null,
                 budget: parseFloat(newSupply.budget),
+                supplyCategory: newSupply.supplyCategory || null,
+                supplyType: newSupply.supplyType || null,
+                supplySubtype: newSupply.supplySubtype || null,
+                referenceCode: newSupply.referenceCode || null,
+                unitOfMeasure: newSupply.unitOfMeasure || null,
+                ...(workOrderIds.length > 0 && { workOrderIds: workOrderIds }),
             })
 
             const res = await projectsAPI.postSupplies(project.id, payload)
@@ -54,7 +163,20 @@ const SuppliesTab = ({ project, userRole }) => {
             if (res.status != 201) throw new Error(data.error || "Failed to submit supply");
             setSupplies((prev) => [data.supply, ...prev]);
             setShowModal(false);
-            setNewSupply({ name: "", vendorId: "", budget: "" });
+            setNewSupply({ 
+                selectedSupplyId: "", 
+                name: "", 
+                vendor: "", 
+                budget: "",
+                supplyCategory: "",
+                supplyType: "",
+                supplySubtype: "",
+                referenceCode: "",
+                unitOfMeasure: "",
+                selectedWorkOrderIds: []
+            });
+            setSupplySearchTerm("");
+            setSelectedCategory("");
         } catch (err) {
             alert(err.message);
         }
@@ -85,13 +207,53 @@ const SuppliesTab = ({ project, userRole }) => {
         }
     };
 
+    const handleWorkOrderChange = (workOrderId) => {
+        const id = workOrderId === "" ? null : parseInt(workOrderId);
+        setSelectedWorkOrderId(id);
+        if (onWorkOrderChange) {
+            onWorkOrderChange(id);
+        }
+    };
+
     return (
         <div style={styles.container}>
             <div style={styles.header}>
                 <h2 style={styles.title}>Supplies</h2>
-                <button style={styles.addButton} onClick={() => setShowModal(true)}>
+                <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+                    <select
+                        value={selectedWorkOrderId || ""}
+                        onChange={(e) => handleWorkOrderChange(e.target.value)}
+                        style={styles.workOrderSelect}
+                    >
+                        <option value="">All Work Orders</option>
+                        {workOrders.map((wo) => (
+                            <option key={wo.id} value={wo.id}>
+                                {wo.name}
+                            </option>
+                        ))}
+                    </select>
+                    <button style={styles.addButton} onClick={() => {
+                        setShowModal(true);
+                        // Reset form and fetch catalog when opening modal
+                        setNewSupply({ 
+                            selectedSupplyId: "", 
+                            name: "", 
+                            vendor: "", 
+                            budget: "",
+                            supplyCategory: "",
+                            supplyType: "",
+                            supplySubtype: "",
+                            referenceCode: "",
+                            unitOfMeasure: "",
+                            selectedWorkOrderIds: []
+                        });
+                        setSupplySearchTerm("");
+                        setSelectedCategory("");
+                        setShowSupplyDropdown(false);
+                    }}>
                     <FaPlus /> {userRole === "worker" ? "Request Supply" : "Add Supply"}
                 </button>
+                </div>
             </div>
 
             {loading ? (
@@ -108,16 +270,45 @@ const SuppliesTab = ({ project, userRole }) => {
                         <th style={styles.th}>Name</th>
                         <th style={styles.th}>Vendor</th>
                         <th style={styles.th}>Budget ($)</th>
+                        <th style={styles.th}>Work Orders</th>
                         <th style={styles.th}>Status</th>
                         {userRole === "project_manager" && <th style={styles.th}>Actions</th>}
                     </tr>
                     </thead>
                     <tbody>
-                    {supplies.map((supply) => (
+                    {supplies.map((supply) => {
+                        // Get work order names for this supply
+                        const workOrderIds = supply.workOrderIds || (supply.workOrderId ? [supply.workOrderId] : []);
+                        const linkedWorkOrders = workOrders.filter(wo => workOrderIds.includes(wo.id));
+                        
+                        return (
                         <tr key={supply.id}>
                             <td style={styles.td}>{supply.name}</td>
                             <td style={styles.td}>{supply.vendor}</td>
                             <td style={styles.td}>{supply.budget.toFixed(2)}</td>
+                            <td style={styles.td}>
+                                {linkedWorkOrders.length > 0 ? (
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+                                        {linkedWorkOrders.map(wo => (
+                                            <span 
+                                                key={wo.id}
+                                                style={{
+                                                    backgroundColor: "#e0e7ff",
+                                                    color: "#4338ca",
+                                                    padding: "0.25rem 0.5rem",
+                                                    borderRadius: "4px",
+                                                    fontSize: "0.85rem",
+                                                    fontWeight: "500"
+                                                }}
+                                            >
+                                                {wo.name}
+                                            </span>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <span style={{ color: "#9ca3af", fontStyle: "italic" }}>None</span>
+                                )}
+                            </td>
                             <td style={styles.td}>
                   <span
                       style={{
@@ -134,7 +325,6 @@ const SuppliesTab = ({ project, userRole }) => {
                     {supply.status}
                   </span>
                             </td>
-                            {console.log(userRole)}
                             {userRole == "project_manager" && (
                                 <td style={styles.td}>
                                     {supply.status === "pending" ? (
@@ -181,49 +371,201 @@ const SuppliesTab = ({ project, userRole }) => {
                                 </td>
                             )}
                         </tr>
-                    ))}
+                        );
+                    })}
                     </tbody>
                 </table>
             )}
 
             {showModal && (
-                <div style={styles.modalOverlay}>
-                    <div style={styles.modal}>
+                <div style={styles.modalOverlay} onClick={() => {
+                    setShowSupplyDropdown(false);
+                    setShowModal(false);
+                }}>
+                    <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
                         <h3 style={styles.modalTitle}>
                             {userRole === "worker" ? "Request New Supply" : "Add Supply"}
                         </h3>
-                        <label style={styles.label}>Supply Name</label>
-                        <input
-                            type="text"
-                            value={newSupply.name}
-                            onChange={(e) => setNewSupply({...newSupply, name: e.target.value})}
-                            style={styles.input}
-                        />
-                        <label style={styles.label}>Vendor</label>
+                        
+                        <label style={styles.label}>Supply Type</label>
+                        <div style={styles.supplyTypeTabs}>
+                            <button
+                                type="button"
+                                style={{
+                                    ...styles.supplyTypeTab,
+                                    backgroundColor: selectedSupplyType === "building" ? "#0052D4" : "#e5e7eb",
+                                    color: selectedSupplyType === "building" ? "white" : "#374151",
+                                    borderBottom: selectedSupplyType === "building" ? "3px solid #10b981" : "3px solid transparent"
+                                }}
+                                onClick={() => {
+                                    setSelectedSupplyType("building");
+                                    setSupplySearchTerm("");
+                                    setSelectedCategory("");
+                                }}
+                            >
+                                Building Supplies
+                            </button>
+                            <button
+                                type="button"
+                                style={{
+                                    ...styles.supplyTypeTab,
+                                    backgroundColor: selectedSupplyType === "electrical" ? "#0052D4" : "#e5e7eb",
+                                    color: selectedSupplyType === "electrical" ? "white" : "#374151",
+                                    borderBottom: selectedSupplyType === "electrical" ? "3px solid #10b981" : "3px solid transparent"
+                                }}
+                                onClick={() => {
+                                    setSelectedSupplyType("electrical");
+                                    setSupplySearchTerm("");
+                                    setSelectedCategory("");
+                                }}
+                            >
+                                Electric Supplies
+                            </button>
+                        </div>
+                        
+                        <label style={styles.label}>Supply Category</label>
                         <select
-                            value={newSupply.vendorId}
-                            onChange={(e) => setNewSupply({...newSupply, vendorId: e.target.value})}
+                            value={selectedCategory}
+                            onChange={(e) => handleCategoryChange(e.target.value)}
                             style={styles.input}
                         >
-                            <option value="">Select a vendor</option>
-                            {fakeVendors.map((v) => (
-                                <option key={v.id} value={v.id}>
-                                    {v.name}
+                            <option value="">All Categories</option>
+                            {categories.map((cat) => (
+                                <option key={cat} value={cat}>
+                                    {cat}
                                 </option>
                             ))}
                         </select>
-                        <label style={styles.label}>Budget ($)</label>
+
+                        <label style={styles.label}>Search Supply (by name or vendor)</label>
+                        <div style={{ position: "relative" }} data-supply-dropdown>
                         <input
-                            type="number"
-                            value={newSupply.budget}
-                            onChange={(e) => setNewSupply({ ...newSupply, budget: e.target.value })}
+                                type="text"
+                                value={supplySearchTerm}
+                                onChange={(e) => {
+                                    setSupplySearchTerm(e.target.value);
+                                    setShowSupplyDropdown(true);
+                                }}
+                                onFocus={() => {
+                                    setShowSupplyDropdown(true);
+                                    // Ensure we have catalog data when focusing
+                                    if (catalogSupplies.length === 0 && !supplySearchTerm && !selectedCategory) {
+                                        projectsAPI.getSuppliesCatalog("", "", selectedSupplyType).then(data => {
+                                            setCatalogSupplies(data.supplies || []);
+                                            if (data.categories) {
+                                                setCategories(data.categories);
+                                            }
+                                        }).catch(err => {
+                                            console.error("Error fetching catalog:", err);
+                                        });
+                                    }
+                                }}
+                                placeholder="Type to search supplies..."
                             style={styles.input}
                         />
+                            {showSupplyDropdown && (
+                                <div style={styles.dropdown} data-supply-dropdown>
+                                    {catalogSupplies.length > 0 ? (
+                                        <>
+                                            {catalogSupplies.map((supply) => (
+                                                <div
+                                                    key={supply.id}
+                                                    style={styles.dropdownItem}
+                                                    onClick={() => handleSupplySelect(supply)}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f3f4f6"}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "white"}
+                                                >
+                                                    <div style={{ fontWeight: "600" }}>{supply.name}</div>
+                                                    <div style={{ fontSize: "0.85rem", color: "#6b7280", display: "flex", gap: "1rem" }}>
+                                                        {supply.budget && (
+                                                            <span>Price: ${parseFloat(supply.budget).toFixed(2)}</span>
+                                                        )}
+                                                        {supply.referenceCode && (
+                                                            <span>Code: {supply.referenceCode}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </>
+                                    ) : (
+                                        <div style={{ ...styles.dropdownItem, color: "#6b7280", fontStyle: "italic", cursor: "default" }}>
+                                            {supplySearchTerm || selectedCategory 
+                                                ? "No supplies found matching your search" 
+                                                : "Loading supplies..."}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {newSupply.selectedSupplyId && (
+                            <div style={{ 
+                                padding: "1rem", 
+                                backgroundColor: "#f0f9ff", 
+                                borderRadius: "8px", 
+                                marginBottom: "1rem",
+                                border: "1px solid #bae6fd"
+                            }}>
+                                <div style={{ fontWeight: "600", color: "#0369a1", marginBottom: "0.5rem" }}>
+                                    Selected Supply:
+                                </div>
+                                <div style={{ color: "#0c4a6e" }}>
+                                    <div><strong>Name:</strong> {newSupply.name}</div>
+                                    {newSupply.vendor && <div><strong>Vendor:</strong> {newSupply.vendor}</div>}
+                                    {newSupply.budget && <div><strong>Budget:</strong> ${parseFloat(newSupply.budget).toFixed(2)}</div>}
+                                </div>
+                            </div>
+                        )}
+
+                        {newSupply.referenceCode && (
+                            <>
+                                <label style={styles.label}>Reference Code</label>
+                                <input
+                                    type="text"
+                                    value={newSupply.referenceCode}
+                                    onChange={(e) => setNewSupply({...newSupply, referenceCode: e.target.value})}
+                                    style={styles.input}
+                                    disabled
+                                />
+                            </>
+                        )}
+
+                        {newSupply.supplyType && (
+                            <>
+                                <label style={styles.label}>Supply Type</label>
+                                <input
+                                    type="text"
+                                    value={newSupply.supplyType}
+                                    onChange={(e) => setNewSupply({...newSupply, supplyType: e.target.value})}
+                                    style={styles.input}
+                                    disabled
+                                />
+                            </>
+                        )}
+
+                        {newSupply.unitOfMeasure && (
+                            <>
+                                <label style={styles.label}>Unit of Measure</label>
+                                <input
+                                    type="text"
+                                    value={newSupply.unitOfMeasure}
+                                    onChange={(e) => setNewSupply({...newSupply, unitOfMeasure: e.target.value})}
+                                    style={styles.input}
+                                    disabled
+                                />
+                            </>
+                        )}
+
                         <div style={styles.modalActions}>
                             <button style={styles.saveButton} onClick={handleAddSupply}>
                                 <FaSave /> {userRole === "worker" ? "Request" : "Save"}
                             </button>
-                            <button style={styles.cancelButton} onClick={() => setShowModal(false)}>
+                            <button style={styles.cancelButton} onClick={() => {
+                                setShowModal(false);
+                                setShowSupplyDropdown(false);
+                                setSupplySearchTerm("");
+                                setSelectedCategory("");
+                            }}>
                                 <FaTimes /> Cancel
                             </button>
                         </div>
@@ -370,6 +712,57 @@ const styles = {
         fontWeight: "600",
         cursor: "pointer",
         transition: "all 0.2s ease",
+    },
+    supplyTypeTabs: {
+        display: "flex",
+        gap: "0.5rem",
+        marginBottom: "1rem",
+        borderBottom: "1px solid #e5e7eb",
+    },
+    supplyTypeTab: {
+        flex: 1,
+        padding: "0.75rem 1rem",
+        border: "none",
+        borderRadius: "8px 8px 0 0",
+        fontSize: "0.95rem",
+        fontWeight: "600",
+        cursor: "pointer",
+        transition: "all 0.2s ease",
+        backgroundColor: "#e5e7eb",
+        color: "#374151",
+    },
+    workOrderSelect: {
+        padding: "0.7rem 1rem",
+        border: "1px solid #d1d5db",
+        borderRadius: "8px",
+        fontSize: "0.95rem",
+        fontWeight: "500",
+        backgroundColor: "white",
+        color: "#374151",
+        cursor: "pointer",
+        outline: "none",
+        minWidth: "200px",
+    },
+    dropdown: {
+        position: "absolute",
+        top: "100%",
+        left: 0,
+        right: 0,
+        backgroundColor: "white",
+        border: "1px solid #d1d5db",
+        borderRadius: "8px",
+        maxHeight: "400px",
+        overflowY: "auto",
+        overflowX: "hidden",
+        zIndex: 1000,
+        boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+        marginTop: "0.25rem",
+    },
+    dropdownItem: {
+        padding: "0.75rem 1rem",
+        cursor: "pointer",
+        borderBottom: "1px solid #f3f4f6",
+        transition: "background-color 0.2s",
     },
 };
 

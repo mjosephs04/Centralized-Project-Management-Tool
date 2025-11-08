@@ -12,7 +12,7 @@ const COLUMNS = [
   { key: "cancelled", label: "Cancelled" },
 ];
 
-const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
+const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, highlightedWorkOrderId }) => {
   const { showSnackbar } = useSnackbar();
   const [workOrders, setWorkOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -407,6 +407,18 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
                 <button type="button" style={styles.cancelBtn} onClick={handleCancelUpdate}>
                   Close
                 </button>
+                {onNavigateToSupplies && selectedWorkOrder && (
+                  <button 
+                    type="button" 
+                    style={{...styles.submitBtn, backgroundColor: "#10b981", marginRight: "0.5rem"}}
+                    onClick={() => {
+                      onNavigateToSupplies(selectedWorkOrder.id);
+                      setShowUpdate(false);
+                    }}
+                  >
+                    View Supplies
+                  </button>
+                )}
                 <button
                   type="submit"
                   style={styles.submitBtn}

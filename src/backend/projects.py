@@ -12,7 +12,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType, Supply, ProjectMember, ProjectInvitation, SupplyStatus
+from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType, Supply, ProjectMember, ProjectInvitation, SupplyStatus, WorkOrderSupply, BuildingSupply, ElectricalSupply
 from .progress import (
     compute_work_order_rollup, compute_schedule_stats, compute_earned_value, to_decimal, normalize_weights,
     compute_schedule_variance, compute_cost_variance, compute_workforce_metrics, compute_quality_metrics, compute_project_health_score,
@@ -1055,10 +1055,70 @@ def debug_project_access(project_id: int):
 
     return jsonify(debug_info), 200
 
+@projects_bp.get("/supplies/catalog")
+@jwt_required()
+def get_supplies_catalog():
+    """Get master catalog supplies (where projectId is null) with optional search and category filter."""
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    # Get optional search, category, and supplyType filters from query parameters
+    search_term = request.args.get("search", "").strip()
+    category = request.args.get("category", "").strip()
+    supply_type = request.args.get("supplyType", "building").strip().lower()  # 'building' or 'electrical'
+    
+    # Select the appropriate model based on supplyType
+    if supply_type == "electrical":
+        SupplyModel = ElectricalSupply
+    else:
+        SupplyModel = BuildingSupply
+    
+    # Query master catalog supplies (projectId is null)
+    query = SupplyModel.query.filter(SupplyModel.projectId.is_(None))
+    
+    # Filter by search term (name or vendor)
+    if search_term:
+        search_filter = f"%{search_term}%"
+        query = query.filter(
+            db.or_(
+                SupplyModel.name.ilike(search_filter),
+                SupplyModel.vendor.ilike(search_filter)
+            )
+        )
+    
+    # Filter by category if provided
+    if category:
+        query = query.filter_by(supplyCategory=category)
+    
+    supplies = query.order_by(SupplyModel.name.asc()).all()
+    
+    # Get unique categories for dropdown (always get all categories, not filtered by search)
+    categories = db.session.query(SupplyModel.supplyCategory).filter(
+        SupplyModel.projectId.is_(None),
+        SupplyModel.supplyCategory.isnot(None)
+    ).distinct().order_by(SupplyModel.supplyCategory.asc()).all()
+    
+    categories_list = [cat[0] for cat in categories if cat[0]]
+    
+    # Debug logging
+    print(f"Catalog query - type: '{supply_type}', search: '{search_term}', category: '{category}'")
+    print(f"Found {len(supplies)} supplies")
+    print(f"Found {len(categories_list)} categories")
+    
+    return jsonify({
+        "supplies": [s.to_dict() for s in supplies],
+        "categories": categories_list,
+        "supplyType": supply_type
+    }), 200
+
+
 @projects_bp.get("/<int:project_id>/supplies")
 @jwt_required()
 def get_project_supplies(project_id):
-    """Get all supplies for a project (pending + approved)."""
+    """Get all supplies for a project (pending + approved). Optionally filter by workOrderId."""
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
     project = Project.query.get(project_id)
@@ -1066,7 +1126,24 @@ def get_project_supplies(project_id):
     if not user or not project:
         return jsonify({"error": "User or project not found"}), 404
 
-    supplies = Supply.query.filter_by(projectId=project_id).order_by(Supply.createdAt.desc()).all()
+    # Get optional workOrderId from query parameters
+    work_order_id = request.args.get("workOrderId", type=int)
+    
+    query = Supply.query.filter_by(projectId=project_id)
+    
+    # Filter by work order if provided (using junction table)
+    if work_order_id:
+        # Use junction table to find supplies linked to this work order
+        # Use distinct() to avoid duplicates if a supply is linked to multiple work orders
+        query = query.join(WorkOrderSupply).filter(
+            WorkOrderSupply.workOrderId == work_order_id,
+            WorkOrderSupply.isActive == True
+        ).distinct()
+    else:
+        # If no workOrderId specified, show all supplies (both project-level and work-order-level)
+        pass
+    
+    supplies = query.order_by(Supply.createdAt.desc()).all()
     return jsonify({"supplies": [s.to_dict() for s in supplies]}), 200
 
 
@@ -1107,6 +1184,19 @@ def add_project_supply(project_id):
     else:
         return jsonify({"error": "Only project managers or workers can request supplies"}), 403
 
+    # Get workOrderIds (can be single ID or list of IDs)
+    work_order_ids = payload.get("workOrderIds") or payload.get("workOrderId")  # Support both formats
+    if work_order_ids:
+        # Convert single ID to list for consistent handling
+        if not isinstance(work_order_ids, list):
+            work_order_ids = [work_order_ids]
+        
+        # Validate that all work orders exist and belong to this project
+        for wo_id in work_order_ids:
+            work_order = WorkOrder.query.filter_by(id=wo_id, projectId=project_id, isActive=True).first()
+            if not work_order:
+                return jsonify({"error": f"Work order {wo_id} not found or does not belong to this project"}), 400
+
     supply = Supply(
         name=payload["name"].strip(),
         vendor=payload.get("vendor", "").strip() if payload.get("vendor") else None,
@@ -1117,12 +1207,32 @@ def add_project_supply(project_id):
         unitOfMeasure=payload.get("unitOfMeasure", "").strip() if payload.get("unitOfMeasure") else None,
         budget=budget,
         projectId=project_id,
+        workOrderId=None,  # No longer using single workOrderId
         status=status,
         requestedById=requested_by,
         approvedById=approved_by,
     )
 
     db.session.add(supply)
+    db.session.flush()  # Get the supply ID
+    
+    # Link supply to work orders using junction table
+    if work_order_ids:
+        for wo_id in work_order_ids:
+            # Check if relationship already exists
+            existing = WorkOrderSupply.query.filter_by(
+                workOrderId=wo_id,
+                supplyId=supply.id,
+                isActive=True
+            ).first()
+            
+            if not existing:
+                work_order_supply = WorkOrderSupply(
+                    workOrderId=wo_id,
+                    supplyId=supply.id
+                )
+                db.session.add(work_order_supply)
+    
     db.session.commit()
     return jsonify({"supply": supply.to_dict()}), 201
 

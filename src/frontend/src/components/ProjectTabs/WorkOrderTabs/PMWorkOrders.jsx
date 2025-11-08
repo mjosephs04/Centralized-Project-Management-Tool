@@ -12,7 +12,7 @@ const STATUS_LABEL = {
   cancelled: "Cancelled",
 };
 
-const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
+const PMWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, highlightedWorkOrderId }) => {
   const { showSnackbar } = useSnackbar();
   const [workOrders, setWorkOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -749,6 +749,18 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
 
               <div style={styles.actions}>
                 <button type="button" style={styles.cancelBtn} onClick={handleCancelUpdate}>Close</button>
+                {onNavigateToSupplies && selectedWorkOrder && (
+                  <button 
+                    type="button" 
+                    style={{...styles.submitBtn, backgroundColor: "#10b981", marginRight: "0.5rem"}}
+                    onClick={() => {
+                      onNavigateToSupplies(selectedWorkOrder.id);
+                      setShowUpdate(false);
+                    }}
+                  >
+                    View Supplies
+                  </button>
+                )}
                 <button type="submit" style={styles.submitBtn}>Update Work Order</button>
               </div>
             </form>
