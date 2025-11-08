@@ -8,7 +8,7 @@ const getAuthToken = () => {
 };
 
 const apiClient = axios.create({
-  baseURL: process.env.REACT_APP_ISPROD ? PROD_API_URL : LOCAL_API_URL,
+  baseURL:  PROD_API_URL,
   headers: {
     "Content-Type": "application/json",
   },
@@ -179,6 +179,10 @@ export const usersAPI = {
     const response = await apiClient.get("/auth/workers");
     return response.data.users;
   },
+  getAllUsers: async () => {
+    const response = await apiClient.get("/auth/allUsers");
+    return response.data.users;
+  }
 };
 
 export const authAPI = {
