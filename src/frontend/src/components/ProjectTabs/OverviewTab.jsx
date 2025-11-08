@@ -129,22 +129,24 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
         <div style={styles.container}>
             <div style={styles.header}>
                 <h2 style={styles.title}>Project Information</h2>
-                {!isEditing ?(
-                    <button style={styles.editButton} onClick={() => setIsEditing(true)}>
-                        <FaEdit /> Edit Details
-                    </button>
-                ) : (
-                    <div style={styles.editActions}>
-                        <button style={styles.deleteButton} onClick={handleDeleteClick}>
-                            <FaTrashAlt /> Delete Project
+                {userRole !== 'worker' && (
+                    !isEditing ?(
+                        <button style={styles.editButton} onClick={() => setIsEditing(true)}>
+                            <FaEdit /> Edit Details
                         </button>
-                        <button style={styles.editButton} onClick={handleSave}>
-                            <FaSave /> Save
-                        </button>
-                        <button style={styles.cancelButton} onClick={handleCancel}>
-                            <FaTimes /> Cancel
-                        </button>
-                    </div>
+                    ) : (
+                        <div style={styles.editActions}>
+                            <button style={styles.deleteButton} onClick={handleDeleteClick}>
+                                <FaTrashAlt /> Delete Project
+                            </button>
+                            <button style={styles.editButton} onClick={handleSave}>
+                                <FaSave /> Save
+                            </button>
+                            <button style={styles.cancelButton} onClick={handleCancel}>
+                                <FaTimes /> Cancel
+                            </button>
+                        </div>
+                    )
                 )}
             </div>
 

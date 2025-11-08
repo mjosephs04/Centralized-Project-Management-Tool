@@ -106,13 +106,9 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
 
   const validateForm = () => {
     const errors = {};
-    if (!formData.startDate) errors.startDate = "Start date is required";
-    if (!formData.endDate) errors.endDate = "End date is required";
-    if (formData.startDate && formData.endDate && formData.startDate >= formData.endDate) {
-      errors.dateOrder = "End date must be after start date";
-    }
+    // Workers can only update actualCost and status, no validation needed
     setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    return true;
   };
 
   const handleCancelUpdate = () => {
@@ -162,12 +158,7 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
     if (!validateForm()) return;
     try {
       await workOrdersAPI.workerUpdate(selectedWorkOrder.id, {
-        description: formData.description,
-        location: formData.location,
-        priority: formData.priority,
         status: formData.status,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
         actualCost: formData.actualCost === "" ? null : parseFloat(formData.actualCost),
       });
       await fetchWorkOrders();
@@ -384,41 +375,6 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
               }}
               style={styles.form}
             >
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  style={{ ...styles.input, ...styles.textArea }}
-                />
-              </div>
-
-              <div style={styles.formRow}>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Location</label>
-                  <input
-                    type="text"
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    style={styles.input}
-                  />
-                </div>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Priority</label>
-                  <select
-                    value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) })}
-                    style={styles.input}
-                  >
-                    <option value="1">Very Low</option>
-                    <option value="2">Low</option>
-                    <option value="3">Medium</option>
-                    <option value="4">High</option>
-                    <option value="5">Critical</option>
-                  </select>
-                </div>
-              </div>
-
               <div style={styles.formRow}>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Status</label>
@@ -444,30 +400,6 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
                     style={styles.input}
                     placeholder="0.00"
                   />
-                </div>
-              </div>
-
-              <div style={styles.formRow}>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Start Date</label>
-                  <input
-                    type="date"
-                    value={formData.startDate}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    style={styles.input}
-                  />
-                  {formErrors.startDate && <div style={styles.error}>{formErrors.startDate}</div>}
-                </div>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>End Date</label>
-                  <input
-                    type="date"
-                    value={formData.endDate}
-                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                    style={styles.input}
-                  />
-                  {formErrors.endDate && <div style={styles.error}>{formErrors.endDate}</div>}
-                  {formErrors.dateOrder && <div style={styles.error}>{formErrors.dateOrder}</div>}
                 </div>
               </div>
 

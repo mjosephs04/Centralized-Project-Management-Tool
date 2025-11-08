@@ -386,10 +386,18 @@ class Supply(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
-    vendor = db.Column(db.String(200), nullable=False)
+    vendor = db.Column(db.String(200), nullable=True)  # Made optional since Excel doesn't have it
+    
+    # Excel file columns
+    referenceCode = db.Column(db.String(100), nullable=True)
+    supplyCategory = db.Column(db.String(200), nullable=True)
+    supplyType = db.Column(db.String(200), nullable=True)
+    supplySubtype = db.Column(db.String(200), nullable=True)
+    unitOfMeasure = db.Column(db.String(50), nullable=True)
+    
     budget = db.Column(DECIMAL(15, 2), nullable=False, default=0.00)
 
-    # New fields
+    # Workflow fields
     status = db.Column(db.Enum(SupplyStatus), default=SupplyStatus.PENDING, nullable=False)
     requestedById = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     approvedById = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
@@ -408,6 +416,11 @@ class Supply(db.Model):
             "id": self.id,
             "name": self.name,
             "vendor": self.vendor,
+            "referenceCode": self.referenceCode,
+            "supplyCategory": self.supplyCategory,
+            "supplyType": self.supplyType,
+            "supplySubtype": self.supplySubtype,
+            "unitOfMeasure": self.unitOfMeasure,
             "budget": float(self.budget) if self.budget else 0.0,
             "status": self.status.value,
             "projectId": self.projectId,

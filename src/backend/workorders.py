@@ -363,7 +363,7 @@ def start_workorder(workorder_id):
 @workorders_bp.patch("/<int:workorder_id>/worker-update")
 @jwt_required()
 def worker_update_workorder(workorder_id):
-    """Limited update endpoint for workers: allow description, location, priority, status, actualCost."""
+    """Limited update endpoint for workers: only allow status and actualCost updates."""
     workorder = WorkOrder.query.get(workorder_id)
     if not workorder:
         return jsonify({"error": "Work order not found"}), 404
@@ -373,38 +373,13 @@ def worker_update_workorder(workorder_id):
     session_id = str(uuid.uuid4())
     payload = request.get_json(silent=True) or request.form.to_dict() or {}
 
-    # Store original values for audit logging
+    # Store original values for audit logging (only for fields workers can update)
     original_values = {
-        "description": workorder.description,
-        "location": workorder.location,
-        "priority": str(workorder.priority),
         "status": workorder.status.value if workorder.status else None,
         "actualCost": f"{workorder.actualCost:.2f}" if workorder.actualCost else None,
-        "startDate": workorder.startDate.isoformat() if workorder.startDate else None,
-        "endDate": workorder.endDate.isoformat() if workorder.endDate else None,
     }
 
-    # Update fields with audit logging
-    if "description" in payload and payload["description"] != original_values["description"]:
-        create_audit_log(AuditEntityType.WORK_ORDER, workorder_id, user_id, "description", original_values["description"], payload["description"], session_id, workorder.projectId)
-        workorder.description = payload["description"]
-
-    if "location" in payload and payload["location"] != original_values["location"]:
-        create_audit_log(AuditEntityType.WORK_ORDER, workorder_id, user_id, "location", original_values["location"], payload["location"], session_id, workorder.projectId)
-        workorder.location = payload["location"]
-
-    if "priority" in payload:
-        try:
-            priority = int(payload["priority"])
-            if priority < 1 or priority > 5:
-                return jsonify({"error": "Priority must be between 1 and 5"}), 400
-            priority_str = str(priority)
-            if priority_str != original_values["priority"]:
-                create_audit_log(AuditEntityType.WORK_ORDER, workorder_id, user_id, "priority", original_values["priority"], priority_str, session_id, workorder.projectId)
-                workorder.priority = priority
-        except ValueError:
-            return jsonify({"error": "Priority must be a number between 1 and 5"}), 400
-
+    # Only allow status and actualCost updates
     if "status" in payload:
         try:
             new_status = WorkOrderStatus(payload["status"].lower())
@@ -430,31 +405,6 @@ def worker_update_workorder(workorder_id):
                     workorder.actualCost = actual_cost
             except ValueError:
                 return jsonify({"error": "Invalid actual cost format"}), 400
-
-    # Handle date updates
-    if "startDate" in payload:
-        try:
-            new_start_date = datetime.strptime(payload["startDate"], "%Y-%m-%d").date()
-            new_start_date_str = new_start_date.isoformat()
-            if new_start_date_str != original_values["startDate"]:
-                create_audit_log(AuditEntityType.WORK_ORDER, workorder_id, user_id, "startDate", original_values["startDate"], new_start_date_str, session_id, workorder.projectId)
-                workorder.startDate = new_start_date
-        except ValueError:
-            return jsonify({"error": "Invalid start date format. Use YYYY-MM-DD"}), 400
-
-    if "endDate" in payload:
-        try:
-            new_end_date = datetime.strptime(payload["endDate"], "%Y-%m-%d").date()
-            new_end_date_str = new_end_date.isoformat()
-            if new_end_date_str != original_values["endDate"]:
-                create_audit_log(AuditEntityType.WORK_ORDER, workorder_id, user_id, "endDate", original_values["endDate"], new_end_date_str, session_id, workorder.projectId)
-                workorder.endDate = new_end_date
-        except ValueError:
-            return jsonify({"error": "Invalid end date format. Use YYYY-MM-DD"}), 400
-
-    # Validate date consistency after updates
-    if workorder.startDate >= workorder.endDate:
-        return jsonify({"error": "End date must be after start date"}), 400
 
     db.session.commit()
     return jsonify({"workorder": workorder.to_dict()}), 200

@@ -397,124 +397,19 @@ def update_project(project_id):
 @projects_bp.patch("/<int:project_id>/worker-update")
 @jwt_required()
 def worker_update_project(project_id):
-    """Limited update endpoint for workers: allow description, location, priority, status, estimatedBudget, actualCost, actualStartDate, actualEndDate."""
+    """Workers cannot update project details - this endpoint returns an error."""
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
     
     if not user:
         return jsonify({"error": "User not found"}), 404
     
-    project = Project.query.get(project_id)
-    if not project:
-        return jsonify({"error": "Project not found"}), 404
-    
-    # Check if user is a worker and has access to this project
+    # Check if user is a worker
     if user.role != UserRole.WORKER:
         return jsonify({"error": "This endpoint is only for workers"}), 403
     
-    # Check if worker is assigned to this project
-    crew_members = project.get_crew_members()
-    if int(user_id) not in crew_members:
-        return jsonify({"error": "Access denied - you are not assigned to this project"}), 403
-    
-    # Generate a session ID for this update to group all changes together
-    session_id = str(uuid.uuid4())
-    payload = request.get_json(silent=True) or request.form.to_dict() or {}
-    
-    # Store original values for audit logging
-    original_values = {
-        "description": project.description,
-        "location": project.location,
-        "priority": project.priority,
-        "status": project.status.value if project.status else None,
-        "estimatedBudget": f"{project.estimatedBudget:.2f}" if project.estimatedBudget else None,
-        "actualCost": f"{project.actualCost:.2f}" if project.actualCost else None,
-        "actualStartDate": project.actualStartDate.isoformat() if project.actualStartDate else None,
-        "actualEndDate": project.actualEndDate.isoformat() if project.actualEndDate else None,
-    }
-    
-    # Update fields with audit logging (limited fields for workers)
-    if "description" in payload and payload["description"] != original_values["description"]:
-        create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "description", original_values["description"], payload["description"], session_id, project_id)
-        project.description = payload["description"]
-    
-    if "location" in payload and payload["location"] != original_values["location"]:
-        create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "location", original_values["location"], payload["location"], session_id, project_id)
-        project.location = payload["location"]
-    
-    if "priority" in payload:
-        if payload["priority"] not in ["low", "medium", "high", "critical"]:
-            return jsonify({"error": "Invalid priority. Must be low, medium, high, or critical"}), 400
-        if payload["priority"] != original_values["priority"]:
-            create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "priority", original_values["priority"], payload["priority"], session_id, project_id)
-            project.priority = payload["priority"]
-    
-    if "estimatedBudget" in payload:
-        if payload["estimatedBudget"]:
-            try:
-                estimated_budget = float(payload["estimatedBudget"])
-                if estimated_budget < 0:
-                    return jsonify({"error": "Estimated budget must be positive"}), 400
-                budget_str = f"{estimated_budget:.2f}"
-                if budget_str != original_values["estimatedBudget"]:
-                    create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "estimatedBudget", original_values["estimatedBudget"], budget_str, session_id, project_id)
-                    project.estimatedBudget = estimated_budget
-            except ValueError:
-                return jsonify({"error": "Invalid estimated budget format"}), 400
-        else:
-            if original_values["estimatedBudget"]:
-                create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "estimatedBudget", original_values["estimatedBudget"], None, session_id, project_id)
-            project.estimatedBudget = None
-    
-    if "status" in payload:
-        try:
-            new_status = ProjectStatus(payload["status"].lower())
-            if new_status.value != original_values["status"]:
-                create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "status", original_values["status"], new_status.value, session_id, project_id)
-                project.status = new_status
-        except ValueError:
-            return jsonify({"error": "Invalid status. Must be planning, in_progress, on_hold, completed, or cancelled"}), 400
-    
-    if "actualCost" in payload:
-        if payload["actualCost"]:
-            try:
-                actual_cost = float(payload["actualCost"])
-                if actual_cost < 0:
-                    return jsonify({"error": "Actual cost must be positive"}), 400
-                cost_str = f"{actual_cost:.2f}"
-                if cost_str != original_values["actualCost"]:
-                    create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "actualCost", original_values["actualCost"], cost_str, session_id, project_id)
-                    project.actualCost = actual_cost
-            except ValueError:
-                return jsonify({"error": "Invalid actual cost format"}), 400
-        else:
-            if original_values["actualCost"]:
-                create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "actualCost", original_values["actualCost"], None, session_id, project_id)
-            project.actualCost = None
-    
-    if "actualStartDate" in payload:
-        try:
-            new_actual_start_date = datetime.strptime(payload["actualStartDate"], "%Y-%m-%d").date() if payload["actualStartDate"] else None
-            new_actual_start_date_str = new_actual_start_date.isoformat() if new_actual_start_date else None
-            if new_actual_start_date_str != original_values["actualStartDate"]:
-                create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "actualStartDate", original_values["actualStartDate"], new_actual_start_date_str, session_id, project_id)
-                project.actualStartDate = new_actual_start_date
-        except ValueError:
-            return jsonify({"error": "Invalid actual start date format. Use YYYY-MM-DD"}), 400
-    
-    if "actualEndDate" in payload:
-        try:
-            new_actual_end_date = datetime.strptime(payload["actualEndDate"], "%Y-%m-%d").date() if payload["actualEndDate"] else None
-            new_actual_end_date_str = new_actual_end_date.isoformat() if new_actual_end_date else None
-            if new_actual_end_date_str != original_values["actualEndDate"]:
-                create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "actualEndDate", original_values["actualEndDate"], new_actual_end_date_str, session_id, project_id)
-                project.actualEndDate = new_actual_end_date
-        except ValueError:
-            return jsonify({"error": "Invalid actual end date format. Use YYYY-MM-DD"}), 400
-    
-    db.session.commit()
-    
-    return jsonify({"project": project.to_dict()}), 200
+    # Workers cannot update any project details
+    return jsonify({"error": "Workers are not allowed to update project details"}), 403
 
 
 @projects_bp.get("/<int:project_id>/audit-logs")
@@ -1188,7 +1083,7 @@ def add_project_supply(project_id):
         return jsonify({"error": "User or project not found"}), 404
 
     payload = request.get_json(silent=True) or {}
-    required_fields = ["name", "vendor", "budget"]
+    required_fields = ["name", "budget"]
     missing = [f for f in required_fields if not payload.get(f)]
     if missing:
         return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
@@ -1214,7 +1109,12 @@ def add_project_supply(project_id):
 
     supply = Supply(
         name=payload["name"].strip(),
-        vendor=payload["vendor"].strip(),
+        vendor=payload.get("vendor", "").strip() if payload.get("vendor") else None,
+        referenceCode=payload.get("referenceCode", "").strip() if payload.get("referenceCode") else None,
+        supplyCategory=payload.get("supplyCategory", "").strip() if payload.get("supplyCategory") else None,
+        supplyType=payload.get("supplyType", "").strip() if payload.get("supplyType") else None,
+        supplySubtype=payload.get("supplySubtype", "").strip() if payload.get("supplySubtype") else None,
+        unitOfMeasure=payload.get("unitOfMeasure", "").strip() if payload.get("unitOfMeasure") else None,
         budget=budget,
         projectId=project_id,
         status=status,
