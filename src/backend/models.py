@@ -320,35 +320,9 @@ class WorkOrderElectricalSupply(db.Model):
         }
 
 
-# Keep old WorkOrderSupply for backward compatibility
-class WorkOrderSupply(db.Model):
-    __tablename__ = "work_order_supplies"
-
-    id = db.Column(db.Integer, primary_key=True)
-    workOrderId = db.Column(db.Integer, db.ForeignKey('work_orders.id'), nullable=False)
-    supplyId = db.Column(db.Integer, db.ForeignKey('supplies.id'), nullable=False)
-
-    # Metadata
-    assignedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    isActive = db.Column(db.Boolean, default=True, nullable=False)
-
-    # Relationships
-    workOrder = db.relationship('WorkOrder', backref=db.backref('supply_assignments', lazy=True))
-    supply = db.relationship('Supply', backref=db.backref('work_order_assignments', lazy=True))
-
-    # Ensure unique workorder-supply combinations
-    __table_args__ = (db.UniqueConstraint('workOrderId', 'supplyId', name='unique_workorder_supply'),)
-
-    def to_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "workOrderId": self.workOrderId,
-            "supplyId": self.supplyId,
-            "workOrder": self.workOrder.to_dict() if self.workOrder else None,
-            "supply": self.supply.to_dict() if self.supply else None,
-            "assignedAt": self.assignedAt.isoformat() if self.assignedAt else None,
-            "isActive": self.isActive,
-        }
+# DEPRECATED: WorkOrderSupply removed - use WorkOrderBuildingSupply or WorkOrderElectricalSupply instead
+# This model has been removed. If you need to drop the table, run:
+# DROP TABLE IF EXISTS work_order_supplies;
 
 
 class ProjectMember(db.Model):
@@ -566,69 +540,6 @@ class ElectricalSupply(db.Model):
     approvedBy = db.relationship("User", foreign_keys=[approvedById], backref="approved_electrical_supplies")
     project = db.relationship("Project", backref=db.backref("electrical_supplies", lazy=True))
     workOrder = db.relationship("WorkOrder", foreign_keys=[workOrderId], backref=db.backref("legacy_electrical_supplies", lazy=True))
-
-    def get_work_orders(self) -> list:
-        """Get work orders as a list of work order IDs from WorkOrderSupply relationships"""
-        try:
-            return [assignment.workOrderId for assignment in self.work_order_assignments if assignment.isActive]
-        except Exception:
-            return []
-
-    def to_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "name": self.name,
-            "vendor": self.vendor,
-            "referenceCode": self.referenceCode,
-            "supplyCategory": self.supplyCategory,
-            "supplyType": self.supplyType,
-            "supplySubtype": self.supplySubtype,
-            "unitOfMeasure": self.unitOfMeasure,
-            "budget": float(self.budget) if self.budget else 0.0,
-            "status": self.status.value,
-            "projectId": self.projectId,
-            "workOrderId": self.workOrderId,
-            "workOrderIds": self.get_work_orders(),
-            "requestedBy": self.requestedBy.to_dict() if self.requestedBy else None,
-            "approvedBy": self.approvedBy.to_dict() if self.approvedBy else None,
-            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
-            "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
-        }
-
-
-# Keep Supply model for backward compatibility (will be deprecated)
-class Supply(db.Model):
-    __tablename__ = "supplies"
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(200), nullable=False)
-    vendor = db.Column(db.String(200), nullable=True)
-    
-    # Excel file columns
-    referenceCode = db.Column(db.String(100), nullable=True)
-    supplyCategory = db.Column(db.String(200), nullable=True)
-    supplyType = db.Column(db.String(200), nullable=True)
-    supplySubtype = db.Column(db.String(200), nullable=True)
-    unitOfMeasure = db.Column(db.String(50), nullable=True)
-    
-    budget = db.Column(DECIMAL(15, 2), nullable=False, default=0.00)
-
-    # Workflow fields
-    status = db.Column(db.Enum(SupplyStatus), default=SupplyStatus.PENDING, nullable=False)
-    requestedById = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
-    approvedById = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
-
-    requestedBy = db.relationship("User", foreign_keys=[requestedById], backref="supply_requests")
-    approvedBy = db.relationship("User", foreign_keys=[approvedById], backref="approved_supplies")
-
-    projectId = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=True)
-    project = db.relationship("Project", backref=db.backref("supplies", lazy=True))
-
-    workOrderId = db.Column(db.Integer, db.ForeignKey("work_orders.id"), nullable=True)
-    workOrder = db.relationship("WorkOrder", foreign_keys=[workOrderId], backref=db.backref("legacy_supplies", lazy=True))
-
-    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     def get_work_orders(self) -> list:
         """Get work orders as a list of work order IDs from WorkOrderSupply relationships"""

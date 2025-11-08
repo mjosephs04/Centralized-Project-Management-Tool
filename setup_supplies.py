@@ -21,7 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.app import create_app
-from backend.models import db, Supply, SupplyStatus, BuildingSupply, ElectricalSupply
+from backend.models import db, SupplyStatus, BuildingSupply, ElectricalSupply
 
 def normalize_column_name(col_name):
     """Normalize column names to handle variations"""

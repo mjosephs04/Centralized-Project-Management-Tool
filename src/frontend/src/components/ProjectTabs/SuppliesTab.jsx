@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { FaBox, FaPlus, FaSave, FaTimes, FaTrash, FaCheck, FaBan } from "react-icons/fa";
+import React, { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
+import { FaBox, FaPlus, FaSave, FaTimes, FaTrash, FaCheck } from "react-icons/fa";
 import {projectsAPI, workOrdersAPI} from "../../services/api";
 
 const fakeVendors = [
@@ -36,6 +37,8 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
     const [selectedCategory, setSelectedCategory] = useState("");
     const [selectedSupplyType, setSelectedSupplyType] = useState("building"); // 'building' or 'electrical'
     const [showSupplyDropdown, setShowSupplyDropdown] = useState(false);
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+    const supplyInputRef = useRef(null);
 
     // Update local state when prop changes
     useEffect(() => {
@@ -63,7 +66,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                 const res = await projectsAPI.getSupplies(project.id, selectedWorkOrderId)
 
                 const data = res.data;
-                if (res.status != 200) throw new Error(data.error || "Failed to load supplies");
+                if (res.status !== 200) throw new Error(data.error || "Failed to load supplies");
                 setSupplies(data.supplies || []);
             } catch (err) {
                 console.error(err);
@@ -100,6 +103,28 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
         }
     }, [supplySearchTerm, selectedCategory, selectedSupplyType, showModal]);
 
+    // Calculate dropdown position when it's shown
+    useEffect(() => {
+        if (showSupplyDropdown && supplyInputRef.current) {
+            const updatePosition = () => {
+                const rect = supplyInputRef.current.getBoundingClientRect();
+                setDropdownPosition({
+                    top: rect.bottom + 4, // Fixed positioning uses viewport coordinates
+                    left: rect.left,
+                    width: rect.width
+                });
+            };
+            updatePosition();
+            // Update position on scroll or resize
+            window.addEventListener('scroll', updatePosition, true);
+            window.addEventListener('resize', updatePosition);
+            return () => {
+                window.removeEventListener('scroll', updatePosition, true);
+                window.removeEventListener('resize', updatePosition);
+            };
+        }
+    }, [showSupplyDropdown]);
+
     // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -134,6 +159,20 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
     const handleCategoryChange = (category) => {
         setSelectedCategory(category);
         setSupplySearchTerm(""); // Reset search when category changes
+        // Clear previously selected supply information
+        setNewSupply({ 
+            selectedSupplyId: "", 
+            name: "", 
+            vendor: "", 
+            budget: "",
+            supplyCategory: "",
+            supplyType: "",
+            supplySubtype: "",
+            referenceCode: "",
+            unitOfMeasure: "",
+            selectedWorkOrderIds: []
+        });
+        setShowSupplyDropdown(false);
     };
 
     const handleAddSupply = async () => {
@@ -151,7 +190,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                 vendor: newSupply.vendor || null,
                 budget: parseFloat(newSupply.budget),
                 supplyCategory: newSupply.supplyCategory || null,
-                supplyType: newSupply.supplyType || null,
+                supplyType: selectedSupplyType, // Use the selected tab type (building/electrical)
                 supplySubtype: newSupply.supplySubtype || null,
                 referenceCode: newSupply.referenceCode || null,
                 unitOfMeasure: newSupply.unitOfMeasure || null,
@@ -160,7 +199,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
 
             const res = await projectsAPI.postSupplies(project.id, payload)
             const data = res.data;
-            if (res.status != 201) throw new Error(data.error || "Failed to submit supply");
+            if (res.status !== 201) throw new Error(data.error || "Failed to submit supply");
             setSupplies((prev) => [data.supply, ...prev]);
             setShowModal(false);
             setNewSupply({ 
@@ -187,7 +226,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
             const payload = JSON.stringify({ status })
             const res = await projectsAPI.patchSupplies(project.id, id, payload)
             const data = res.data;
-            if (res.status != 200) throw new Error(data.error || "Failed to update status");
+            if (res.status !== 200) throw new Error(data.error || "Failed to update status");
             setSupplies((prev) => prev.map((s) => (s.id === id ? data.supply : s)));
         } catch (err) {
             alert(err.message);
@@ -263,119 +302,151 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                     <FaBox style={styles.emptyIcon} />
                     <p style={styles.emptyText}>No supplies yet.</p>
                 </div>
-            ) : (
-                <table style={styles.table}>
-                    <thead>
-                    <tr>
-                        <th style={styles.th}>Name</th>
-                        <th style={styles.th}>Vendor</th>
-                        <th style={styles.th}>Budget ($)</th>
-                        <th style={styles.th}>Work Orders</th>
-                        <th style={styles.th}>Status</th>
-                        {userRole === "project_manager" && <th style={styles.th}>Actions</th>}
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {supplies.map((supply) => {
-                        // Get work order names for this supply
-                        const workOrderIds = supply.workOrderIds || (supply.workOrderId ? [supply.workOrderId] : []);
-                        const linkedWorkOrders = workOrders.filter(wo => workOrderIds.includes(wo.id));
-                        
-                        return (
-                        <tr key={supply.id}>
-                            <td style={styles.td}>{supply.name}</td>
-                            <td style={styles.td}>{supply.vendor}</td>
-                            <td style={styles.td}>{supply.budget.toFixed(2)}</td>
-                            <td style={styles.td}>
-                                {linkedWorkOrders.length > 0 ? (
-                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
-                                        {linkedWorkOrders.map(wo => (
-                                            <span 
-                                                key={wo.id}
-                                                style={{
-                                                    backgroundColor: "#e0e7ff",
-                                                    color: "#4338ca",
-                                                    padding: "0.25rem 0.5rem",
-                                                    borderRadius: "4px",
-                                                    fontSize: "0.85rem",
-                                                    fontWeight: "500"
-                                                }}
-                                            >
-                                                {wo.name}
-                                            </span>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <span style={{ color: "#9ca3af", fontStyle: "italic" }}>None</span>
-                                )}
-                            </td>
-                            <td style={styles.td}>
-                  <span
-                      style={{
-                          color:
-                              supply.status === "approved"
-                                  ? "green"
-                                  : supply.status === "rejected"
-                                      ? "red"
-                                      : "gray",
-                          fontWeight: 600,
-                          textTransform: "capitalize",
-                      }}
-                  >
-                    {supply.status}
-                  </span>
-                            </td>
-                            {userRole == "project_manager" && (
-                                <td style={styles.td}>
-                                    {supply.status === "pending" ? (
-                                        <>
-                                            <button
-                                                style={{
-                                                    ...styles.actionButton,
-                                                    backgroundColor: "#dcfce7",
-                                                    color: "#166534",
-                                                    border: "1px solid #86efac",
-                                                    marginRight: "0.5rem",
-                                                }}
-                                                onClick={() => handleStatusChange(supply.id, "approved")}
-                                            >
-                                                <FaCheck style={{marginRight: "0.3rem"}}/> Approve
-                                            </button>
+            ) : (() => {
+                // Group supplies by type and sort by category
+                const normalizeSupplyType = (type) => {
+                    if (!type) return "building"; // Default to building if not set
+                    const normalized = String(type).toLowerCase().trim();
+                    if (normalized.includes("electrical") || normalized.includes("electric")) {
+                        return "electrical";
+                    }
+                    return "building"; // Default to building
+                };
 
-                                            <button
-                                                style={{
-                                                    ...styles.actionButton,
-                                                    backgroundColor: "#fee2e2",
-                                                    color: "#991b1b",
-                                                    border: "1px solid #fca5a5",
-                                                    marginRight: "0.5rem",
-                                                }}
-                                                onClick={() => handleStatusChange(supply.id, "rejected")}
-                                            >
-                                                <FaBan style={{marginRight: "0.3rem"}}/> Reject
-                                            </button>
-                                        </>
-                                    ) : null}
+                const buildingSupplies = supplies
+                    .filter(s => normalizeSupplyType(s.supplyType) === "building")
+                    .sort((a, b) => {
+                        const catA = a.supplyCategory || "";
+                        const catB = b.supplyCategory || "";
+                        return catA.localeCompare(catB);
+                    });
+                
+                const electricalSupplies = supplies
+                    .filter(s => normalizeSupplyType(s.supplyType) === "electrical")
+                    .sort((a, b) => {
+                        const catA = a.supplyCategory || "";
+                        const catB = b.supplyCategory || "";
+                        return catA.localeCompare(catB);
+                    });
 
-                                    <button
-                                        style={{
-                                            ...styles.actionButton,
-                                            backgroundColor: "#fef2f2",
-                                            color: "#b91c1c",
-                                            border: "1px solid #fecaca",
-                                        }}
-                                        onClick={() => handleDeleteSupply(supply.id)}
-                                    >
-                                        <FaTrash style={{marginRight: "0.3rem"}}/> Delete
-                                    </button>
-                                </td>
-                            )}
-                        </tr>
-                        );
-                    })}
-                    </tbody>
-                </table>
-            )}
+                const renderSupplyTable = (supplyList, title) => {
+                    if (supplyList.length === 0) return null;
+
+                    return (
+                        <div style={{ marginBottom: "3rem" }}>
+                            <h3 style={{ fontSize: "1.5rem", fontWeight: "600", color: "#2c3e50", marginBottom: "1rem" }}>
+                                {title}
+                            </h3>
+                            <table style={styles.table}>
+                                <thead>
+                                    <tr>
+                                        <th style={styles.th}>Name</th>
+                                        <th style={styles.th}>Code</th>
+                                        <th style={styles.th}>Vendor</th>
+                                        <th style={styles.th}>Price ($)</th>
+                                        <th style={styles.th}>Unit of Measure</th>
+                                        <th style={styles.th}>Status</th>
+                                        {userRole === "project_manager" && <th style={styles.th}>Actions</th>}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {supplyList.map((supply) => (
+                                        <tr key={supply.id}>
+                                            <td style={styles.td}>
+                                                <div>
+                                                    <div style={{ fontWeight: "500" }}>{supply.name}</div>
+                                                    {supply.supplySubtype && (
+                                                        <div style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "0.25rem" }}>
+                                                            {supply.supplySubtype}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td style={styles.td}>{supply.referenceCode || "-"}</td>
+                                            <td style={styles.td}>{supply.vendor || "-"}</td>
+                                            <td style={styles.td}>{supply.budget.toFixed(2)}</td>
+                                            <td style={styles.td}>{supply.unitOfMeasure || "-"}</td>
+                                            <td style={styles.td}>
+                                                <span
+                                                    style={{
+                                                        color:
+                                                            supply.status === "approved"
+                                                                ? "green"
+                                                                : supply.status === "rejected"
+                                                                    ? "red"
+                                                                    : "gray",
+                                                        fontWeight: 600,
+                                                        textTransform: "capitalize",
+                                                    }}
+                                                >
+                                                    {supply.status}
+                                                </span>
+                                            </td>
+                                            {userRole === "project_manager" && (
+                                                <td style={styles.td}>
+                                                    {supply.status === "pending" ? (
+                                                        <>
+                                                            <button
+                                                                style={{
+                                                                    ...styles.actionButton,
+                                                                    backgroundColor: "#dcfce7",
+                                                                    color: "#166534",
+                                                                    border: "1px solid #86efac",
+                                                                    marginRight: "0.5rem",
+                                                                }}
+                                                                onClick={() => handleStatusChange(supply.id, "approved")}
+                                                            >
+                                                                <FaCheck style={{marginRight: "0.3rem"}}/> Approve
+                                                            </button>
+
+                                                            <button
+                                                                style={{
+                                                                    ...styles.actionButton,
+                                                                    backgroundColor: "#fee2e2",
+                                                                    color: "#991b1b",
+                                                                    border: "1px solid #fca5a5",
+                                                                }}
+                                                                onClick={() => handleDeleteSupply(supply.id)}
+                                                            >
+                                                                <FaTrash style={{marginRight: "0.3rem"}}/> Reject
+                                                            </button>
+                                                        </>
+                                                    ) : supply.status === "approved" ? (
+                                                        <button
+                                                            style={{
+                                                                ...styles.actionButton,
+                                                                backgroundColor: "#fef2f2",
+                                                                color: "#b91c1c",
+                                                                border: "1px solid #fecaca",
+                                                            }}
+                                                            onClick={() => handleDeleteSupply(supply.id)}
+                                                        >
+                                                            <FaTrash style={{marginRight: "0.3rem"}}/> Delete
+                                                        </button>
+                                                    ) : null}
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    );
+                };
+
+                return (
+                    <div>
+                        {renderSupplyTable(buildingSupplies, "Building Supplies")}
+                        {renderSupplyTable(electricalSupplies, "Electric Supplies")}
+                        {buildingSupplies.length === 0 && electricalSupplies.length === 0 && (
+                            <div style={styles.emptyState}>
+                                <FaBox style={styles.emptyIcon} />
+                                <p style={styles.emptyText}>No supplies yet.</p>
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
 
             {showModal && (
                 <div style={styles.modalOverlay} onClick={() => {
@@ -401,6 +472,20 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                     setSelectedSupplyType("building");
                                     setSupplySearchTerm("");
                                     setSelectedCategory("");
+                                    // Clear previously selected supply information
+                                    setNewSupply({ 
+                                        selectedSupplyId: "", 
+                                        name: "", 
+                                        vendor: "", 
+                                        budget: "",
+                                        supplyCategory: "",
+                                        supplyType: "",
+                                        supplySubtype: "",
+                                        referenceCode: "",
+                                        unitOfMeasure: "",
+                                        selectedWorkOrderIds: []
+                                    });
+                                    setShowSupplyDropdown(false);
                                 }}
                             >
                                 Building Supplies
@@ -417,6 +502,20 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                     setSelectedSupplyType("electrical");
                                     setSupplySearchTerm("");
                                     setSelectedCategory("");
+                                    // Clear previously selected supply information
+                                    setNewSupply({ 
+                                        selectedSupplyId: "", 
+                                        name: "", 
+                                        vendor: "", 
+                                        budget: "",
+                                        supplyCategory: "",
+                                        supplyType: "",
+                                        supplySubtype: "",
+                                        referenceCode: "",
+                                        unitOfMeasure: "",
+                                        selectedWorkOrderIds: []
+                                    });
+                                    setShowSupplyDropdown(false);
                                 }}
                             >
                                 Electric Supplies
@@ -440,6 +539,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                         <label style={styles.label}>Search Supply (by name or vendor)</label>
                         <div style={{ position: "relative" }} data-supply-dropdown>
                         <input
+                                ref={supplyInputRef}
                                 type="text"
                                 value={supplySearchTerm}
                                 onChange={(e) => {
@@ -463,40 +563,51 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                 placeholder="Type to search supplies..."
                             style={styles.input}
                         />
-                            {showSupplyDropdown && (
-                                <div style={styles.dropdown} data-supply-dropdown>
-                                    {catalogSupplies.length > 0 ? (
-                                        <>
-                                            {catalogSupplies.map((supply) => (
-                                                <div
-                                                    key={supply.id}
-                                                    style={styles.dropdownItem}
-                                                    onClick={() => handleSupplySelect(supply)}
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f3f4f6"}
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "white"}
-                                                >
-                                                    <div style={{ fontWeight: "600" }}>{supply.name}</div>
-                                                    <div style={{ fontSize: "0.85rem", color: "#6b7280", display: "flex", gap: "1rem" }}>
-                                                        {supply.budget && (
-                                                            <span>Price: ${parseFloat(supply.budget).toFixed(2)}</span>
-                                                        )}
-                                                        {supply.referenceCode && (
-                                                            <span>Code: {supply.referenceCode}</span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </>
-                                    ) : (
-                                        <div style={{ ...styles.dropdownItem, color: "#6b7280", fontStyle: "italic", cursor: "default" }}>
-                                            {supplySearchTerm || selectedCategory 
-                                                ? "No supplies found matching your search" 
-                                                : "Loading supplies..."}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
                         </div>
+                        {showSupplyDropdown && createPortal(
+                            <div 
+                                style={{
+                                    ...styles.dropdown,
+                                    position: "fixed",
+                                    top: `${dropdownPosition.top}px`,
+                                    left: `${dropdownPosition.left}px`,
+                                    width: `${dropdownPosition.width}px`,
+                                    zIndex: 2000
+                                }} 
+                                data-supply-dropdown
+                            >
+                                {catalogSupplies.length > 0 ? (
+                                    <>
+                                        {catalogSupplies.map((supply) => (
+                                            <div
+                                                key={supply.id}
+                                                style={styles.dropdownItem}
+                                                onClick={() => handleSupplySelect(supply)}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f3f4f6"}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "white"}
+                                            >
+                                                <div style={{ fontWeight: "600" }}>{supply.name}</div>
+                                                <div style={{ fontSize: "0.85rem", color: "#6b7280", display: "flex", gap: "1rem" }}>
+                                                    {supply.budget && (
+                                                        <span>Price: ${parseFloat(supply.budget).toFixed(2)}</span>
+                                                    )}
+                                                    {supply.referenceCode && (
+                                                        <span>Code: {supply.referenceCode}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </>
+                                ) : (
+                                    <div style={{ ...styles.dropdownItem, color: "#6b7280", fontStyle: "italic", cursor: "default" }}>
+                                        {supplySearchTerm || selectedCategory 
+                                            ? "No supplies found matching your search" 
+                                            : "Loading supplies..."}
+                                    </div>
+                                )}
+                            </div>,
+                            document.body
+                        )}
 
                         {newSupply.selectedSupplyId && (
                             <div style={{ 
@@ -512,7 +623,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                 <div style={{ color: "#0c4a6e" }}>
                                     <div><strong>Name:</strong> {newSupply.name}</div>
                                     {newSupply.vendor && <div><strong>Vendor:</strong> {newSupply.vendor}</div>}
-                                    {newSupply.budget && <div><strong>Budget:</strong> ${parseFloat(newSupply.budget).toFixed(2)}</div>}
+                                    {newSupply.budget && <div><strong>Price:</strong> ${parseFloat(newSupply.budget).toFixed(2)}</div>}
                                 </div>
                             </div>
                         )}
@@ -744,19 +855,13 @@ const styles = {
         minWidth: "200px",
     },
     dropdown: {
-        position: "absolute",
-        top: "100%",
-        left: 0,
-        right: 0,
         backgroundColor: "white",
         border: "1px solid #d1d5db",
         borderRadius: "8px",
-        maxHeight: "400px",
+        maxHeight: "320px",
         overflowY: "auto",
         overflowX: "hidden",
-        zIndex: 1000,
         boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-        marginTop: "0.25rem",
     },
     dropdownItem: {
         padding: "0.75rem 1rem",

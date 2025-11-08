@@ -12,7 +12,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType, Supply, ProjectMember, ProjectInvitation, SupplyStatus, WorkOrderSupply, BuildingSupply, ElectricalSupply
+from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType, ProjectMember, ProjectInvitation, SupplyStatus, BuildingSupply, ElectricalSupply, WorkOrderBuildingSupply, WorkOrderElectricalSupply
 from .progress import (
     compute_work_order_rollup, compute_schedule_stats, compute_earned_value, to_decimal, normalize_weights,
     compute_schedule_variance, compute_cost_variance, compute_workforce_metrics, compute_quality_metrics, compute_project_health_score,
@@ -176,18 +176,47 @@ def delete_project(project_id):
 @projects_bp.get("/")
 @jwt_required()
 def get_projects():
-    """Get all projects (accessible by all authenticated users)"""
-    projects = Project.query.all()
+    """Get projects based on user role:
+    - Project managers: projects they manage
+    - Workers: projects they are assigned to as members
+    - Admins: all projects"""
+    user_id = int(get_jwt_identity())
+    user = User.query.filter_by(id=user_id, isActive=True).first()
+    
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    if user.role == UserRole.PROJECT_MANAGER:
+        # Project managers see projects they manage
+        projects = Project.query.filter_by(projectManagerId=user_id, isActive=True).all()
+    elif user.role == UserRole.WORKER:
+        # Workers only see projects they are members of
+        project_memberships = ProjectMember.query.filter_by(userId=user_id, isActive=True).all()
+        project_ids = [pm.projectId for pm in project_memberships]
+        if project_ids:
+            projects = Project.query.filter(
+                Project.id.in_(project_ids),
+                Project.isActive == True
+            ).all()
+        else:
+            projects = []
+    elif user.role == UserRole.ADMIN:
+        # Admins see all projects
+        projects = Project.query.filter_by(isActive=True).all()
+    else:
+        # Unknown role - return empty list
+        projects = []
+    
     return jsonify({"projects": [project.to_dict() for project in projects]}), 200
 
 
 @projects_bp.get("/<int:project_id>")
 @jwt_required()
 def get_project(project_id):
-    """Get a specific project by ID"""
+    """Get a specific project by ID (with access control)"""
 
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
+    user_id = int(get_jwt_identity())
+    user = User.query.filter_by(id=user_id, isActive=True).first()
     
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -195,6 +224,29 @@ def get_project(project_id):
     project = Project.query.filter_by(id=project_id, isActive=True).first()
     if not project:
         return jsonify({"error": "Project not found"}), 404
+
+    # Access control: Check if user has permission to view this project
+    if user.role == UserRole.ADMIN:
+        # Admins can view all projects
+        pass
+    elif user.role == UserRole.PROJECT_MANAGER:
+        # Project managers can only view projects they manage
+        if project.projectManagerId != user_id:
+            return jsonify({"error": "You do not have permission to view this project"}), 403
+    elif user.role == UserRole.WORKER:
+        # Workers can only view projects they are members of
+        if not is_project_member(user_id, project_id):
+            return jsonify({"error": "You do not have permission to view this project"}), 403
+    else:
+        # Unknown role - deny access
+        return jsonify({"error": "You do not have permission to view this project"}), 403
+
+    # Recalculate project actual cost if it's NULL (for existing projects)
+    if project.actualCost is None:
+        _update_project_actual_cost_from_work_orders(project_id)
+        db.session.commit()
+        # Refresh the project to get updated cost
+        db.session.refresh(project)
 
     return jsonify({"project": project.to_dict()}), 200
 
@@ -204,16 +256,50 @@ def get_project(project_id):
 @projects_bp.get("/my-projects")
 @jwt_required()
 def get_my_projects():
-    """Get projects managed by the current user (for project managers)"""
+    """Get projects for the current user:
+    - Project managers: projects they manage
+    - Workers: projects they are assigned to as members
+    - Admins: all projects"""
     user_id = int(get_jwt_identity())
     user = User.query.filter_by(id=user_id, isActive=True).first()
     
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
     if user.role == UserRole.PROJECT_MANAGER:
+        # Project managers see projects they manage
         projects = Project.query.filter_by(projectManagerId=user_id, isActive=True).all()
-    else:
-        # For now, other roles see all projects
-        # In the future, this could be filtered based on assignments
+    elif user.role == UserRole.WORKER:
+        # Workers only see projects they are members of
+        project_memberships = ProjectMember.query.filter_by(userId=user_id, isActive=True).all()
+        project_ids = [pm.projectId for pm in project_memberships]
+        if project_ids:
+            projects = Project.query.filter(
+                Project.id.in_(project_ids),
+                Project.isActive == True
+            ).all()
+        else:
+            projects = []
+    elif user.role == UserRole.ADMIN:
+        # Admins see all projects
         projects = Project.query.filter_by(isActive=True).all()
+    else:
+        # Unknown role - return empty list
+        projects = []
+    
+    # Recalculate actual costs for projects that have NULL (for existing projects)
+    updated_any = False
+    for project in projects:
+        if project.actualCost is None:
+            _update_project_actual_cost_from_work_orders(project.id)
+            updated_any = True
+    
+    if updated_any:
+        db.session.commit()
+        # Refresh projects to get updated costs
+        for project in projects:
+            if project.actualCost is None:
+                db.session.refresh(project)
     
     return jsonify({"projects": [project.to_dict() for project in projects]}), 200
 
@@ -474,6 +560,79 @@ def _parse_iso_date(s: Optional[str]) -> Optional[date]:
         raise ValueError("Invalid date format. Use YYYY-MM-DD.")
 
 
+def _update_project_actual_cost_from_work_orders(project_id: int):
+    """Update project's actual cost by summing all work orders' actual costs in the project"""
+    project = Project.query.filter_by(id=project_id, isActive=True).first()
+    if not project:
+        return
+    
+    # Get all active work orders for this project
+    work_orders = WorkOrder.query.filter_by(projectId=project_id, isActive=True).all()
+    
+    # Sum all work order actual costs
+    total_actual_cost = Decimal("0")
+    for wo in work_orders:
+        if wo.actualCost is not None:
+            total_actual_cost += to_decimal(wo.actualCost)
+    
+    # Update project's actual cost (set to 0 if no costs, not None)
+    # This ensures the value is always set, even if it's 0
+    if total_actual_cost == Decimal("0"):
+        project.actualCost = Decimal("0")
+    else:
+        project.actualCost = total_actual_cost
+
+
+def _update_work_order_costs_from_supplies(work_order_ids: List[int]):
+    """Recalculate and update work order actualCost based on approved supplies linked to them.
+    
+    This function sums all approved supply costs for the given work orders and updates
+    their actualCost fields. Note: This will overwrite any manually entered actualCost,
+    so supplies should be the primary source of cost tracking.
+    Also updates project actual costs after updating work order costs.
+    """
+    if not work_order_ids:
+        return
+    
+    updated_project_ids = set()
+    
+    for wo_id in work_order_ids:
+        work_order = WorkOrder.query.get(wo_id)
+        if not work_order:
+            continue
+        
+        # Calculate total cost of approved supplies for this work order
+        supply_cost_total = Decimal("0")
+        
+        # Get approved building supplies
+        building_links = WorkOrderBuildingSupply.query.filter_by(
+            workOrderId=wo_id,
+            isActive=True
+        ).all()
+        for link in building_links:
+            supply = BuildingSupply.query.get(link.buildingSupplyId)
+            if supply and supply.status == SupplyStatus.APPROVED:
+                supply_cost_total += to_decimal(supply.budget)
+        
+        # Get approved electrical supplies
+        electrical_links = WorkOrderElectricalSupply.query.filter_by(
+            workOrderId=wo_id,
+            isActive=True
+        ).all()
+        for link in electrical_links:
+            supply = ElectricalSupply.query.get(link.electricalSupplyId)
+            if supply and supply.status == SupplyStatus.APPROVED:
+                supply_cost_total += to_decimal(supply.budget)
+        
+        # Update work order actualCost with total supply costs
+        work_order.actualCost = supply_cost_total
+        updated_project_ids.add(work_order.projectId)
+    
+    # Update project actual costs for all affected projects
+    for project_id in updated_project_ids:
+        _update_project_actual_cost_from_work_orders(project_id)
+
+
 def _parse_weights_from_query(args) -> Optional[Dict[str, Decimal]]:
     q_weights = {
         "work_orders": args.get("w_work_orders"),
@@ -569,6 +728,12 @@ def get_dashboard_progress():
         page = int(request.args.get("page", 1))
         page_size = int(request.args.get("pageSize", 25))
 
+        user_id = int(get_jwt_identity())
+        user = User.query.filter_by(id=user_id, isActive=True).first()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
         stmt = select(Project)
         if status_str:
             try:
@@ -577,9 +742,26 @@ def get_dashboard_progress():
                 return jsonify({"error": "Invalid status value"}), 400
             stmt = stmt.where(Project.status == status)
 
-        if manager_only:
-            user_id = int(get_jwt_identity())
+        # Apply role-based filtering
+        if user.role == UserRole.PROJECT_MANAGER:
+            # Project managers always see only projects they manage
             stmt = stmt.where(Project.projectManagerId == user_id)
+        elif user.role == UserRole.WORKER:
+            # Workers only see projects they are members of
+            project_memberships = ProjectMember.query.filter_by(userId=user_id, isActive=True).all()
+            project_ids = [pm.projectId for pm in project_memberships]
+            if project_ids:
+                stmt = stmt.where(Project.id.in_(project_ids))
+            else:
+                # No project memberships, return empty result
+                return jsonify({"count": 0, "page": page, "pageSize": page_size, "results": []}), 200
+        elif user.role == UserRole.ADMIN:
+            # Admins see all projects (managerOnly filter still applies if set)
+            if manager_only:
+                stmt = stmt.where(Project.projectManagerId == user_id)
+        else:
+            # Unknown role - return empty result
+            return jsonify({"count": 0, "page": page, "pageSize": page_size, "results": []}), 200
 
         projects: List[Project] = db.session.execute(stmt).scalars().all()
         if not projects:
@@ -1129,22 +1311,33 @@ def get_project_supplies(project_id):
     # Get optional workOrderId from query parameters
     work_order_id = request.args.get("workOrderId", type=int)
     
-    query = Supply.query.filter_by(projectId=project_id)
+    # Query both BuildingSupply and ElectricalSupply
+    building_query = BuildingSupply.query.filter_by(projectId=project_id)
+    electrical_query = ElectricalSupply.query.filter_by(projectId=project_id)
     
-    # Filter by work order if provided (using junction table)
+    # Filter by work order if provided (using appropriate junction tables)
     if work_order_id:
-        # Use junction table to find supplies linked to this work order
-        # Use distinct() to avoid duplicates if a supply is linked to multiple work orders
-        query = query.join(WorkOrderSupply).filter(
-            WorkOrderSupply.workOrderId == work_order_id,
-            WorkOrderSupply.isActive == True
+        # Filter building supplies
+        building_query = building_query.join(WorkOrderBuildingSupply).filter(
+            WorkOrderBuildingSupply.workOrderId == work_order_id,
+            WorkOrderBuildingSupply.isActive == True
         ).distinct()
-    else:
-        # If no workOrderId specified, show all supplies (both project-level and work-order-level)
-        pass
+        
+        # Filter electrical supplies
+        electrical_query = electrical_query.join(WorkOrderElectricalSupply).filter(
+            WorkOrderElectricalSupply.workOrderId == work_order_id,
+            WorkOrderElectricalSupply.isActive == True
+        ).distinct()
     
-    supplies = query.order_by(Supply.createdAt.desc()).all()
-    return jsonify({"supplies": [s.to_dict() for s in supplies]}), 200
+    # Get supplies from both tables
+    building_supplies = building_query.order_by(BuildingSupply.createdAt.desc()).all()
+    electrical_supplies = electrical_query.order_by(ElectricalSupply.createdAt.desc()).all()
+    
+    # Combine and sort by creation date
+    all_supplies = list(building_supplies) + list(electrical_supplies)
+    all_supplies.sort(key=lambda s: s.createdAt, reverse=True)
+    
+    return jsonify({"supplies": [s.to_dict() for s in all_supplies]}), 200
 
 
 
@@ -1172,6 +1365,18 @@ def add_project_supply(project_id):
     except ValueError:
         return jsonify({"error": "Invalid budget format"}), 400
 
+    # Determine supply type (default to "building" if not specified)
+    supply_type_raw = payload.get("supplyType", "building")
+    # Handle both string and None values
+    if supply_type_raw:
+        supply_type = str(supply_type_raw).strip().lower()
+    else:
+        supply_type = "building"
+    
+    if supply_type not in ["building", "electrical"]:
+        # Default to building if invalid value
+        supply_type = "building"
+
     # Determine role-based flow
     if user.role == UserRole.PROJECT_MANAGER:
         status = SupplyStatus.APPROVED
@@ -1197,41 +1402,66 @@ def add_project_supply(project_id):
             if not work_order:
                 return jsonify({"error": f"Work order {wo_id} not found or does not belong to this project"}), 400
 
-    supply = Supply(
-        name=payload["name"].strip(),
-        vendor=payload.get("vendor", "").strip() if payload.get("vendor") else None,
-        referenceCode=payload.get("referenceCode", "").strip() if payload.get("referenceCode") else None,
-        supplyCategory=payload.get("supplyCategory", "").strip() if payload.get("supplyCategory") else None,
-        supplyType=payload.get("supplyType", "").strip() if payload.get("supplyType") else None,
-        supplySubtype=payload.get("supplySubtype", "").strip() if payload.get("supplySubtype") else None,
-        unitOfMeasure=payload.get("unitOfMeasure", "").strip() if payload.get("unitOfMeasure") else None,
-        budget=budget,
-        projectId=project_id,
-        workOrderId=None,  # No longer using single workOrderId
-        status=status,
-        requestedById=requested_by,
-        approvedById=approved_by,
-    )
+    # Create the appropriate supply type
+    common_fields = {
+        "name": payload["name"].strip(),
+        "vendor": payload.get("vendor", "").strip() if payload.get("vendor") else None,
+        "referenceCode": payload.get("referenceCode", "").strip() if payload.get("referenceCode") else None,
+        "supplyCategory": payload.get("supplyCategory", "").strip() if payload.get("supplyCategory") else None,
+        "supplyType": payload.get("supplyType", "").strip() if payload.get("supplyType") else None,
+        "supplySubtype": payload.get("supplySubtype", "").strip() if payload.get("supplySubtype") else None,
+        "unitOfMeasure": payload.get("unitOfMeasure", "").strip() if payload.get("unitOfMeasure") else None,
+        "budget": budget,
+        "projectId": project_id,
+        "workOrderId": None,  # No longer using single workOrderId
+        "status": status,
+        "requestedById": requested_by,
+        "approvedById": approved_by,
+    }
+
+    if supply_type == "electrical":
+        supply = ElectricalSupply(**common_fields)
+    else:
+        supply = BuildingSupply(**common_fields)
 
     db.session.add(supply)
     db.session.flush()  # Get the supply ID
     
-    # Link supply to work orders using junction table
+    # Link supply to work orders using appropriate junction table
     if work_order_ids:
         for wo_id in work_order_ids:
-            # Check if relationship already exists
-            existing = WorkOrderSupply.query.filter_by(
-                workOrderId=wo_id,
-                supplyId=supply.id,
-                isActive=True
-            ).first()
-            
-            if not existing:
-                work_order_supply = WorkOrderSupply(
+            if supply_type == "electrical":
+                # Check if relationship already exists
+                existing = WorkOrderElectricalSupply.query.filter_by(
                     workOrderId=wo_id,
-                    supplyId=supply.id
-                )
-                db.session.add(work_order_supply)
+                    electricalSupplyId=supply.id,
+                    isActive=True
+                ).first()
+                
+                if not existing:
+                    work_order_supply = WorkOrderElectricalSupply(
+                        workOrderId=wo_id,
+                        electricalSupplyId=supply.id
+                    )
+                    db.session.add(work_order_supply)
+            else:
+                # Building supply
+                existing = WorkOrderBuildingSupply.query.filter_by(
+                    workOrderId=wo_id,
+                    buildingSupplyId=supply.id,
+                    isActive=True
+                ).first()
+                
+                if not existing:
+                    work_order_supply = WorkOrderBuildingSupply(
+                        workOrderId=wo_id,
+                        buildingSupplyId=supply.id
+                    )
+                    db.session.add(work_order_supply)
+    
+    # Update work order costs if supply is approved and linked to work orders
+    if status == SupplyStatus.APPROVED and work_order_ids:
+        _update_work_order_costs_from_supplies(work_order_ids)
     
     db.session.commit()
     return jsonify({"supply": supply.to_dict()}), 201
@@ -1242,22 +1472,49 @@ def update_supply_status(project_id, supply_id):
     """Approve or reject a supply request (Project Manager only)."""
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
-    supply = Supply.query.filter_by(id=supply_id, projectId=project_id).first()
-
-    if not user or not supply:
-        return jsonify({"error": "User or supply not found"}), 404
+    
+    if not user:
+        return jsonify({"error": "User not found"}), 404
     if user.role not in [UserRole.ADMIN, UserRole.PROJECT_MANAGER]:
         return jsonify({"error": "Only project managers or admins can approve/reject supplies"}), 403
+
+    # Try to find supply in both tables
+    supply = BuildingSupply.query.filter_by(id=supply_id, projectId=project_id).first()
+    if not supply:
+        supply = ElectricalSupply.query.filter_by(id=supply_id, projectId=project_id).first()
+    
+    if not supply:
+        return jsonify({"error": "Supply not found"}), 404
 
     payload = request.get_json(silent=True) or {}
     new_status = payload.get("status", "").lower()
     if new_status not in ["approved", "rejected"]:
         return jsonify({"error": "Invalid status. Must be 'approved' or 'rejected'"}), 400
 
+    old_status = supply.status
     supply.status = SupplyStatus.APPROVED if new_status == "approved" else SupplyStatus.REJECTED
     supply.approvedById = user.id
+    
+    # Get work orders linked to this supply
+    work_order_ids = []
+    if isinstance(supply, BuildingSupply):
+        links = WorkOrderBuildingSupply.query.filter_by(
+            buildingSupplyId=supply_id,
+            isActive=True
+        ).all()
+        work_order_ids = [link.workOrderId for link in links]
+    elif isinstance(supply, ElectricalSupply):
+        links = WorkOrderElectricalSupply.query.filter_by(
+            electricalSupplyId=supply_id,
+            isActive=True
+        ).all()
+        work_order_ids = [link.workOrderId for link in links]
+    
+    # Update work order costs if status changed (approved/rejected)
+    if old_status != supply.status and work_order_ids:
+        _update_work_order_costs_from_supplies(work_order_ids)
+    
     db.session.commit()
-
     return jsonify({"supply": supply.to_dict()}), 200
 
 
@@ -1277,11 +1534,33 @@ def delete_project_supply(project_id, supply_id):
     if user.role == UserRole.PROJECT_MANAGER and project.projectManagerId != user.id:
         return jsonify({"error": "You can only delete supplies from your own projects"}), 403
 
-    supply = Supply.query.filter_by(id=supply_id, projectId=project_id).first()
+    # Try to find supply in both tables
+    supply = BuildingSupply.query.filter_by(id=supply_id, projectId=project_id).first()
+    supply_type = "building"
+    if not supply:
+        supply = ElectricalSupply.query.filter_by(id=supply_id, projectId=project_id).first()
+        supply_type = "electrical"
+    
     if not supply:
         return jsonify({"error": "Supply not found"}), 404
 
+    # Get work orders linked to this supply before deleting relationships
+    work_order_ids = []
+    if supply_type == "electrical":
+        links = WorkOrderElectricalSupply.query.filter_by(electricalSupplyId=supply_id).all()
+        work_order_ids = [link.workOrderId for link in links]
+        WorkOrderElectricalSupply.query.filter_by(electricalSupplyId=supply_id).delete()
+    else:
+        links = WorkOrderBuildingSupply.query.filter_by(buildingSupplyId=supply_id).all()
+        work_order_ids = [link.workOrderId for link in links]
+        WorkOrderBuildingSupply.query.filter_by(buildingSupplyId=supply_id).delete()
+
     db.session.delete(supply)
+    
+    # Update work order costs after deleting supply
+    if work_order_ids:
+        _update_work_order_costs_from_supplies(work_order_ids)
+    
     db.session.commit()
     return jsonify({"message": "Supply deleted successfully"}), 200
 
@@ -1391,3 +1670,32 @@ def get_all_metrics(project_id: int):
         print(f"Error in get_all_metrics: {str(e)}")
         print(traceback.format_exc())
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+
+
+@projects_bp.post("/recalculate-costs")
+@jwt_required()
+def recalculate_all_project_costs():
+    """Recalculate actual costs for all projects based on their work orders (admin only)"""
+    user_id = int(get_jwt_identity())
+    user = User.query.filter_by(id=user_id, isActive=True).first()
+    
+    if not user or user.role != UserRole.ADMIN:
+        return jsonify({"error": "Only admins can recalculate all project costs"}), 403
+    
+    # Get all active projects
+    projects = Project.query.filter_by(isActive=True).all()
+    
+    updated_count = 0
+    for project in projects:
+        old_cost = project.actualCost
+        _update_project_actual_cost_from_work_orders(project.id)
+        if project.actualCost != old_cost:
+            updated_count += 1
+    
+    db.session.commit()
+    
+    return jsonify({
+        "message": f"Recalculated actual costs for {updated_count} projects",
+        "total_projects": len(projects),
+        "updated_count": updated_count
+    }), 200

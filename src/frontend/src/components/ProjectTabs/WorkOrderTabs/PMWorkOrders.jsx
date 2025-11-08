@@ -57,6 +57,15 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, highli
     }
   };
 
+  // Filter workers to only show those assigned to the project
+  const projectWorkers = useMemo(() => {
+    if (!project?.crewMembers || !Array.isArray(project.crewMembers)) {
+      return [];
+    }
+    const crewMemberIds = new Set(project.crewMembers.map(id => String(id)));
+    return allWorkers.filter(worker => crewMemberIds.has(String(worker.id)));
+  }, [allWorkers, project?.crewMembers]);
+
   const grouped = useMemo(() => {
     const by = Object.fromEntries(STATUS_ORDER.map((s) => [s, []]));
     for (const wo of workOrders) (by[(wo.status || "pending").toLowerCase()] || by.pending).push(wo);
@@ -527,10 +536,14 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, highli
                   <div style={{ padding: "0.5rem", color: "#6b7280" }}>Loading workers...</div>
                 ) : (
                   <div style={styles.workerSelectContainer}>
-                    {allWorkers.length === 0 ? (
-                      <div style={{ padding: "0.5rem", color: "#6b7280" }}>No workers available</div>
+                    {projectWorkers.length === 0 ? (
+                      <div style={{ padding: "0.5rem", color: "#6b7280" }}>
+                        {project?.crewMembers && project.crewMembers.length === 0 
+                          ? "No workers assigned to this project. Please add workers to the project first."
+                          : "No workers available"}
+                      </div>
                     ) : (
-                      allWorkers.map(worker => {
+                      projectWorkers.map(worker => {
                         const isSelected = (formData.selectedWorkers || []).includes(worker.id);
                         return (
                           <label key={worker.id} style={styles.workerCheckbox}>
@@ -723,10 +736,14 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, highli
                   <div style={{ padding: "0.5rem", color: "#6b7280" }}>Loading workers...</div>
                 ) : (
                   <div style={styles.workerSelectContainer}>
-                    {allWorkers.length === 0 ? (
-                      <div style={{ padding: "0.5rem", color: "#6b7280" }}>No workers available</div>
+                    {projectWorkers.length === 0 ? (
+                      <div style={{ padding: "0.5rem", color: "#6b7280" }}>
+                        {project?.crewMembers && project.crewMembers.length === 0 
+                          ? "No workers assigned to this project. Please add workers to the project first."
+                          : "No workers available"}
+                      </div>
                     ) : (
-                      allWorkers.map(worker => {
+                      projectWorkers.map(worker => {
                         const isSelected = (formData.selectedWorkers || []).includes(worker.id);
                         return (
                           <label key={worker.id} style={styles.workerCheckbox}>

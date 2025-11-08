@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from decimal import Decimal, getcontext
 from typing import Dict, Any, Optional, List
 
-from .models import db, Project, WorkOrder, WorkOrderStatus, ProjectStatus, ProjectMember
+from .models import db, Project, WorkOrder, WorkOrderStatus, ProjectStatus, ProjectMember, BuildingSupply, ElectricalSupply, WorkOrderBuildingSupply, WorkOrderElectricalSupply, SupplyStatus
 
 # precision for Decimal math
 getcontext().prec = 28
@@ -75,6 +75,34 @@ def compute_work_order_rollup(work_orders: list[WorkOrder]) -> Dict[str, Any]:
     """Summarize work orders into counts and budget totals"""
     total = completed = in_progress = on_hold = pending = cancelled = 0
     est_total = est_completed = est_in_progress_raw = actual_cost_total = Decimal("0")
+    supply_cost_total = Decimal("0")
+
+    # Get all work order IDs
+    work_order_ids = [wo.id for wo in work_orders] if work_orders else []
+    
+    # Calculate total supply costs for all work orders (only approved supplies)
+    if work_order_ids:
+        # Get all approved building supplies linked to these work orders
+        building_supply_links = WorkOrderBuildingSupply.query.filter(
+            WorkOrderBuildingSupply.workOrderId.in_(work_order_ids),
+            WorkOrderBuildingSupply.isActive == True
+        ).all()
+        
+        for link in building_supply_links:
+            supply = BuildingSupply.query.get(link.buildingSupplyId)
+            if supply and supply.status == SupplyStatus.APPROVED:
+                supply_cost_total += to_decimal(supply.budget)
+        
+        # Get all approved electrical supplies linked to these work orders
+        electrical_supply_links = WorkOrderElectricalSupply.query.filter(
+            WorkOrderElectricalSupply.workOrderId.in_(work_order_ids),
+            WorkOrderElectricalSupply.isActive == True
+        ).all()
+        
+        for link in electrical_supply_links:
+            supply = ElectricalSupply.query.get(link.electricalSupplyId)
+            if supply and supply.status == SupplyStatus.APPROVED:
+                supply_cost_total += to_decimal(supply.budget)
 
     for wo in work_orders:
         total += 1
@@ -100,6 +128,9 @@ def compute_work_order_rollup(work_orders: list[WorkOrder]) -> Dict[str, Any]:
             cancelled += 1
             # Exclude cancelled work orders from est_total for SPI/CPI calculations
 
+    # Add supply costs to actual cost total
+    actual_cost_total += supply_cost_total
+
     # completion ratio with partial credit for in-progress
     # Exclude cancelled work orders from the total for completion calculation
     active_total = total - cancelled
@@ -123,6 +154,7 @@ def compute_work_order_rollup(work_orders: list[WorkOrder]) -> Dict[str, Any]:
             "est_completed": est_completed,
             "est_in_progress_credit": est_in_progress_raw * IN_PROGRESS_CREDIT,
             "actual_cost_total": actual_cost_total,
+            "supply_cost_total": supply_cost_total,
         },
         "completion_ratio": completion_ratio,
     }
@@ -161,7 +193,9 @@ def compute_earned_value(rollup: Dict[str, Any], project: Project, schedule: Dic
     est_total = to_decimal(rollup["budget"]["est_total"])
     ev = to_decimal(rollup["budget"]["est_completed"]) + to_decimal(rollup["budget"]["est_in_progress_credit"])
     pv = schedule["planned_pct_time_elapsed"] * est_total
-    ac = to_decimal(project.actualCost) + to_decimal(rollup["budget"]["actual_cost_total"])
+    # AC should be only work order actual costs, not including supplies
+    # Use project.actualCost which is the sum of work order actual costs only
+    ac = to_decimal(project.actualCost) if project.actualCost is not None else Decimal("0")
     spi = safe_div(ev, pv) if pv > 0 else Decimal("0")
     cpi = safe_div(ev, ac) if ac > 0 else Decimal("0")
     return {"pv": pv, "ev": ev, "ac": ac, "spi": spi, "cpi": cpi}
@@ -261,7 +295,9 @@ def compute_cost_variance(project: Project, project_id: int) -> Dict[str, Any]:
     
     est_total = to_decimal(rollup["budget"]["est_total"])
     ev = to_decimal(rollup["budget"]["est_completed"]) + to_decimal(rollup["budget"]["est_in_progress_credit"])
-    ac = to_decimal(project.actualCost) + to_decimal(rollup["budget"]["actual_cost_total"])
+    # AC should be only work order actual costs, not including supplies
+    # Use project.actualCost which is the sum of work order actual costs only
+    ac = to_decimal(project.actualCost) if project.actualCost is not None else Decimal("0")
     
     # Cost Variance
     cv = ev - ac
