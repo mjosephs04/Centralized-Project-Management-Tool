@@ -644,7 +644,7 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
               {isEditing && (
                 <button
                   style={styles.removeButton}
-                  onClick={() => handleRemoveMemberFromEdit(index)}
+                  onClick={() => handleRemoveMember(index)}
                   title="Remove member"
                 >
                   <FaTrash />
