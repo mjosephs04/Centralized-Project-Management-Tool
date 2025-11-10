@@ -17,15 +17,16 @@ def create_app() -> Flask:
 
     # Configure CORS - allow all origins for now
     # TODO: Restrict to specific origins in production for security
+    # Note: Using "*" requires supports_credentials=False
     CORS(
         app,
         resources={r"/api/*": {
-            "origins": lambda origin: True,  # Allow all origins
+            "origins": "*",  # Allow all origins
             "allow_headers": ["Content-Type", "Authorization"],
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "expose_headers": ["Authorization"],
         }},
-        supports_credentials=True,
+        supports_credentials=False,  # Must be False when using "*" for origins
     )
 
     db.init_app(app)
