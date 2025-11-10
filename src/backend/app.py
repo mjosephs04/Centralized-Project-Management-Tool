@@ -15,13 +15,17 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    # Configure CORS - allow all origins for now
+    # TODO: Restrict to specific origins in production for security
     CORS(
         app,
-        resources={r"/api/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}},
+        resources={r"/api/*": {
+            "origins": lambda origin: True,  # Allow all origins
+            "allow_headers": ["Content-Type", "Authorization"],
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            "expose_headers": ["Authorization"],
+        }},
         supports_credentials=True,
-        expose_headers=["Authorization"],
-        allow_headers=["Content-Type", "Authorization"],
-        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     )
 
     db.init_app(app)
