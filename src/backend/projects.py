@@ -279,17 +279,19 @@ def get_my_projects():
     user_id = int(get_jwt_identity())
     user = User.query.filter_by(id=user_id, isActive=True).first()
     
-<<<<<<< HEAD
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
     if user.role == UserRole.ADMIN:
         # Admins can see all projects
         projects = Project.query.filter_by(isActive=True).all()
     else:
-        # Collect projects where user is a manager (new table + legacy field)
+        # Combine projects where user is a manager (new table + legacy field)
         manager_proj_ids = [pm.projectId for pm in ProjectManager.query.filter_by(userId=user_id, isActive=True).all()]
         legacy_manager_ids = [p.id for p in Project.query.filter_by(projectManagerId=user_id, isActive=True).all()]
-        # Collect projects where user is a member
+        # Projects where user is a member
         member_proj_ids = [m.projectId for m in ProjectMember.query.filter_by(userId=user_id, isActive=True).all()]
-        # Collect projects the user is invited to (pending or accepted invitations matching their email)
+        # Projects the user is invited to (pending or accepted invitations matching their email)
         invited_proj_ids = []
         try:
             invited_proj_ids = [inv.projectId for inv in ProjectInvitation.query.filter(
@@ -305,45 +307,20 @@ def get_my_projects():
             projects = []
         else:
             projects = Project.query.filter(Project.isActive == True, Project.id.in_(list(proj_ids))).all()
-=======
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    
-    if user.role == UserRole.PROJECT_MANAGER:
-        # Project managers see projects they manage
-        projects = Project.query.filter_by(projectManagerId=user_id, isActive=True).all()
-    elif user.role == UserRole.WORKER:
-        # Workers only see projects they are members of
-        project_memberships = ProjectMember.query.filter_by(userId=user_id, isActive=True).all()
-        project_ids = [pm.projectId for pm in project_memberships]
-        if project_ids:
-            projects = Project.query.filter(
-                Project.id.in_(project_ids),
-                Project.isActive == True
-            ).all()
-        else:
-            projects = []
-    elif user.role == UserRole.ADMIN:
-        # Admins see all projects
-        projects = Project.query.filter_by(isActive=True).all()
-    else:
-        # Unknown role - return empty list
-        projects = []
-    
+
     # Recalculate actual costs for projects that have NULL (for existing projects)
     updated_any = False
     for project in projects:
         if project.actualCost is None:
             _update_project_actual_cost_from_work_orders(project.id)
             updated_any = True
-    
+
     if updated_any:
         db.session.commit()
         # Refresh projects to get updated costs
         for project in projects:
             if project.actualCost is None:
                 db.session.refresh(project)
->>>>>>> 7602d535db87f9e65d451ef286f9d96d779a9c67
     
     return jsonify({"projects": [project.to_dict() for project in projects]}), 200
 
@@ -786,20 +763,14 @@ def get_dashboard_progress():
                 return jsonify({"error": "Invalid status value"}), 400
             stmt = stmt.where(Project.status == status)
 
-<<<<<<< HEAD
-        if manager_only:
-            user_id = int(get_jwt_identity())
-            # Filter projects managed by the user (new relation or legacy)
+        # Role-based and managerOnly filtering
+        if user.role == UserRole.PROJECT_MANAGER:
+            # Project managers always see only projects they manage (legacy or new relation)
             manager_proj_ids = [pm.projectId for pm in ProjectManager.query.filter_by(userId=user_id, isActive=True).all()]
             if manager_proj_ids:
                 stmt = stmt.where((Project.projectManagerId == user_id) | (Project.id.in_(manager_proj_ids)))
             else:
                 stmt = stmt.where(Project.projectManagerId == user_id)
-=======
-        # Apply role-based filtering
-        if user.role == UserRole.PROJECT_MANAGER:
-            # Project managers always see only projects they manage
-            stmt = stmt.where(Project.projectManagerId == user_id)
         elif user.role == UserRole.WORKER:
             # Workers only see projects they are members of
             project_memberships = ProjectMember.query.filter_by(userId=user_id, isActive=True).all()
@@ -810,13 +781,16 @@ def get_dashboard_progress():
                 # No project memberships, return empty result
                 return jsonify({"count": 0, "page": page, "pageSize": page_size, "results": []}), 200
         elif user.role == UserRole.ADMIN:
-            # Admins see all projects (managerOnly filter still applies if set)
+            # Admins see all projects unless managerOnly is set
             if manager_only:
-                stmt = stmt.where(Project.projectManagerId == user_id)
+                manager_proj_ids = [pm.projectId for pm in ProjectManager.query.filter_by(userId=user_id, isActive=True).all()]
+                if manager_proj_ids:
+                    stmt = stmt.where((Project.projectManagerId == user_id) | (Project.id.in_(manager_proj_ids)))
+                else:
+                    stmt = stmt.where(Project.projectManagerId == user_id)
         else:
-            # Unknown role - return empty result
+            # Unknown or unsupported role - return empty result
             return jsonify({"count": 0, "page": page, "pageSize": page_size, "results": []}), 200
->>>>>>> 7602d535db87f9e65d451ef286f9d96d779a9c67
 
         projects: List[Project] = db.session.execute(stmt).scalars().all()
         if not projects:
