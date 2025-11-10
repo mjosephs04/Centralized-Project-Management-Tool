@@ -1,3 +1,4 @@
+import os
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -53,9 +54,14 @@ def create_app() -> Flask:
     def health():
         return jsonify({"status": "ok"})
 
-    # Initialize database tables at startup
-    with app.app_context():
-        db.create_all()
+    env = os.getenv("ENV", "development")
+    if env != "production":
+        with app.app_context():
+            try:
+                db.create_all()
+            except Exception as e:
+                # Log error but don't crash the app
+                app.logger.warning(f"Could not create database tables: {e}")
 
     return app
 
