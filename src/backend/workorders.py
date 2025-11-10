@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, date
+from decimal import Decimal
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from .models import db, User, Project, WorkOrder, WorkOrderWorker, WorkOrderStatus, UserRole, Audit, AuditEntityType
+from .models import db, User, Project, WorkOrder, WorkOrderWorker, WorkOrderStatus, UserRole, Audit, AuditEntityType, ProjectMember
 
 
 workorders_bp = Blueprint("workorders", __name__, url_prefix="/api/workorders")
@@ -24,6 +25,31 @@ def create_audit_log(entity_type: AuditEntityType, entity_id: int, user_id: int,
         projectId=project_id
     )
     db.session.add(audit_log)
+
+
+def update_project_actual_cost(project_id: int):
+    """Update project's actual cost by summing all work orders' actual costs in the project"""
+    from .progress import to_decimal
+    
+    project = Project.query.filter_by(id=project_id, isActive=True).first()
+    if not project:
+        return
+    
+    # Get all active work orders for this project
+    work_orders = WorkOrder.query.filter_by(projectId=project_id, isActive=True).all()
+    
+    # Sum all work order actual costs
+    total_actual_cost = Decimal("0")
+    for wo in work_orders:
+        if wo.actualCost is not None:
+            total_actual_cost += to_decimal(wo.actualCost)
+    
+    # Update project's actual cost (set to 0 if no costs, not None)
+    # This ensures the value is always set, even if it's 0
+    if total_actual_cost == Decimal("0"):
+        project.actualCost = Decimal("0")
+    else:
+        project.actualCost = total_actual_cost
 
 
 @workorders_bp.get("/test")
@@ -126,6 +152,9 @@ def create_workorder():
         workorder.name,
         project_id=payload["projectId"]
     )
+    
+    # Update project's actual cost (in case work order has initial actual cost)
+    update_project_actual_cost(payload["projectId"])
     
     db.session.commit()
     
@@ -324,6 +353,10 @@ def update_workorder(workorder_id):
     if workorder.startDate >= workorder.endDate:
         return jsonify({"error": "End date must be after start date"}), 400
     
+    # Update project's actual cost if work order actual cost was changed
+    if "actualCost" in payload:
+        update_project_actual_cost(workorder.projectId)
+    
     db.session.commit()
     
     return jsonify({"workorder": workorder.to_dict()}), 200
@@ -363,7 +396,7 @@ def start_workorder(workorder_id):
 @workorders_bp.patch("/<int:workorder_id>/worker-update")
 @jwt_required()
 def worker_update_workorder(workorder_id):
-    """Limited update endpoint for workers: allow description, location, priority, status, actualCost."""
+    """Limited update endpoint for workers: only allow status and actualCost updates."""
     workorder = WorkOrder.query.get(workorder_id)
     if not workorder:
         return jsonify({"error": "Work order not found"}), 404
@@ -373,38 +406,13 @@ def worker_update_workorder(workorder_id):
     session_id = str(uuid.uuid4())
     payload = request.get_json(silent=True) or request.form.to_dict() or {}
 
-    # Store original values for audit logging
+    # Store original values for audit logging (only for fields workers can update)
     original_values = {
-        "description": workorder.description,
-        "location": workorder.location,
-        "priority": str(workorder.priority),
         "status": workorder.status.value if workorder.status else None,
         "actualCost": f"{workorder.actualCost:.2f}" if workorder.actualCost else None,
-        "startDate": workorder.startDate.isoformat() if workorder.startDate else None,
-        "endDate": workorder.endDate.isoformat() if workorder.endDate else None,
     }
 
-    # Update fields with audit logging
-    if "description" in payload and payload["description"] != original_values["description"]:
-        create_audit_log(AuditEntityType.WORK_ORDER, workorder_id, user_id, "description", original_values["description"], payload["description"], session_id, workorder.projectId)
-        workorder.description = payload["description"]
-
-    if "location" in payload and payload["location"] != original_values["location"]:
-        create_audit_log(AuditEntityType.WORK_ORDER, workorder_id, user_id, "location", original_values["location"], payload["location"], session_id, workorder.projectId)
-        workorder.location = payload["location"]
-
-    if "priority" in payload:
-        try:
-            priority = int(payload["priority"])
-            if priority < 1 or priority > 5:
-                return jsonify({"error": "Priority must be between 1 and 5"}), 400
-            priority_str = str(priority)
-            if priority_str != original_values["priority"]:
-                create_audit_log(AuditEntityType.WORK_ORDER, workorder_id, user_id, "priority", original_values["priority"], priority_str, session_id, workorder.projectId)
-                workorder.priority = priority
-        except ValueError:
-            return jsonify({"error": "Priority must be a number between 1 and 5"}), 400
-
+    # Only allow status and actualCost updates
     if "status" in payload:
         try:
             new_status = WorkOrderStatus(payload["status"].lower())
@@ -431,30 +439,9 @@ def worker_update_workorder(workorder_id):
             except ValueError:
                 return jsonify({"error": "Invalid actual cost format"}), 400
 
-    # Handle date updates
-    if "startDate" in payload:
-        try:
-            new_start_date = datetime.strptime(payload["startDate"], "%Y-%m-%d").date()
-            new_start_date_str = new_start_date.isoformat()
-            if new_start_date_str != original_values["startDate"]:
-                create_audit_log(AuditEntityType.WORK_ORDER, workorder_id, user_id, "startDate", original_values["startDate"], new_start_date_str, session_id, workorder.projectId)
-                workorder.startDate = new_start_date
-        except ValueError:
-            return jsonify({"error": "Invalid start date format. Use YYYY-MM-DD"}), 400
-
-    if "endDate" in payload:
-        try:
-            new_end_date = datetime.strptime(payload["endDate"], "%Y-%m-%d").date()
-            new_end_date_str = new_end_date.isoformat()
-            if new_end_date_str != original_values["endDate"]:
-                create_audit_log(AuditEntityType.WORK_ORDER, workorder_id, user_id, "endDate", original_values["endDate"], new_end_date_str, session_id, workorder.projectId)
-                workorder.endDate = new_end_date
-        except ValueError:
-            return jsonify({"error": "Invalid end date format. Use YYYY-MM-DD"}), 400
-
-    # Validate date consistency after updates
-    if workorder.startDate >= workorder.endDate:
-        return jsonify({"error": "End date must be after start date"}), 400
+    # Update project's actual cost if work order actual cost was changed
+    if "actualCost" in payload:
+        update_project_actual_cost(workorder.projectId)
 
     db.session.commit()
     return jsonify({"workorder": workorder.to_dict()}), 200
@@ -490,6 +477,17 @@ def assign_worker_to_workorder(workorder_id):
     
     if worker.role != UserRole.WORKER:
         return jsonify({"error": "User must be a worker to be assigned to work orders"}), 400
+    
+    # Validate that the worker is a member of the project
+    project_id = workorder.projectId
+    is_project_member = ProjectMember.query.filter_by(
+        projectId=project_id,
+        userId=user_id_to_assign,
+        isActive=True
+    ).first()
+    
+    if not is_project_member:
+        return jsonify({"error": "Worker must be a member of this project to be assigned to work orders"}), 400
     
     # Check if already assigned
     existing_assignment = WorkOrderWorker.query.filter_by(
@@ -670,6 +668,19 @@ def assign_workers_to_workorder(workorder_id):
     if len(workers) != len(worker_ids):
         return jsonify({"error": "One or more worker IDs are invalid"}), 400
     
+    # Validate that all workers are members of the project
+    project_id = workorder.projectId
+    project_member_ids = {pm.userId for pm in ProjectMember.query.filter_by(
+        projectId=project_id, 
+        isActive=True
+    ).all()}
+    
+    invalid_workers = [wid for wid in worker_ids if wid not in project_member_ids]
+    if invalid_workers:
+        return jsonify({
+            "error": f"One or more workers are not members of this project. Worker IDs: {invalid_workers}"
+        }), 400
+    
     # Get current assigned workers for audit log
     current_assignments = WorkOrderWorker.query.filter_by(workOrderId=workorder_id, isActive=True).all()
     old_worker_ids = set([a.userId for a in current_assignments])
@@ -771,6 +782,10 @@ def delete_workorder(workorder_id):
     )
     
     db.session.delete(workorder)
+    
+    # Update project's actual cost after deleting work order
+    update_project_actual_cost(project_id)
+    
     db.session.commit()
     
     return jsonify({"message": "Work order deleted successfully"}), 200

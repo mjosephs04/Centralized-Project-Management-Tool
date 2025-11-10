@@ -234,6 +234,24 @@ def get_all_workers():
     except Exception as e:
         return jsonify({"error": f"Failed to retrieve workers: {str(e)}"}), 500
 
+@auth_bp.get("/allUsers")
+@jwt_required()
+def get_all_users():
+    """
+    Return all users
+    Example request: GET /api/auth/allUsers
+    Requires Authorization header with Bearer token.
+    """
+    try:
+        # Query all users who are workers
+        workers = User.query.all()
+
+        # Serialize users (exclude password hash in to_dict)
+        worker_data = [w.to_dict() for w in workers]
+        return jsonify({"users": worker_data}), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to retrieve workers: {str(e)}"}), 500
 
 @auth_bp.post("/forgot-password")
 def forgot_password():
