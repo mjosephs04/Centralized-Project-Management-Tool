@@ -288,13 +288,13 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
 
                                     <div style={styles.cardFooter}>
                                       <button
-                                        style={{ ...styles.cardBtn, background: "#e5e7eb" }}
+                                        style={{ ...styles.cardBtn, background: "#5692bc", color: 'white' }}
                                         onClick={() => openViewModal(wo)}
                                         title="View"
                                       >
                                         <FaEye style={{ marginRight: 6 }} /> View
                                       </button>
-                                      <button style={styles.cardBtn} onClick={() => openUpdateModal(wo)}>
+                                      <button style={{...styles.cardBtn, background: '#b356bc', color: 'white'}} onClick={() => openUpdateModal(wo)}>
                                         Update
                                       </button>
                                     </div>
@@ -375,13 +375,74 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
               }}
               style={styles.form}
             >
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Description</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  style={{ ...styles.input, ...styles.textArea }}
+                  placeholder="Add a detailed description"
+                />
+              </div>
+
+              <div style={styles.formRow}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Location</label>
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    style={styles.input}
+                    placeholder="Work location"
+                  />
+                </div>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Priority</label>
+                  <select
+                    value={formData.priority}
+                    onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) })}
+                    style={styles.select}
+                  >
+                    <option value="1">Very Low</option>
+                    <option value="2">Low</option>
+                    <option value="3">Medium</option>
+                    <option value="4">High</option>
+                    <option value="5">Critical</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={styles.formRow}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Start Date</label>
+                  <input
+                    type="date"
+                    value={formData.startDate}
+                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                    style={styles.input}
+                  />
+                  {formErrors.startDate && <div style={styles.error}>{formErrors.startDate}</div>}
+                </div>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>End Date</label>
+                  <input
+                    type="date"
+                    value={formData.endDate}
+                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                    style={styles.input}
+                  />
+                  {formErrors.endDate && <div style={styles.error}>{formErrors.endDate}</div>}
+                  {formErrors.dateOrder && <div style={styles.error}>{formErrors.dateOrder}</div>}
+                </div>
+              </div>
+
               <div style={styles.formRow}>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Status</label>
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    style={styles.input}
+                    style={styles.select}
                   >
                     <option value="pending">Pending</option>
                     <option value="in_progress">In Progress</option>
@@ -392,20 +453,23 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
                 </div>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Actual Cost</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formData.actualCost}
-                    onChange={(e) => setFormData({ ...formData, actualCost: e.target.value })}
-                    style={styles.input}
-                    placeholder="0.00"
-                  />
+                  <div style={styles.inputWrapper}>
+                    <span style={styles.inputPrefix}>$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.actualCost}
+                      onChange={(e) => setFormData({ ...formData, actualCost: e.target.value })}
+                      style={styles.inputWithPrefix}
+                      placeholder="0.00"
+                    />
+                  </div>
                 </div>
               </div>
 
               <div style={styles.actions}>
                 <button type="button" style={styles.cancelBtn} onClick={handleCancelUpdate}>
-                  Close
+                  Cancel
                 </button>
                 {onNavigateToSupplies && selectedWorkOrder && (
                   <button 
@@ -423,7 +487,7 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
                   type="submit"
                   style={styles.submitBtn}
                 >
-                  Update
+                  Update Work Order
                 </button>
               </div>
             </form>
@@ -434,7 +498,7 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
   );
 };
 
-// Styles (trimmed from your existing file for consistency)
+// Styles (updated to match PMWorkOrders and CalendarTab)
 const styles = {
   container: { maxWidth: "1400px", margin: "0 auto" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" },
@@ -458,51 +522,191 @@ const styles = {
   smallLabel: { color: "#6b7280", fontWeight: 600 },
   statusBadge: { display: "inline-block", padding: "0.2rem 0.6rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: "700", textTransform: "capitalize", textAlign: "center" },
   cardBtn: { padding: "0.35rem 0.6rem", background: "#dbeafe", color: "#111827", border: "none", borderRadius: "8px", fontSize: "0.85rem", fontWeight: "700", cursor: "pointer" },
-  // Modals
-  overlay: { position: "fixed", inset: 0, backgroundColor: "rgba(0, 0, 0, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
-  modal: { backgroundColor: "white", borderRadius: "12px", width: "90%", maxWidth: "600px", maxHeight: "90vh", overflow: "auto" },
-  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.25rem", borderBottom: "1px solid #e5e7eb" },
-  modalTitle: { fontSize: "1.25rem", fontWeight: "700", color: "#111827", margin: 0 },
-  closeButton: { background: "none", border: "none", fontSize: "1.25rem", color: "#6b7280", cursor: "pointer" },
-  form: { padding: "1.25rem" },
-  formGroup: { marginBottom: "1rem", flex: 1 },
-  formRow: { display: "flex", gap: "1rem" },
-  label: { display: "block", marginBottom: "0.4rem", fontWeight: "700", color: "#374151", fontSize: "0.9rem" },
-  input: { width: "100%", padding: "0.7rem", border: "1px solid #d1d5db", borderRadius: "8px", fontSize: "1rem", outline: "none" },
-  textArea: { minHeight: "100px", resize: "vertical" },
-  actions: { display: "flex", gap: "1rem", justifyContent: "flex-end", marginTop: "1rem" },
-  cancelBtn: { padding: "0.7rem 1.2rem", backgroundColor: "#e5e7eb", color: "#374151", border: "none", borderRadius: "8px", fontWeight: "700", cursor: "pointer" },
-  submitBtn: { padding: "0.7rem 1.2rem", backgroundColor: "#0052D4", color: "white", border: "none", borderRadius: "8px", fontWeight: "700", cursor: "pointer" },
-  viewBody: { padding: "1.25rem", display: "grid", gap: "0.6rem" },
-  viewRow: { lineHeight: 1.4 },
-  error: { marginTop: "0.25rem", color: "#b91c1c", fontSize: "0.85rem", fontWeight: "700" },
-  cardAssignedWorkers: {
-    marginTop: "0.5rem",
-    paddingTop: "0.5rem",
-    borderTop: "1px solid #f3f4f6",
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.35rem"
+  
+  // Modals - Enhanced styling to match PMWorkOrders
+  overlay: { 
+    position: "fixed", 
+    inset: 0, 
+    backgroundColor: "rgba(0, 0, 0, 0.6)", 
+    backdropFilter: "blur(4px)", 
+    display: "flex", 
+    alignItems: "center", 
+    justifyContent: "center", 
+    zIndex: 1000, 
+    padding: "1rem" 
   },
-  assignedLabel: {
-    fontSize: "0.75rem",
+  modal: { 
+    backgroundColor: "white", 
+    borderRadius: "16px", 
+    width: "90%", 
+    maxWidth: "650px", 
+    maxHeight: "90vh", 
+    overflow: "hidden",
+    boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+    display: "flex",
+    flexDirection: "column"
+  },
+  modalHeader: { 
+    display: "flex", 
+    justifyContent: "space-between", 
+    alignItems: "center", 
+    padding: "1.75rem 2rem", 
+    borderBottom: "1px solid #e5e7eb",
+    backgroundColor: "#fafbfc",
+    flexShrink: 0
+  },
+  modalTitle: { 
+    fontSize: "1.5rem", 
+    fontWeight: "700", 
+    color: "#1f2937", 
+    margin: 0,
+    letterSpacing: "-0.02em"
+  },
+  closeButton: { 
+    background: "none", 
+    border: "none", 
+    fontSize: "1.5rem", 
+    color: "#6b7280", 
+    cursor: "pointer",
+    padding: "0.5rem",
+    borderRadius: "8px",
+    transition: "all 0.2s",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  form: { 
+    padding: "2rem",
+    overflowY: "auto",
+    flex: 1
+  },
+  formGroup: { 
+    marginBottom: "1.5rem", 
+    flex: 1 
+  },
+  formRow: { 
+    display: "flex", 
+    gap: "1.25rem",
+    marginBottom: "0"
+  },
+  label: { 
+    display: "block", 
+    marginBottom: "0.5rem", 
+    fontWeight: "600", 
+    color: "#374151", 
+    fontSize: "0.875rem",
+    letterSpacing: "0.01em"
+  },
+  input: { 
+    width: "100%", 
+    padding: "0.875rem 1rem", 
+    border: "1.5px solid #e5e7eb", 
+    borderRadius: "8px", 
+    fontSize: "0.95rem", 
+    outline: "none",
+    transition: "all 0.2s",
+    backgroundColor: "#ffffff",
+    color: "#1f2937",
+    fontFamily: "inherit",
+    boxSizing: "border-box"
+  },
+  select: {
+    width: "100%",
+    padding: "0.875rem 1rem",
+    border: "1.5px solid #e5e7eb",
+    borderRadius: "8px",
+    fontSize: "0.95rem",
+    outline: "none",
+    transition: "all 0.2s",
+    backgroundColor: "#ffffff",
+    color: "#1f2937",
+    fontFamily: "inherit",
+    cursor: "pointer",
+    boxSizing: "border-box"
+  },
+  textArea: { 
+    minHeight: "120px", 
+    resize: "vertical",
+    lineHeight: "1.5",
+    fontFamily: "inherit"
+  },
+  inputWrapper: {
+    position: "relative",
+    display: "flex",
+    alignItems: "center"
+  },
+  inputPrefix: {
+    position: "absolute",
+    left: "1rem",
     color: "#6b7280",
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em"
+    fontSize: "0.95rem",
+    fontWeight: "500",
+    pointerEvents: "none",
+    zIndex: 1
   },
-  workerBadgesContainer: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "0.35rem"
+  inputWithPrefix: {
+    width: "100%",
+    padding: "0.875rem 1rem 0.875rem 2rem",
+    border: "1.5px solid #e5e7eb",
+    borderRadius: "8px",
+    fontSize: "0.95rem",
+    outline: "none",
+    transition: "all 0.2s",
+    backgroundColor: "#ffffff",
+    color: "#1f2937",
+    fontFamily: "inherit",
+    boxSizing: "border-box"
   },
-  workerBadge: {
-    display: "inline-block",
-    padding: "0.25rem 0.6rem",
-    backgroundColor: "#e0e7ff",
-    color: "#3730a3",
-    borderRadius: "9999px",
-    fontSize: "0.75rem",
+  actions: { 
+    display: "flex", 
+    gap: "1rem", 
+    justifyContent: "flex-end", 
+    marginTop: "2rem",
+    paddingTop: "1.5rem",
+    borderTop: "1px solid #f3f4f6"
+  },
+  cancelBtn: {
+    padding: '0.875rem 1.75rem',
+    backgroundColor: 'white',
+    color: '#bc8056',
+    border: '2px solid #bc8056',
+    borderRadius: '8px',
+    fontSize: '0.95rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    letterSpacing: '0.01em',
+  },
+  submitBtn: {
+    padding: '0.875rem 1.75rem',
+    background: '#5692bc',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '0.95rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    letterSpacing: '0.01em',
+    boxShadow: '0 4px 6px -1px rgba(35, 115, 243, 0.2), 0 2px 4px -1px rgba(35, 115, 243, 0.1)',
+  },
+  viewBody: { 
+    padding: "2rem", 
+    display: "grid", 
+    gap: "1rem",
+    overflowY: "auto",
+    flex: 1
+  },
+  viewRow: { 
+    lineHeight: 1.6,
+    padding: "0.75rem",
+    backgroundColor: "#f8fafc",
+    borderRadius: "8px"
+  },
+  error: { 
+    marginTop: "0.5rem", 
+    color: "#dc2626", 
+    fontSize: "0.875rem", 
     fontWeight: "600"
   },
 };

@@ -1,7 +1,7 @@
 import React, {useState, useEffect} from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import UserNavbar from "../components/UserNavbar";
-import { FaArrowLeft } from "react-icons/fa";
+import { FaArrowLeft, FaEdit, FaSave, FaTimes } from "react-icons/fa";
 import OverviewTab from '../components/ProjectTabs/OverviewTab'
 import { projectsAPI, authAPI } from "../services/api";
 import TeamTab from "../components/ProjectTabs/TeamTab";
@@ -46,13 +46,15 @@ const SingleProjectPage = ({ projects }) => {
     const { projectId } = useParams();
     const navigate = useNavigate();
     const { showSnackbar } = useSnackbar();
-    const [activeTab, setActiveTab] = useState('calendar');
+    const [activeTab, setActiveTab] = useState('overview');
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [userRole, setUserRole] = useState(null);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [highlightedWorkOrderId, setHighlightedWorkOrderId] = useState(null);
+    const [isEditingDescription, setIsEditingDescription] = useState(false);
+    const [editedDescription, setEditedDescription] = useState('');
     const [selectedWorkOrderForSupplies, setSelectedWorkOrderForSupplies] = useState(null);
 
     useEffect(() => {
@@ -85,6 +87,7 @@ const SingleProjectPage = ({ projects }) => {
             setUserRole(me?.role || null);
             const data = await projectsAPI.getProject(projectId);
             setProject(data);
+            setEditedDescription(data.description || '');
         } catch (err) {
             if (err.response?.status === 403) {
                 setError("Access denied. You don't have permission to view this project.");
@@ -112,6 +115,32 @@ const SingleProjectPage = ({ projects }) => {
             console.error('Error updating project:', err);
             alert('Failed to update project: ' + err.message);
         }
+    };
+
+    const handleEditDescription = () => {
+        setEditedDescription(project.description || '');
+        setIsEditingDescription(true);
+    };
+
+    const handleSaveDescription = async () => {
+        try {
+            const updated = await projectsAPI.updateProject(projectId, {
+                description: editedDescription
+            });
+            setProject(updated);
+            setIsEditingDescription(false);
+            showSnackbar('Project description updated successfully!', 'success');
+            triggerRefresh();
+        } catch (err) {
+            console.error('Error updating description:', err);
+            showSnackbar('Failed to update project description', 'error');
+        }
+    };
+
+    const handleCancelDescription = () => {
+        setEditedDescription(project.description || '');
+        setIsEditingDescription(false);
+        showSnackbar('Changes discarded', 'warning');
     };
 
     const handleDelete = () => {
@@ -167,8 +196,8 @@ const SingleProjectPage = ({ projects }) => {
     }
 
     const managerTabs = [
-        { id: 'calendar', label: 'Calendar'},
         { id: 'overview', label: 'Overview' },
+        { id: 'calendar', label: 'Calendar'},
         { id: 'metrics', label: 'Metrics'},
         { id: 'team', label: 'Team'},
         { id: 'workorders', label: 'Work Orders'},
@@ -178,8 +207,8 @@ const SingleProjectPage = ({ projects }) => {
 
     // Worker-specific tabs (no Metrics, but includes read-only Team)
     const workerTabs = [
-        { id: 'calendar', label: 'Calendar'},
         { id: 'overview', label: 'Overview' },
+        { id: 'calendar', label: 'Calendar'},
         { id: 'team', label: 'Team' },
         { id: 'workorders', label: 'Work Orders'},
         { id: 'logs', label: 'Logs'},
@@ -231,10 +260,48 @@ const SingleProjectPage = ({ projects }) => {
             </div>
             <div style={styles.contentContainer}>
                 <div style={styles.descriptionSection}>
-                    <h2 style={styles.sectionTitle}>Project Description</h2>
-                    <p style={styles.description}>
-                        {project.description || "No description available for this project."}
-                    </p>
+                    <div style={styles.descriptionHeader}>
+                        <h2 style={styles.sectionTitle}>Project Description</h2>
+                        {userRole !== 'worker' && !isEditingDescription && (
+                            <button 
+                                style={styles.editIconButton}
+                                onClick={handleEditDescription}
+                                title="Edit description"
+                            >
+                                <FaEdit />
+                            </button>
+                        )}
+                        {userRole !== 'worker' && isEditingDescription && (
+                            <div style={styles.descriptionActions}>
+                                <button 
+                                    style={styles.saveIconButton}
+                                    onClick={handleSaveDescription}
+                                    title="Save changes"
+                                >
+                                    <FaSave />
+                                </button>
+                                <button 
+                                    style={styles.cancelIconButton}
+                                    onClick={handleCancelDescription}
+                                    title="Cancel"
+                                >
+                                    <FaTimes />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                    {isEditingDescription ? (
+                        <textarea
+                            value={editedDescription}
+                            onChange={(e) => setEditedDescription(e.target.value)}
+                            style={styles.descriptionTextarea}
+                            placeholder="Enter project description..."
+                        />
+                    ) : (
+                        <p style={styles.description}>
+                            {project.description || "No description available for this project."}
+                        </p>
+                    )}
                 </div>
             </div>
             <div style={styles.tabContainer}>
@@ -320,7 +387,7 @@ const styles = {
     },
     contentContainer: {
         padding: '3rem 2.5rem',
-        background: 'linear-gradient(90deg,rgb(35, 115, 243) 0%, #4facfe 100%)',
+        background: '#5692bc',
         minHeight: '100px'
     },
     descriptionSection: {
@@ -331,22 +398,87 @@ const styles = {
         borderRadius: '12px',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
     },
+    descriptionHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '1rem',
+    },
     sectionTitle: {
         fontSize: '1rem',
         fontWeight: '600',
         color: '#2c3e50',
-        marginTop: 0,
-        marginBottom: '0.2rem',
+        margin: 0,
+    },
+    descriptionActions: {
+        display: 'flex',
+        gap: '0.5rem',
+        alignItems: 'center',
+    },
+    editIconButton: {
+        background: 'none',
+        border: '2px solid #5692bc',
+        cursor: 'pointer',
+        padding: '0.5rem 0.5rem 0.5rem 0.6rem',
+        color: '#5692bc',
+        fontSize: '1.1rem',
+        transition: 'all 0.2s',
+        borderRadius: '6px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    saveIconButton: {
+        background: '#77DD77',
+        border: 'none',
+        cursor: 'pointer',
+        padding: '0.6rem',
+        color: 'white',
+        fontSize: '1rem',
+        transition: 'all 0.2s',
+        borderRadius: '6px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cancelIconButton: {
+        background: 'white',
+        border: '2px solid #bc8056',
+        cursor: 'pointer',
+        padding: '0.6rem',
+        color: '#bc8056',
+        fontSize: '1rem',
+        transition: 'all 0.2s',
+        borderRadius: '6px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     description: {
         fontSize: '1rem',
         lineHeight: '1.7',
         color: '#4a5568',
         margin: 0,
+        whiteSpace: 'pre-wrap',
+    },
+    descriptionTextarea: {
+        width: '100%',
+        minHeight: '150px',
+        padding: '0.75rem',
+        fontSize: '1rem',
+        lineHeight: '1.7',
+        color: '#4a5568',
+        border: '2px solid #e5e7eb',
+        borderRadius: '8px',
+        resize: 'vertical',
+        fontFamily: 'inherit',
+        outline: 'none',
+        transition: 'border-color 0.2s',
+        boxSizing: 'border-box',
     },
     tabContainer: {
         width: '100%',
-        background: 'linear-gradient(90deg,rgb(35, 115, 243) 0%, #4facfe 100%)',
+        background: '#5692bc',
         minHeight: 'calc(100vh - 400px)',
     },
     tabNav: {
@@ -385,7 +517,7 @@ const styles = {
     },
     tabContent: {
         padding: '3rem 2.5rem',
-        backgroundColor: '#f8f0fa',
+        backgroundColor: '#fff4ed',
         minHeight: 'calc(100vh - 500px)',
         animation: 'fadeIn 0.4s ease',
     }

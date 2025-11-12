@@ -115,7 +115,7 @@ const LoginDistributionPage = () => {
 
                     <div style={styles.card}>
                         <div style={styles.cardHeader}>
-                            <div style={{...styles.cardIcon, background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)'}}>
+                            <div style={{...styles.cardIcon, background: '#FF6961'}}>
                                 <FaUserMinus size={24} />
                             </div>
                             <div>
@@ -164,8 +164,8 @@ const LoginDistributionPage = () => {
 
 const styles = {
     pageContainer: {
-        padding: '2.5rem 2.5rem',
-        background: 'linear-gradient(135deg, rgb(35, 115, 243) 0%, #4facfe 100%)',
+        padding: '1.5rem 1rem',
+        background: 'rgb(219, 219, 219)',
         minHeight: 'calc(100vh - 80px)',
         fontFamily: 'sans-serif',
     },
@@ -173,7 +173,7 @@ const styles = {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '2rem',
+        marginBottom: '1.5rem',
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
         padding: '2rem',
         borderRadius: '16px',
@@ -184,7 +184,7 @@ const styles = {
         fontWeight: '700',
         color: '#1a202c',
         margin: '0 0 0.5rem 0',
-        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+        background: '#515557',
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
     },
@@ -197,7 +197,7 @@ const styles = {
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))',
         gap: '2rem',
-        marginBottom: '2rem',
+        marginBottom: '1.5rem',
     },
     card: {
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -218,7 +218,7 @@ const styles = {
         width: '56px',
         height: '56px',
         borderRadius: '12px',
-        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+        background: '#5692bc',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -256,7 +256,7 @@ const styles = {
     },
     labelIcon: {
         fontSize: '0.9rem',
-        color: '#2373f3',
+        color: '#5692bc',
     },
     input: {
         padding: '0.85rem 1rem',
@@ -279,7 +279,7 @@ const styles = {
         justifyContent: 'center',
         gap: '0.75rem',
         padding: '1rem 1.5rem',
-        background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+        background: '#5692bc',
         color: 'white',
         border: 'none',
         borderRadius: '10px',
@@ -296,7 +296,7 @@ const styles = {
         justifyContent: 'center',
         gap: '0.75rem',
         padding: '1rem 1.5rem',
-        background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)',
+        background: '#FF6961',
         color: 'white',
         border: 'none',
         borderRadius: '10px',
@@ -315,7 +315,7 @@ const styles = {
         borderRadius: '16px',
         padding: '2rem',
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-        borderLeft: '4px solid #2373f3',
+        borderLeft: '4px solid #5692bc',
     },
     infoTitle: {
         fontSize: '1.25rem',
