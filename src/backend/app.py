@@ -55,18 +55,13 @@ def create_app() -> Flask:
     app.register_blueprint(projects_bp)
     app.register_blueprint(workorders_bp)
 
-    @app.get("/api/health")
-    def health():
-        return jsonify({"status": "ok"})
-
     env = os.getenv("ENV", "development")
-    if env != "production":
-        with app.app_context():
-            try:
-                db.create_all()
-            except Exception as e:
-                # Log error but don't crash the app
-                app.logger.warning(f"Could not create database tables: {e}")
+    with app.app_context():
+        try:
+            db.create_all()
+        except Exception as e:
+            # Log error but don't crash the app
+            app.logger.warning(f"Could not create database tables: {e}")
 
     return app
 
