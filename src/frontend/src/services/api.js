@@ -8,7 +8,7 @@ const getAuthToken = () => {
 };
 
 const apiClient = axios.create({
-  baseURL:  PROD_API_URL,
+  baseURL: process.env.REACT_APP_ISPROD ? PROD_API_URL : LOCAL_API_URL,
   headers: {
     "Content-Type": "application/json",
   },
