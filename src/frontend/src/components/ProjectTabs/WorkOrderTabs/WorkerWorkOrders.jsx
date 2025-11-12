@@ -12,7 +12,7 @@ const COLUMNS = [
   { key: "cancelled", label: "Cancelled" },
 ];
 
-const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
+const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, highlightedWorkOrderId }) => {
   const { showSnackbar } = useSnackbar();
   const [workOrders, setWorkOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -106,13 +106,9 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
 
   const validateForm = () => {
     const errors = {};
-    if (!formData.startDate) errors.startDate = "Start date is required";
-    if (!formData.endDate) errors.endDate = "End date is required";
-    if (formData.startDate && formData.endDate && formData.startDate >= formData.endDate) {
-      errors.dateOrder = "End date must be after start date";
-    }
+    // Workers can only update actualCost and status, no validation needed
     setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    return true;
   };
 
   const handleCancelUpdate = () => {
@@ -162,12 +158,7 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
     if (!validateForm()) return;
     try {
       await workOrdersAPI.workerUpdate(selectedWorkOrder.id, {
-        description: formData.description,
-        location: formData.location,
-        priority: formData.priority,
         status: formData.status,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
         actualCost: formData.actualCost === "" ? null : parseFloat(formData.actualCost),
       });
       await fetchWorkOrders();
@@ -480,6 +471,18 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate }) => {
                 <button type="button" style={styles.cancelBtn} onClick={handleCancelUpdate}>
                   Cancel
                 </button>
+                {onNavigateToSupplies && selectedWorkOrder && (
+                  <button 
+                    type="button" 
+                    style={{...styles.submitBtn, backgroundColor: "#10b981", marginRight: "0.5rem"}}
+                    onClick={() => {
+                      onNavigateToSupplies(selectedWorkOrder.id);
+                      setShowUpdate(false);
+                    }}
+                  >
+                    View Supplies
+                  </button>
+                )}
                 <button
                   type="submit"
                   style={styles.submitBtn}

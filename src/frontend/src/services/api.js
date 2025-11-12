@@ -68,8 +68,11 @@ export const projectsAPI = {
     const response = await apiClient.post(`/projects/${projectId}/supplies`, payload);
     return response;
   },
-  getSupplies:  async (projectId) => {
-    const response = await apiClient.get(`/projects/${projectId}/supplies`);
+  getSupplies:  async (projectId, workOrderId = null) => {
+    const url = workOrderId 
+      ? `/projects/${projectId}/supplies?workOrderId=${workOrderId}`
+      : `/projects/${projectId}/supplies`;
+    const response = await apiClient.get(url);
     return response;
   },
   patchSupplies: async (projectId, supplyID, payload) => {
@@ -79,6 +82,36 @@ export const projectsAPI = {
   deleteSupplies:  async (projectId, supplyID) => {
     const response = await apiClient.delete(`/projects/${projectId}/supplies/${supplyID}`);
     return response;
+  },
+
+  getProjectMembers: async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/members`);
+    return response.data.members;
+  },
+
+  getProjectInvitations: async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/invitations`);
+    return response.data.invitations;
+  },
+
+  removeProjectMember: async (projectId, memberId) => {
+    const response = await apiClient.delete(`/projects/${projectId}/members/${memberId}`);
+    return response.data;
+  },
+
+  removeProjectManager: async (projectId, managerId) => {
+    const response = await apiClient.delete(`/projects/${projectId}/managers/${managerId}`);
+    return response.data;
+  },
+
+  getSuppliesCatalog: async (search = "", category = "", supplyType = "building") => {
+    const params = new URLSearchParams();
+    params.append("supplyType", supplyType);
+    if (search) params.append("search", search);
+    if (category) params.append("category", category);
+    const url = `/projects/supplies/catalog?${params.toString()}`;
+    const response = await apiClient.get(url);
+    return response.data;
   },
 
   inviteUser: async (projectId, invitationData) => {
@@ -166,6 +199,10 @@ export const usersAPI = {
     const response = await apiClient.get("/auth/workers");
     return response.data.users;
   },
+  getAllUsers: async () => {
+    const response = await apiClient.get("/auth/allUsers");
+    return response.data.users;
+  }
 };
 
 export const authAPI = {
@@ -182,8 +219,18 @@ export const authAPI = {
     return response;
   },
   forgotPassword: async (payload) => {
-    const response = await apiClient.post("/auth/forgot-password", payload)
-    return response;
+    const response = await apiClient.post("/auth/forgot-password", payload);
+    return response.data;
+  },
+
+  resetPassword: async (payload) => {
+    const response = await apiClient.post("/auth/reset-password", payload);
+    return response.data;
+  },
+
+  validateResetToken: async (token) => {
+    const response = await apiClient.get(`/auth/reset-password/validate/${token}`);
+    return response.data;
   },
   
   validateInvitationToken: async (token) => {
