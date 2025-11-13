@@ -509,3 +509,54 @@ def activate_user(user_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Failed to activate user: {str(e)}"}), 500
+
+@auth_bp.post("/updateUserRole/<int:user_id>")
+@jwt_required()
+def update_user_role(user_id):
+    """
+    Update a user's role (admin-only).
+    Endpoint: PUT /api/auth/updateUserRole/<user_id>
+    Body: { "role": "admin" | "worker" | "project_manager" }
+    """
+    # Verify requesting user is an admin
+    requesting_user_id = get_jwt_identity()
+    requesting_user = User.query.filter_by(id=requesting_user_id, isActive=True).first()
+    print(requesting_user)
+
+    if not requesting_user:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    if requesting_user.role != UserRole.ADMIN:
+        return jsonify({"error": "Only admins can update user roles"}), 403
+
+    # Parse role from body
+    payload = request.get_json(silent=True) or {}
+    new_role_raw = payload.get("role")
+
+    if not new_role_raw:
+        return jsonify({"error": "Field 'role' is required"}), 400
+
+    # Validate role
+    try:
+        new_role = UserRole(new_role_raw.lower())
+    except ValueError:
+        return jsonify({"error": "Invalid role. Must be admin, worker, or project_manager."}), 400
+
+    # Fetch user to update
+    user = User.query.filter_by(id=user_id).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    # Update DB
+    try:
+        user.role = new_role
+        db.session.commit()
+
+        return jsonify({
+            "message": "User role updated successfully",
+            "user": user.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Failed to update user role: {str(e)}"}), 500

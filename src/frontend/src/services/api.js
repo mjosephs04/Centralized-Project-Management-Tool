@@ -211,7 +211,11 @@ export const usersAPI = {
     const response = await apiClient.post(`/auth/activateUser/${userKey}`)
     return response
   },
-};
+  updateUserRole: async (userKey, role) => {
+    const response = await apiClient.post(`/auth/updateUserRole/${userKey}`, {role})
+    return response;
+  },
+}
 
 export const authAPI = {
   me: async () => {

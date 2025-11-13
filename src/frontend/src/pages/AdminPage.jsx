@@ -32,7 +32,7 @@ const AdminPage = () => {
     };
 
     const handleAddUser = async () => {
-        const { firstName, lastName, emailAddress, role } = newUser;
+        const { firstName, lastName, emailAddress } = newUser;
         if (!firstName || !lastName || !emailAddress) {
             alert("Please fill out all fields");
             return;
@@ -45,16 +45,14 @@ const AdminPage = () => {
                 emailAddress: emailAddress.trim(),
                 phoneNumber: "+10000000000",
                 password: "testPass",
-                role,
+                role: "project_manager", // FORCE PROJECT MANAGER
             });
 
-            const res = await authAPI.register(payload);
-            const data = res.data;
-            if (res.status !== 201) throw new Error(data.error || "Failed to add user");
+            const status = await authAPI.register(payload);
+            if (status !== 201) throw new Error("Failed to add project manager");
 
-            setUsers((prev) => [data.user, ...prev]);
             setShowModal(false);
-            setNewUser({ firstName: "", lastName: "", emailAddress: "", role: "worker" });
+            setNewUser({ firstName: "", lastName: "", emailAddress: "", role: "project_manager" });
         } catch (err) {
             alert(err.message);
         }
@@ -73,8 +71,24 @@ const AdminPage = () => {
         }
     };
 
+    const handleUpdateRole = async (id, newRole) => {
+        try {
+            const res = await usersAPI.updateUserRole(id, newRole);
+            if (res.status !== 200) throw new Error(res.data.error || "Failed to update role");
+
+            // update row in UI
+            setUsers((prev) =>
+                prev.map((u) =>
+                    u.id === id ? { ...u, role: newRole } : u
+                )
+            );
+        } catch (err) {
+            alert(err.message);
+        }
+    };
+
     const handleDeleteUser = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this user?")) return;
+        if (!window.confirm("Are you sure you want to inactivate this user?")) return;
         try {
             const res = await usersAPI.deleteUser(id);
             if (res.status !== 200) throw new Error(res.data.error || "Failed to delete user");
@@ -108,7 +122,7 @@ const AdminPage = () => {
                 <div style={styles.header}>
                     <h2 style={styles.title}>Users</h2>
                     <button style={styles.addButton} onClick={() => setShowModal(true)}>
-                        <FaPlus /> Add User
+                        <FaPlus /> Add Project Manager
                     </button>
                 </div>
 
@@ -162,7 +176,25 @@ const AdminPage = () => {
                                     {user.firstName} {user.lastName}
                                 </td>
                                 <td style={styles.td}>{user.emailAddress}</td>
-                                <td style={styles.td}>{user.role.toUpperCase()}</td>
+                                <td style={styles.td}>
+                                    <select
+                                        value={user.role}
+                                        onChange={(e) => handleUpdateRole(user.id, e.target.value)}
+                                        style={{
+                                            padding: "0.4rem",
+                                            borderRadius: "6px",
+                                            border: "1px solid #d1d5db",
+                                            fontWeight: 600,
+                                            backgroundColor: "#f9fafb",
+                                            cursor: "pointer"
+                                        }}
+                                    >
+                                        <option value="admin">ADMIN</option>
+                                        <option value="worker">WORKER</option>
+                                        <option value="project_manager">PROJECT MANAGER</option>
+                                    </select>
+                                </td>
+
                                 <td style={styles.td}>
                                     <span
                                         style={{
@@ -186,7 +218,7 @@ const AdminPage = () => {
                                             onClick={() => handleDeleteUser(user.id)}
                                         >
                                             <FaTrash style={{ marginRight: "0.3rem" }} />
-                                            Delete
+                                            Inactivate
                                         </button>
                                     ) : (
                                         <button
@@ -213,7 +245,7 @@ const AdminPage = () => {
                 {showModal && (
                     <div style={styles.modalOverlay}>
                         <div style={styles.modal}>
-                            <h3 style={styles.modalTitle}>Add New User</h3>
+                            <h3 style={styles.modalTitle}>Add New Project Manager</h3>
 
                             <label style={styles.label}>First Name</label>
                             <input
@@ -239,7 +271,6 @@ const AdminPage = () => {
                                 style={styles.input}
                             />
 
-                            <label style={styles.label}>Role</label>
 
                             <div style={styles.modalActions}>
                                 <button style={styles.saveButton} onClick={handleAddUser}>
@@ -331,7 +362,7 @@ const styles = {
         fontWeight: "500",
     },
     input: {
-        width: "100%",
+        width: "90%",
         padding: "0.7rem",
         marginBottom: "1rem",
         border: "1px solid #d1d5db",
