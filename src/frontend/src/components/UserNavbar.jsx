@@ -278,30 +278,32 @@ const UserNavbar = () => {
 
                 <Notifications userRole={userRole} />
 
-                <button
-                    style={{
-                        ...styles.iconButton,
-                        ...(isHovered.mail ? styles.iconButtonHover : {})
-                    }}
-                    onMouseEnter={() => setIsHovered({ ...isHovered, mail: true })}
-                    onMouseLeave={() => setIsHovered({ ...isHovered, mail: false })}
-                >
-                    <FaEnvelope
-                        size={20}
+                <Link to="/messages">
+                    <button
                         style={{
-                            ...styles.icon,
-                            ...(isHovered.mail ? styles.iconHover : {})
+                            ...styles.iconButton,
+                            ...(isHovered.mail ? styles.iconButtonHover : {})
                         }}
-                    />
-                    
-                    <div style={{
-                        ...styles.tooltip,
-                        ...(isHovered.mail ? styles.tooltipVisible : {})
-                    }}>
-                        <div style={styles.tooltipArrow}></div>
-                        Messages
-                    </div>
-                </button>
+                        onMouseEnter={() => setIsHovered({ ...isHovered, mail: true })}
+                        onMouseLeave={() => setIsHovered({ ...isHovered, mail: false })}
+                    >
+                        <FaEnvelope
+                            size={20}
+                            style={{
+                                ...styles.icon,
+                                ...(isHovered.mail ? styles.iconHover : {})
+                            }}
+                        />
+                        
+                        <div style={{
+                            ...styles.tooltip,
+                            ...(isHovered.mail ? styles.tooltipVisible : {})
+                        }}>
+                            <div style={styles.tooltipArrow}></div>
+                            Messages
+                        </div>
+                    </button>
+                </Link>
 
                 <Link to="/profile">
                     <button

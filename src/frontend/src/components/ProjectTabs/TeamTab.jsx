@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { FaEdit, FaSave, FaTimes, FaUserPlus, FaTrash, FaUser } from "react-icons/fa";
-import { usersAPI, projectsAPI } from "../../services/api";
+import { useNavigate } from "react-router-dom";
+import { FaEdit, FaSave, FaTimes, FaUserPlus, FaTrash, FaUser, FaEnvelope } from "react-icons/fa";
+import { usersAPI, projectsAPI, messagesAPI } from "../../services/api";
 import { useSnackbar } from '../../contexts/SnackbarContext';
 
 const TeamTab = ({ project, onUpdate, userRole }) => {
   // Local state
   const { showSnackbar } = useSnackbar();
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
 
   // Normalize incoming crew members to objects { id?, name? } in local state
@@ -126,27 +128,52 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
 
   const findWorkerById = (id) => allWorkers.find((w) => String(w.id) === String(id));
 
-  const crewResolved = useMemo(() => {
-    // Resolve each crew entry with worker details if id matches
-    return crew.map((member) => {
-      if (member.id) {
-        const w = findWorkerById(member.id);
-        if (w) {
-          return {
-            id: w.id,
-            name: workerDisplayName(w),
-            email: getEmail(w),
-            phoneNumber: getPhone(w),
-            profileImageUrl: w.profileImageUrl || ""
-          };
-        }
-        // unresolved ID — show ID as name fallback
-        return { id: member.id, name: `Worker #${member.id}`, email: "", phoneNumber: "" };
+const crewResolved = useMemo(() => {
+  // Resolve each crew entry with worker details if id matches
+  return crew.map((member) => {
+    if (member.id) {
+      const w = findWorkerById(member.id);
+      if (w) {
+        return {
+          id: w.id,
+          name: workerDisplayName(w),
+          email: getEmail(w),
+          phoneNumber: getPhone(w),
+          profileImageUrl: w.profileImageUrl || ""
+        };
       }
-      // name-only legacy entry
-      return { name: member.name, email: "", phoneNumber: "" };
-    });
-  }, [crew, allWorkers]);
+      // unresolved ID — show ID as name fallback
+      return { id: member.id, name: `Worker #${member.id}`, email: "", phoneNumber: "" };
+    }
+    // name-only legacy entry
+    return { name: member.name, email: "", phoneNumber: "" };
+  });
+}, [crew, allWorkers]);
+
+const projectManagerInfo = useMemo(() => {
+  const pm = project?.projectManager;
+  if (pm) {
+    return {
+      id: pm.id,
+      name: getName(pm) || getEmail(pm) || "Project Manager",
+      email: getEmail(pm) || project?.projectManagerEmail || "—",
+      phone: getPhone(pm) || project?.projectManagerPhoneNumber || "",
+      profileImageUrl: pm.profileImageUrl || ""
+    };
+  }
+
+  if (project?.projectManagerName || project?.projectManagerEmail || project?.projectManagerId) {
+    return {
+      id: project?.projectManagerId,
+      name: project?.projectManagerName || project?.projectManagerEmail || "Project Manager",
+      email: project?.projectManagerEmail || "—",
+      phone: project?.projectManagerPhoneNumber || "",
+      profileImageUrl: project?.projectManagerProfileImageUrl || ""
+    };
+  }
+
+  return null;
+}, [project]);
 
   // Debounced search effect
   useEffect(() => {
@@ -293,7 +320,9 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
     } catch (error) {
       console.error("Failed to send invitation:", error);
       console.error("Error response:", error.response?.data);
-      const errorMessage = error.response?.data?.error || "Failed to send invitation";
+      console.error("Error status:", error.response?.status);
+      console.error("Full error:", error);
+      const errorMessage = error.response?.data?.error || error.message || "Failed to send invitation";
       setInviteMessage(`❌ ${errorMessage}`);
       showSnackbar(errorMessage, "error");
     } finally {
@@ -318,6 +347,22 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
     } catch (error) {
       console.error("Failed to remove member:", error);
       alert(error.response?.data?.error || "Failed to remove member");
+    }
+  };
+
+  const handleStartConversation = async (targetUserId, displayName = "this user") => {
+    if (!targetUserId) {
+      showSnackbar("Messaging isn't available for this person yet.", "warning");
+      return;
+    }
+
+    try {
+      const conversation = await messagesAPI.createConversation(targetUserId);
+      navigate(`/messages?conversation=${conversation.id}`);
+    } catch (error) {
+      console.error("Failed to start conversation:", error);
+      const errorMessage = error.response?.data?.error || `Failed to start conversation with ${displayName}`;
+      showSnackbar(errorMessage, "error");
     }
   };
 
@@ -570,6 +615,16 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
                         </div>
                       )}
                     </div>
+                    {m.id && (
+                      <button
+                        style={styles.messageButton}
+                        onClick={() => handleStartConversation(m.id, getName(m) || m.emailAddress)}
+                        title="Message project manager"
+                      >
+                        <FaEnvelope size={14} />
+                        Message
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -621,6 +676,16 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
                         </div>
                       )}
                     </div>
+                    {m.id && (
+                      <button
+                        style={styles.messageButton}
+                        onClick={() => handleStartConversation(m.id, getName(m) || m.emailAddress)}
+                        title="Send message"
+                      >
+                        <FaEnvelope size={14} />
+                        Message
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -638,51 +703,129 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
           )}
         </div>
       ) : (
-        <div style={styles.grid}>
-          {crewResolved.map((member, index) => (
-            <div key={index} style={styles.card}>
-              {isEditing && (
-                <button
-                  style={styles.removeButton}
-                  onClick={() => handleRemoveMember(index)}
-                  title="Remove member"
-                >
-                  <FaTrash />
-                </button>
-              )}
+        <>
+          {projectManagerInfo && (
+            <div style={{ marginBottom: "1.5rem" }}>
+              <h3 style={{ margin: 0, color: "#374151" }}>Project Manager</h3>
+              <div style={styles.grid}>
+                <div style={styles.card}>
+                  {canEdit && projectManagerInfo.id && (
+                    <button
+                      style={styles.removeButton}
+                      onClick={() => handleRemoveTeamMember(projectManagerInfo.id, true)}
+                      title="Remove project manager"
+                    >
+                      <FaTrash />
+                    </button>
+                  )}
 
-                <div style={styles.avatarContainer}>
-                    {member.profileImageUrl ? (
-                        <img
-                            src={member.profileImageUrl}
-                            alt={`${member.name || "User"} profile`}
-                            style={styles.avatarImage}
-                            onError={(e) => (e.target.style.display = "none")}
-                        />
+                  <div style={styles.avatarContainer}>
+                    {projectManagerInfo.profileImageUrl ? (
+                      <img
+                        src={projectManagerInfo.profileImageUrl}
+                        alt={`${projectManagerInfo.name} profile`}
+                        style={styles.avatarImage}
+                        onError={(e) => (e.target.style.display = "none")}
+                      />
                     ) : (
-                        <div style={styles.avatar}>
-                            <FaUser style={styles.avatarIcon}/>
-                        </div>
+                      <div style={styles.avatar}>
+                        <FaUser style={styles.avatarIcon} />
+                      </div>
                     )}
-                </div>
-
-                <div style={styles.cardContent}>
-                    <h3 style={styles.memberName}>{member.name || "Member"}</h3>
-
-                    <div style={styles.contactInfo}>
-                        <div style={styles.contactItem}>
-                            <span style={styles.label}>Email:</span>
-                            <span style={styles.value}>{member.email || "—"}</span>
                   </div>
-                  <div style={styles.contactItem}>
-                    <span style={styles.label}>Phone:</span>
-                    <span style={styles.value}>{member.phoneNumber || "—"}</span>
+
+                  <div style={styles.cardContent}>
+                    <h3 style={styles.memberName}>{projectManagerInfo.name}</h3>
+                    <div style={styles.contactInfo}>
+                      <div style={styles.contactItem}>
+                        <span style={styles.label}>Email:</span>
+                        <span style={styles.value}>{projectManagerInfo.email || "—"}</span>
+                      </div>
+                      {projectManagerInfo.phone && (
+                        <div style={styles.contactItem}>
+                          <span style={styles.label}>Phone:</span>
+                          <span style={styles.value}>{projectManagerInfo.phone}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {projectManagerInfo.id && (
+                      <button
+                        style={styles.messageButton}
+                        onClick={() => handleStartConversation(projectManagerInfo.id, projectManagerInfo.name)}
+                        title="Message project manager"
+                      >
+                        <FaEnvelope size={14} />
+                        Message
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
-          ))}
-        </div>
+          )}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.5rem" }}>
+            <h3 style={{ margin: 0, color: "#374151" }}>Team Members</h3>
+            {isEditing && <span style={{ color: "#6b7280", fontStyle: "italic" }}>(editing)</span>}
+          </div>
+          <div style={styles.grid}>
+            {crewResolved.map((member, index) => (
+              <div key={index} style={styles.card}>
+                {isEditing && (
+                  <button
+                    style={styles.removeButton}
+                    onClick={() => handleRemoveMember(index)}
+                    title="Remove member"
+                  >
+                    <FaTrash />
+                  </button>
+                )}
+
+                <div style={styles.avatarContainer}>
+                  {member.profileImageUrl ? (
+                    <img
+                      src={member.profileImageUrl}
+                      alt={`${member.name || "User"} profile`}
+                      style={styles.avatarImage}
+                      onError={(e) => (e.target.style.display = "none")}
+                    />
+                  ) : (
+                    <div style={styles.avatar}>
+                      <FaUser style={styles.avatarIcon} />
+                    </div>
+                  )}
+                </div>
+
+                <div style={styles.cardContent}>
+                  <h3 style={styles.memberName}>{member.name || "Member"}</h3>
+
+                  <div style={styles.contactInfo}>
+                    <div style={styles.contactItem}>
+                      <span style={styles.label}>Email:</span>
+                      <span style={styles.value}>{member.email || "—"}</span>
+                    </div>
+                    <div style={styles.contactItem}>
+                      <span style={styles.label}>Phone:</span>
+                      <span style={styles.value}>{member.phoneNumber || "—"}</span>
+                    </div>
+                  </div>
+
+                  {member.id && (
+                    <button
+                      style={styles.messageButton}
+                      onClick={() => handleStartConversation(member.id, member.name || member.email)}
+                      title="Send message"
+                    >
+                      <FaEnvelope size={14} />
+                      Message
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Pending Invitations (PM/Admin only) - moved to bottom */}
@@ -965,6 +1108,23 @@ const styles = {
     contactItem: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.85rem" },
     label: { fontWeight: "600", color: "#6b7280" },
     value: { color: "#2c3e50" },
+    messageButton: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "0.5rem",
+        marginTop: "0.75rem",
+        padding: "0.5rem 1rem",
+        backgroundColor: "#0052D4",
+        color: "white",
+        border: "none",
+        borderRadius: "6px",
+        fontSize: "0.875rem",
+        fontWeight: "500",
+        cursor: "pointer",
+        transition: "background-color 0.2s ease",
+        width: "100%",
+    },
     emptyState: {
         textAlign: "center",
         padding: "4rem 2rem",

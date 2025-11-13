@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const LOCAL_API_URL = "http://localhost:8080/api";
-const PROD_API_URL = "https://centralized-project-management-tool-frontend-710408068302.us-south1.run.app/"
+const PROD_API_URL = "http://localhost:8080/api"
 
 const getAuthToken = () => {
   return localStorage.getItem("accessToken");
@@ -151,6 +151,50 @@ export const projectsAPI = {
   validateInvitationToken: async (token) => {
     const response = await apiClient.get(`/projects/invitations/validate/${token}`);
     return response.data;
+  },
+};
+
+export const messagesAPI = {
+  getConversations: async () => {
+    const response = await apiClient.get("/messages/conversations");
+    return response.data.conversations;
+  },
+
+  getConversation: async (conversationId) => {
+    const response = await apiClient.get(`/messages/conversations/${conversationId}`);
+    return response.data.conversation;
+  },
+
+  createConversation: async (otherUserId) => {
+    const response = await apiClient.post("/messages/conversations", { otherUserId });
+    return response.data.conversation;
+  },
+
+  getMessages: async (conversationId, limit = 50, offset = 0) => {
+    const response = await apiClient.get(`/messages/conversations/${conversationId}/messages`, {
+      params: { limit, offset }
+    });
+    return response.data;
+  },
+
+  sendMessage: async (conversationId, content) => {
+    const response = await apiClient.post(`/messages/conversations/${conversationId}/messages`, { content });
+    return response.data.message;
+  },
+
+  markMessageRead: async (messageId) => {
+    const response = await apiClient.put(`/messages/messages/${messageId}/read`);
+    return response.data.message;
+  },
+
+  markConversationRead: async (conversationId) => {
+    const response = await apiClient.put(`/messages/conversations/${conversationId}/read`);
+    return response.data;
+  },
+
+  getUnreadCount: async () => {
+    const response = await apiClient.get("/messages/unread-count");
+    return response.data.unreadCount;
   },
 
   getMetrics: {

@@ -717,3 +717,78 @@ class NotificationDismissal(db.Model):
             "auditLogId": self.auditLogId,
             "dismissedAt": self.dismissedAt.isoformat() if self.dismissedAt else None,
         }
+
+
+class Conversation(db.Model):
+    __tablename__ = "conversations"
+
+    id = db.Column(db.Integer, primary_key=True)
+    participant1Id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    participant2Id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    lastMessageAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    participant1 = db.relationship('User', foreign_keys=[participant1Id], backref=db.backref('conversations_as_participant1', lazy=True))
+    participant2 = db.relationship('User', foreign_keys=[participant2Id], backref=db.backref('conversations_as_participant2', lazy=True))
+    messages = db.relationship('Message', backref='conversation', lazy=True, order_by='Message.createdAt')
+
+    # Ensure unique conversation between two users
+    __table_args__ = (db.UniqueConstraint('participant1Id', 'participant2Id', name='unique_conversation_pair'),)
+
+    def to_dict(self, current_user_id: int = None) -> dict:
+        # Determine the other participant
+        other_participant = self.participant2 if current_user_id == self.participant1Id else self.participant1
+        other_participant_dict = other_participant.to_dict() if other_participant else None
+        
+        # Get unread count for current user
+        unread_count = 0
+        if current_user_id:
+            unread_count = Message.query.filter_by(
+                conversationId=self.id,
+                recipientId=current_user_id,
+                isRead=False
+            ).count()
+        
+        return {
+            "id": self.id,
+            "participant1Id": self.participant1Id,
+            "participant2Id": self.participant2Id,
+            "otherParticipant": other_participant_dict,
+            "lastMessageAt": self.lastMessageAt.isoformat() if self.lastMessageAt else None,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+            "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+            "unreadCount": unread_count,
+        }
+
+
+class Message(db.Model):
+    __tablename__ = "messages"
+
+    id = db.Column(db.Integer, primary_key=True)
+    conversationId = db.Column(db.Integer, db.ForeignKey('conversations.id'), nullable=False, index=True)
+    senderId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    recipientId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    content = db.Column(db.Text, nullable=False)
+    isRead = db.Column(db.Boolean, default=False, nullable=False)
+    readAt = db.Column(db.DateTime, nullable=True)
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    sender = db.relationship('User', foreign_keys=[senderId], backref=db.backref('sent_messages', lazy=True))
+    recipient = db.relationship('User', foreign_keys=[recipientId], backref=db.backref('received_messages', lazy=True))
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "conversationId": self.conversationId,
+            "senderId": self.senderId,
+            "recipientId": self.recipientId,
+            "sender": self.sender.to_dict() if self.sender else None,
+            "recipient": self.recipient.to_dict() if self.recipient else None,
+            "content": self.content,
+            "isRead": self.isRead,
+            "readAt": self.readAt.isoformat() if self.readAt else None,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+        }

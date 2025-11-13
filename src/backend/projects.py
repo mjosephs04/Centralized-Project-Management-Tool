@@ -1533,7 +1533,7 @@ def invite_user_to_project(project_id: int):
     worker_type = None
     if role == UserRole.WORKER:
         worker_type_str = payload.get("workerType")
-        if not worker_type_str:
+        if worker_type_str is None or worker_type_str == "":
             return jsonify({"error": "workerType is required when role is worker."}), 400
         try:
             worker_type = WorkerType(worker_type_str.lower())
@@ -1607,6 +1607,10 @@ def invite_user_to_project(project_id: int):
             }), 201
 
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error creating invitation: {str(e)}")
+        print(error_trace)
         return jsonify({"error": f"Failed to create invitation: {str(e)}"}), 500
 
 
