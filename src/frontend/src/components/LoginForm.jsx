@@ -71,7 +71,11 @@ const LoginForm = () => {
       
       // Delay navigation to show success message
       setTimeout(() => {
-        navigate('/projects');
+        if(res.data.user.role === 'admin'){
+          navigate('/admin');
+        } else {
+          navigate('/projects');
+        }
       }, 1000);
       
     } catch (err) {

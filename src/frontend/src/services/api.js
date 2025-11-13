@@ -202,7 +202,15 @@ export const usersAPI = {
   getAllUsers: async () => {
     const response = await apiClient.get("/auth/allUsers");
     return response.data.users;
-  }
+  },
+  deleteUser: async(userKey) => {
+    const response = await apiClient.post(`/auth/deleteUser/${userKey}`)
+    return response
+  },
+  activateUser: async(userKey) => {
+    const response = await apiClient.post(`/auth/activateUser/${userKey}`)
+    return response
+  },
 };
 
 export const authAPI = {
