@@ -624,3 +624,96 @@ class PasswordReset(db.Model):
             "used": self.used,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
         }
+
+
+class NotificationPreference(db.Model):
+    __tablename__ = "notification_preferences"
+
+    id = db.Column(db.Integer, primary_key=True)
+    userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True, index=True)
+    
+    # Project notifications
+    projectStatusChange = db.Column(db.Boolean, default=True, nullable=False)
+    projectStatusChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    projectPriorityChange = db.Column(db.Boolean, default=True, nullable=False)
+    projectPriorityChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    projectBudgetChange = db.Column(db.Boolean, default=True, nullable=False)
+    projectBudgetChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    projectDateChange = db.Column(db.Boolean, default=True, nullable=False)
+    projectDateChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    projectTeamChange = db.Column(db.Boolean, default=True, nullable=False)
+    projectTeamChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    
+    # Work order notifications
+    workOrderCreated = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderCreatedEmail = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderStatusChange = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderStatusChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderCompleted = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderCompletedEmail = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderPriorityChange = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderPriorityChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderBudgetChange = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderBudgetChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderDateChange = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderDateChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('notification_preferences', lazy=True))
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "userId": self.userId,
+            "projectStatusChange": self.projectStatusChange,
+            "projectStatusChangeEmail": self.projectStatusChangeEmail,
+            "projectPriorityChange": self.projectPriorityChange,
+            "projectPriorityChangeEmail": self.projectPriorityChangeEmail,
+            "projectBudgetChange": self.projectBudgetChange,
+            "projectBudgetChangeEmail": self.projectBudgetChangeEmail,
+            "projectDateChange": self.projectDateChange,
+            "projectDateChangeEmail": self.projectDateChangeEmail,
+            "projectTeamChange": self.projectTeamChange,
+            "projectTeamChangeEmail": self.projectTeamChangeEmail,
+            "workOrderCreated": self.workOrderCreated,
+            "workOrderCreatedEmail": self.workOrderCreatedEmail,
+            "workOrderStatusChange": self.workOrderStatusChange,
+            "workOrderStatusChangeEmail": self.workOrderStatusChangeEmail,
+            "workOrderCompleted": self.workOrderCompleted,
+            "workOrderCompletedEmail": self.workOrderCompletedEmail,
+            "workOrderPriorityChange": self.workOrderPriorityChange,
+            "workOrderPriorityChangeEmail": self.workOrderPriorityChangeEmail,
+            "workOrderBudgetChange": self.workOrderBudgetChange,
+            "workOrderBudgetChangeEmail": self.workOrderBudgetChangeEmail,
+            "workOrderDateChange": self.workOrderDateChange,
+            "workOrderDateChangeEmail": self.workOrderDateChangeEmail,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+            "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+        }
+
+
+class NotificationDismissal(db.Model):
+    __tablename__ = "notification_dismissals"
+
+    id = db.Column(db.Integer, primary_key=True)
+    userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    auditLogId = db.Column(db.Integer, db.ForeignKey('audit_logs.id'), nullable=False, index=True)
+    dismissedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('notification_dismissals', lazy=True))
+    auditLog = db.relationship('Audit', backref=db.backref('dismissals', lazy=True))
+
+    # Ensure unique user-audit log combinations
+    __table_args__ = (db.UniqueConstraint('userId', 'auditLogId', name='unique_user_audit_dismissal'),)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "userId": self.userId,
+            "auditLogId": self.auditLogId,
+            "dismissedAt": self.dismissedAt.isoformat() if self.dismissedAt else None,
+        }

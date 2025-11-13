@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const LOCAL_API_URL = "http://localhost:8080/api";
-const PROD_API_URL = "https://centralized-project-management-tool-backend-710408068302.us-south1.run.app/api"
+const PROD_API_URL = "https://centralized-project-management-tool-frontend-710408068302.us-south1.run.app/"
 
 const getAuthToken = () => {
   return localStorage.getItem("accessToken");
@@ -61,6 +61,35 @@ export const projectsAPI = {
 
   getProjectAuditLogs: async (projectId) => {
     const response = await apiClient.get(`/projects/${projectId}/audit-logs`);
+    return response.data;
+  },
+
+  getNotifications: async (limit = 50, onlyUnread = false) => {
+    const params = new URLSearchParams();
+    if (limit) params.append("limit", limit);
+    if (onlyUnread) params.append("only_unread", "true");
+    const url = `/projects/notifications${params.toString() ? `?${params.toString()}` : ''}`;
+    const response = await apiClient.get(url);
+    return response.data;
+  },
+
+  getNotificationPreferences: async () => {
+    const response = await apiClient.get("/projects/notification-preferences");
+    return response.data.preferences;
+  },
+
+  updateNotificationPreferences: async (preferences) => {
+    const response = await apiClient.put("/projects/notification-preferences", preferences);
+    return response.data.preferences;
+  },
+
+  dismissNotification: async (notificationId) => {
+    const response = await apiClient.post(`/projects/notifications/${notificationId}/dismiss`);
+    return response.data;
+  },
+
+  dismissAllNotifications: async () => {
+    const response = await apiClient.post("/projects/notifications/dismiss-all");
     return response.data;
   },
 

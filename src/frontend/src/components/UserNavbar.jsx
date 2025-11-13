@@ -5,6 +5,7 @@ import { FaShareFromSquare } from "react-icons/fa6";
 import logo from '../imgs/LSGSLogo.png';
 import { authAPI } from '../services/api';
 import { useSnackbar } from '../contexts/SnackbarContext';
+import Notifications from './Notifications';
 
 const styles = {
     navbar: {
@@ -274,6 +275,8 @@ const UserNavbar = () => {
                         </button>
                     </Link>
                 )}
+
+                <Notifications userRole={userRole} />
 
                 <button
                     style={{
