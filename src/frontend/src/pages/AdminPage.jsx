@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { FaPlus, FaSave, FaTimes, FaTrash, FaUser } from "react-icons/fa";
 import UserNavbar from "../components/UserNavbar";
-import {authAPI, usersAPI} from "../services/api";
+import { authAPI, usersAPI } from "../services/api";
 
 const AdminPage = () => {
     const [users, setUsers] = useState([]);
     const [showModal, setShowModal] = useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
     const [newUser, setNewUser] = useState({
         firstName: "",
         lastName: "",
@@ -31,7 +32,7 @@ const AdminPage = () => {
     };
 
     const handleAddUser = async () => {
-        const { firstName, lastName, emailAddress, role } = newUser;
+        const { firstName, lastName, emailAddress } = newUser;
         if (!firstName || !lastName || !emailAddress) {
             alert("Please fill out all fields");
             return;
@@ -44,24 +45,50 @@ const AdminPage = () => {
                 emailAddress: emailAddress.trim(),
                 phoneNumber: "+10000000000",
                 password: "testPass",
-                role,
+                role: "project_manager", // FORCE PROJECT MANAGER
             });
 
+            const status = await authAPI.register(payload);
+            if (status !== 201) throw new Error("Failed to add project manager");
 
-            const res = await authAPI.register(payload);
-            const data = res.data;
-            if (res.status !== 201) throw new Error(data.error || "Failed to add user");
-
-            setUsers((prev) => [data.user, ...prev]);
             setShowModal(false);
-            setNewUser({ firstName: "", lastName: "", emailAddress: "", role: "worker" });
+            setNewUser({ firstName: "", lastName: "", emailAddress: "", role: "project_manager" });
+        } catch (err) {
+            alert(err.message);
+        }
+    };
+
+    const handleActivateUser = async (id) => {
+        try {
+            const res = await usersAPI.activateUser(id);
+            if (res.status !== 200) throw new Error(res.data.error || "Failed to activate user");
+
+            setUsers((prev) =>
+                prev.map((u) => (u.id === id ? { ...u, isActive: true } : u))
+            );
+        } catch (err) {
+            alert(err.message);
+        }
+    };
+
+    const handleUpdateRole = async (id, newRole) => {
+        try {
+            const res = await usersAPI.updateUserRole(id, newRole);
+            if (res.status !== 200) throw new Error(res.data.error || "Failed to update role");
+
+            // update row in UI
+            setUsers((prev) =>
+                prev.map((u) =>
+                    u.id === id ? { ...u, role: newRole } : u
+                )
+            );
         } catch (err) {
             alert(err.message);
         }
     };
 
     const handleDeleteUser = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this user?")) return;
+        if (!window.confirm("Are you sure you want to inactivate this user?")) return;
         try {
             const res = await usersAPI.deleteUser(id);
             if (res.status !== 200) throw new Error(res.data.error || "Failed to delete user");
@@ -71,6 +98,23 @@ const AdminPage = () => {
         }
     };
 
+    const filteredUsers = useMemo(() => {
+        let list = [...users];
+
+        // Filter
+        if (searchQuery.trim() !== "") {
+            const query = searchQuery.toLowerCase();
+            list = list.filter((u) =>
+                (u.firstName + " " + u.lastName).toLowerCase().includes(query) ||
+                u.emailAddress.toLowerCase().includes(query) ||
+                u.role.toLowerCase().includes(query) ||
+                (u.isActive ? "active" : "inactive").includes(query)
+            );
+        }
+
+        return list;
+    }, [users, searchQuery]);
+
     return (
         <>
             <UserNavbar />
@@ -78,13 +122,30 @@ const AdminPage = () => {
                 <div style={styles.header}>
                     <h2 style={styles.title}>Users</h2>
                     <button style={styles.addButton} onClick={() => setShowModal(true)}>
-                        <FaPlus /> Add User
+                        <FaPlus /> Add Project Manager
                     </button>
+                </div>
+
+                {/* 🔍 SEARCH BAR */}
+                <div style={{ marginBottom: "1rem" }}>
+                    <input
+                        type="text"
+                        placeholder="Search users by name, email, role, or status..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        style={{
+                            width: "100%",
+                            padding: "0.7rem",
+                            borderRadius: "8px",
+                            border: "1px solid #d1d5db",
+                            fontSize: "1rem",
+                        }}
+                    />
                 </div>
 
                 {loading ? (
                     <p>Loading users...</p>
-                ) : users.length === 0 ? (
+                ) : filteredUsers.length === 0 ? (
                     <div style={styles.emptyState}>
                         <FaUser style={styles.emptyIcon} />
                         <p style={styles.emptyText}>No users found.</p>
@@ -93,44 +154,86 @@ const AdminPage = () => {
                     <table style={styles.table}>
                         <thead>
                         <tr>
-                            <th style={styles.th}>Name</th>
-                            <th style={styles.th}>Email</th>
-                            <th style={styles.th}>Role</th>
-                            <th style={styles.th}>Active</th>
+                            <th style={styles.th}>
+                                Name
+                            </th>
+                            <th style={styles.th} >
+                                Email
+                            </th>
+                            <th style={styles.th}>
+                                Role
+                            </th>
+                            <th style={styles.th}>
+                                Active
+                            </th>
                             <th style={styles.th}>Actions</th>
                         </tr>
                         </thead>
                         <tbody>
-                        {users.map((user) => (
+                        {filteredUsers.map((user) => (
                             <tr key={user.id}>
                                 <td style={styles.td}>
                                     {user.firstName} {user.lastName}
                                 </td>
                                 <td style={styles.td}>{user.emailAddress}</td>
-                                <td style={styles.td}>{user.role}</td>
                                 <td style={styles.td}>
-                    <span
-                        style={{
-                            color: user.isActive ? "green" : "gray",
-                            fontWeight: 600,
-                            textTransform: "capitalize",
-                        }}
-                    >
-                      {user.isActive ? "Active" : "Inactive"}
-                    </span>
+                                    <select
+                                        value={user.role}
+                                        onChange={(e) => handleUpdateRole(user.id, e.target.value)}
+                                        style={{
+                                            padding: "0.4rem",
+                                            borderRadius: "6px",
+                                            border: "1px solid #d1d5db",
+                                            fontWeight: 600,
+                                            backgroundColor: "#f9fafb",
+                                            cursor: "pointer"
+                                        }}
+                                    >
+                                        <option value="admin">ADMIN</option>
+                                        <option value="worker">WORKER</option>
+                                        <option value="project_manager">PROJECT MANAGER</option>
+                                    </select>
+                                </td>
+
+                                <td style={styles.td}>
+                                    <span
+                                        style={{
+                                            color: user.isActive ? "green" : "gray",
+                                            fontWeight: 600,
+                                            textTransform: "capitalize",
+                                        }}
+                                    >
+                                        {user.isActive ? "Active" : "Inactive"}
+                                    </span>
                                 </td>
                                 <td style={styles.td}>
-                                    <button
-                                        style={{
-                                            ...styles.actionButton,
-                                            backgroundColor: "#fef2f2",
-                                            color: "#b91c1c",
-                                            border: "1px solid #fecaca",
-                                        }}
-                                        onClick={() => handleDeleteUser(user.id)}
-                                    >
-                                        <FaTrash style={{ marginRight: "0.3rem" }} /> Delete
-                                    </button>
+                                    {user.isActive ? (
+                                        <button
+                                            style={{
+                                                ...styles.actionButton,
+                                                backgroundColor: "#fef2f2",
+                                                color: "#b91c1c",
+                                                border: "1px solid #fecaca",
+                                            }}
+                                            onClick={() => handleDeleteUser(user.id)}
+                                        >
+                                            <FaTrash style={{ marginRight: "0.3rem" }} />
+                                            Inactivate
+                                        </button>
+                                    ) : (
+                                        <button
+                                            style={{
+                                                ...styles.actionButton,
+                                                backgroundColor: "#ecfdf5",
+                                                color: "#047857",
+                                                border: "1px solid #a7f3d0",
+                                            }}
+                                            onClick={() => handleActivateUser(user.id)}
+                                        >
+                                            <FaPlus style={{ marginRight: "0.3rem" }} />
+                                            Activate
+                                        </button>
+                                    )}
                                 </td>
                             </tr>
                         ))}
@@ -138,10 +241,12 @@ const AdminPage = () => {
                     </table>
                 )}
 
+                {/* --- ADD USER MODAL --- */}
                 {showModal && (
                     <div style={styles.modalOverlay}>
                         <div style={styles.modal}>
-                            <h3 style={styles.modalTitle}>Add New User</h3>
+                            <h3 style={styles.modalTitle}>Add New Project Manager</h3>
+
                             <label style={styles.label}>First Name</label>
                             <input
                                 type="text"
@@ -149,6 +254,7 @@ const AdminPage = () => {
                                 onChange={(e) => setNewUser({ ...newUser, firstName: e.target.value })}
                                 style={styles.input}
                             />
+
                             <label style={styles.label}>Last Name</label>
                             <input
                                 type="text"
@@ -156,6 +262,7 @@ const AdminPage = () => {
                                 onChange={(e) => setNewUser({ ...newUser, lastName: e.target.value })}
                                 style={styles.input}
                             />
+
                             <label style={styles.label}>Email</label>
                             <input
                                 type="email"
@@ -163,7 +270,7 @@ const AdminPage = () => {
                                 onChange={(e) => setNewUser({ ...newUser, emailAddress: e.target.value })}
                                 style={styles.input}
                             />
-                            <label style={styles.label}>Role</label>
+
 
                             <div style={styles.modalActions}>
                                 <button style={styles.saveButton} onClick={handleAddUser}>
@@ -218,11 +325,7 @@ const styles = {
         color: "#2c3e50",
         borderBottom: "1px solid #e5e7eb",
     },
-    td: {
-        padding: "1rem",
-        borderBottom: "1px solid #f3f4f6",
-        color: "#374151",
-    },
+    td: { padding: "1rem", borderBottom: "1px solid #f3f4f6", color: "#374151" },
     emptyState: {
         textAlign: "center",
         padding: "4rem 2rem",
@@ -252,9 +355,14 @@ const styles = {
         boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
     },
     modalTitle: { marginBottom: "1.5rem", fontSize: "1.3rem", fontWeight: "600" },
-    label: { display: "block", marginBottom: "0.5rem", color: "#374151", fontWeight: "500" },
+    label: {
+        display: "block",
+        marginBottom: "0.5rem",
+        color: "#374151",
+        fontWeight: "500",
+    },
     input: {
-        width: "100%",
+        width: "90%",
         padding: "0.7rem",
         marginBottom: "1rem",
         border: "1px solid #d1d5db",
@@ -262,7 +370,11 @@ const styles = {
         outline: "none",
         fontSize: "1rem",
     },
-    modalActions: { display: "flex", justifyContent: "space-between", marginTop: "1rem" },
+    modalActions: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginTop: "1rem",
+    },
     saveButton: {
         backgroundColor: "#10b981",
         color: "white",
