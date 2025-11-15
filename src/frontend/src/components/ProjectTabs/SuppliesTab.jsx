@@ -34,6 +34,16 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
     const [currentUserId, setCurrentUserId] = useState(null);
     
     // Catalog supplies and categories - cached separately for building and electrical
+    // Use persistent cache that survives modal close
+    const catalogCacheRef = useRef({
+        buildingSupplies: [],
+        electricalSupplies: [],
+        buildingCategories: [],
+        electricalCategories: [],
+        lastLoaded: null,
+        cacheTimeout: 5 * 60 * 1000 // 5 minutes
+    });
+    
     const [buildingCatalogSupplies, setBuildingCatalogSupplies] = useState([]);
     const [electricalCatalogSupplies, setElectricalCatalogSupplies] = useState([]);
     const [buildingCategories, setBuildingCategories] = useState([]);
@@ -45,6 +55,12 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
     const [showSupplyDropdown, setShowSupplyDropdown] = useState(false);
     const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
     const supplyInputRef = useRef(null);
+    const [catalogPage, setCatalogPage] = useState(1);
+    const [catalogLoading, setCatalogLoading] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMorePages, setHasMorePages] = useState(true);
+    const [paginationInfo, setPaginationInfo] = useState(null);
+    const dropdownScrollRef = useRef(null);
 
     // Fetch current user ID
     useEffect(() => {
@@ -96,70 +112,184 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
         if (project?.id) fetchSupplies();
     }, [project?.id, selectedWorkOrderId]);
 
-    // Load all catalog supplies at once when modal opens (only once)
-    useEffect(() => {
-        const loadAllCatalogSupplies = async () => {
-            if (!showModal || catalogLoaded) return; // Only load once when modal opens
+    // Load catalog supplies function (defined outside useEffect so it can be reused)
+    const loadCatalogSupplies = React.useCallback(async (page = 1, append = false, category = null, search = null) => {
+        if (!showModal && !append) return;
+        
+        // Use current state values if not provided
+        const filterCategory = category !== null ? category : selectedCategory;
+        const filterSearch = search !== null ? search : supplySearchTerm;
+        
+        const cache = catalogCacheRef.current;
+        const now = Date.now();
+        const isCacheValid = cache.lastLoaded && (now - cache.lastLoaded < cache.cacheTimeout);
+        
+        // Only use cache if no filters are applied (cache is for unfiltered data)
+        const hasFilters = filterCategory || filterSearch;
+        
+        // Use cached data if available and valid (only for first page, no filters)
+        if (!append && !hasFilters && isCacheValid && cache.buildingSupplies.length > 0) {
+            console.log("Using cached catalog data");
+            setBuildingCatalogSupplies(cache.buildingSupplies);
+            setElectricalCatalogSupplies(cache.electricalSupplies);
+            setBuildingCategories(cache.buildingCategories);
+            setElectricalCategories(cache.electricalCategories);
+            setCatalogLoaded(true);
+            // Set pagination info from cache if available
+            if (cache.paginationInfo) {
+                setPaginationInfo(cache.paginationInfo);
+                setHasMorePages(cache.hasMorePages || false);
+            }
+            return;
+        }
+        
+        // Load from API with pagination and filters
+        try {
+            if (append) {
+                setLoadingMore(true);
+            } else {
+                setCatalogLoading(true);
+            }
+            console.log(`Loading catalog supplies (page ${page}, category: ${filterCategory || 'all'}, search: ${filterSearch || 'none'})...`);
+            const data = await projectsAPI.getSuppliesCatalog(filterSearch || "", filterCategory || "", "all", page, 50); // Load 50 items per page for better UX
+            console.log("Catalog data received:", data);
             
-            try {
-                console.log("Loading all catalog supplies at once...");
-                const data = await projectsAPI.getSuppliesCatalog("", "", "all");
-                console.log("All catalog data received:", data);
-                console.log("Building supplies count:", data.buildingSupplies?.length || 0);
-                console.log("Electrical supplies count:", data.electricalSupplies?.length || 0);
-                console.log("Building categories count:", data.buildingCategories?.length || 0);
-                console.log("Electrical categories count:", data.electricalCategories?.length || 0);
-                
+            if (append) {
+                // Append to existing supplies
+                setBuildingCatalogSupplies(prev => [...prev, ...(data.buildingSupplies || [])]);
+                setElectricalCatalogSupplies(prev => [...prev, ...(data.electricalSupplies || [])]);
+            } else {
+                // Replace supplies (first page)
                 setBuildingCatalogSupplies(data.buildingSupplies || []);
                 setElectricalCatalogSupplies(data.electricalSupplies || []);
                 setBuildingCategories(data.buildingCategories || []);
                 setElectricalCategories(data.electricalCategories || []);
+                
+                // Update cache only if no filters (cache unfiltered data)
+                if (!hasFilters) {
+                    cache.buildingSupplies = data.buildingSupplies || [];
+                    cache.electricalSupplies = data.electricalSupplies || [];
+                    cache.buildingCategories = data.buildingCategories || [];
+                    cache.electricalCategories = data.electricalCategories || [];
+                    cache.lastLoaded = now;
+                }
+            }
+            
+            // Update pagination info
+            if (data.pagination) {
+                const pagination = data.pagination;
+                setPaginationInfo(pagination);
+                
+                // Check if there are more pages (for "all" type, check both building and electrical)
+                if (data.supplyType === "all") {
+                    const buildingHasMore = pagination.buildingTotalPages > page;
+                    const electricalHasMore = pagination.electricalTotalPages > page;
+                    setHasMorePages(buildingHasMore || electricalHasMore);
+                    
+                    if (!append) {
+                        cache.paginationInfo = pagination;
+                        cache.hasMorePages = buildingHasMore || electricalHasMore;
+                    }
+                } else {
+                    setHasMorePages(pagination.totalPages > page);
+                    
+                    if (!append) {
+                        cache.paginationInfo = pagination;
+                        cache.hasMorePages = pagination.totalPages > 1;
+                    }
+                }
+            }
+            
+            setCatalogPage(page);
+            setCatalogLoaded(true);
+        } catch (err) {
+            console.error("Error loading catalog supplies:", err);
+            // Use cached data even if stale if available (only for first page, no filters)
+            if (!append && !hasFilters && cache.buildingSupplies.length > 0) {
+                setBuildingCatalogSupplies(cache.buildingSupplies);
+                setElectricalCatalogSupplies(cache.electricalSupplies);
+                setBuildingCategories(cache.buildingCategories);
+                setElectricalCategories(cache.electricalCategories);
                 setCatalogLoaded(true);
-            } catch (err) {
-                console.error("Error loading all catalog supplies:", err);
-                console.error("Error details:", err.response?.data || err.message);
+            } else if (!append) {
                 setBuildingCatalogSupplies([]);
                 setElectricalCatalogSupplies([]);
                 setBuildingCategories([]);
                 setElectricalCategories([]);
             }
+        } finally {
+            setCatalogLoading(false);
+            setLoadingMore(false);
+        }
+    }, [showModal, selectedCategory, supplySearchTerm]);
+    
+    // Load catalog supplies when modal opens (with caching)
+    useEffect(() => {
+        if (showModal) {
+            loadCatalogSupplies(1, false);
+        }
+    }, [showModal, loadCatalogSupplies]);
+    
+    // Load more supplies when scrolling near bottom
+    const loadMoreSupplies = React.useCallback(async () => {
+        if (loadingMore || !hasMorePages || !catalogLoaded) return;
+        
+        const nextPage = catalogPage + 1;
+        await loadCatalogSupplies(nextPage, true, selectedCategory, supplySearchTerm);
+    }, [loadingMore, hasMorePages, catalogLoaded, catalogPage, loadCatalogSupplies, selectedCategory, supplySearchTerm]);
+    
+    // Handle scroll in dropdown for infinite scroll
+    useEffect(() => {
+        const dropdownElement = dropdownScrollRef.current;
+        if (!dropdownElement || !showSupplyDropdown) return;
+        
+        const handleScroll = () => {
+            const { scrollTop, scrollHeight, clientHeight } = dropdownElement;
+            // Load more when user scrolls within 100px of bottom
+            if (scrollHeight - scrollTop - clientHeight < 100 && hasMorePages && !loadingMore) {
+                loadMoreSupplies();
+            }
         };
         
-        loadAllCatalogSupplies();
-    }, [showModal, catalogLoaded]);
+        dropdownElement.addEventListener('scroll', handleScroll);
+        return () => {
+            dropdownElement.removeEventListener('scroll', handleScroll);
+        };
+    }, [showSupplyDropdown, hasMorePages, loadingMore, loadMoreSupplies]);
 
-    // Reset catalog loaded state when modal closes
+    // Reset form state when modal closes (but keep cache)
     useEffect(() => {
         if (!showModal) {
-            setCatalogLoaded(false);
             setSupplySearchTerm("");
             setSelectedCategory("");
+            setCatalogPage(1);
         }
     }, [showModal]);
+    
+    // Debounced search: reload supplies when search term changes
+    useEffect(() => {
+        if (!showModal) return;
+        
+        setCatalogPage(1); // Reset to first page
+        setHasMorePages(true); // Reset pagination state
+        
+        // Debounce: wait 300ms after user stops typing
+        const timeoutId = setTimeout(async () => {
+            await loadCatalogSupplies(1, false, selectedCategory, supplySearchTerm);
+        }, 300);
+        
+        return () => clearTimeout(timeoutId);
+    }, [supplySearchTerm, showModal]); // Only trigger on search term change, not category
 
-    // Client-side filtering of catalog supplies based on search, category, and type
+    // Client-side filtering: only filter by supply type (building vs electrical)
+    // Category and search filtering are now done server-side
     const getFilteredCatalogSupplies = () => {
         const sourceSupplies = selectedSupplyType === "electrical" 
             ? electricalCatalogSupplies 
             : buildingCatalogSupplies;
         
-        let filtered = [...sourceSupplies];
-        
-        // Filter by search term
-        if (supplySearchTerm) {
-            const searchLower = supplySearchTerm.toLowerCase();
-            filtered = filtered.filter(supply => 
-                (supply.name && supply.name.toLowerCase().includes(searchLower)) ||
-                (supply.vendor && supply.vendor.toLowerCase().includes(searchLower))
-            );
-        }
-        
-        // Filter by category
-        if (selectedCategory) {
-            filtered = filtered.filter(supply => supply.supplyCategory === selectedCategory);
-        }
-        
-        return filtered;
+        // No additional filtering needed - server already filtered by category/search
+        return [...sourceSupplies];
     };
 
     // Get categories for current supply type
@@ -222,9 +352,12 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
         }
     };
 
-    const handleCategoryChange = (category) => {
+    const handleCategoryChange = async (category) => {
         setSelectedCategory(category);
         setSupplySearchTerm(""); // Reset search when category changes
+        setCatalogPage(1); // Reset to first page
+        setHasMorePages(true); // Reset pagination state
+        
         // Clear previously selected supply information
         setNewSupply({ 
             selectedSupplyId: "", 
@@ -239,6 +372,11 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
             selectedWorkOrderIds: []
         });
         setShowSupplyDropdown(false);
+        
+        // Reload supplies with new category filter from server
+        if (showModal) {
+            await loadCatalogSupplies(1, false, category, "");
+        }
     };
 
     const handleAddSupply = async () => {
@@ -1031,6 +1169,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                         </div>
                         {showSupplyDropdown && createPortal(
                             <div 
+                                ref={dropdownScrollRef}
                                 style={{
                                     ...styles.dropdown,
                                     position: "fixed",
@@ -1064,15 +1203,29 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                                 </div>
                                             </div>
                                         ))}
+                                        {loadingMore && (
+                                            <div style={{ ...styles.dropdownItem, color: "#6b7280", fontStyle: "italic", cursor: "default", textAlign: "center", padding: "1rem" }}>
+                                                Loading more...
+                                            </div>
+                                        )}
                                     </>
                                 ) : (
-                                    <div style={{ ...styles.dropdownItem, color: "#6b7280", fontStyle: "italic", cursor: "default" }}>
-                                        {!catalogLoaded 
-                                            ? "Loading supplies..." 
-                                            : supplySearchTerm || selectedCategory 
-                                                ? "No supplies found matching your search" 
-                                                : "No supplies available"}
-                                    </div>
+                                    <>
+                                        <div style={{ ...styles.dropdownItem, color: "#6b7280", fontStyle: "italic", cursor: "default" }}>
+                                            {catalogLoading 
+                                                ? "Loading supplies..." 
+                                                : !catalogLoaded 
+                                                    ? "Loading supplies..." 
+                                                    : supplySearchTerm || selectedCategory 
+                                                        ? "No supplies found matching your search" 
+                                                        : "No supplies available"}
+                                        </div>
+                                        {loadingMore && (
+                                            <div style={{ ...styles.dropdownItem, color: "#6b7280", fontStyle: "italic", cursor: "default", textAlign: "center" }}>
+                                                Loading more...
+                                            </div>
+                                        )}
+                                    </>
                                 );
                                 })()}
                             </div>,

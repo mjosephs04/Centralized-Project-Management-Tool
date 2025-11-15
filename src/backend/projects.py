@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections import defaultdict
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import Dict, Any, List, Optional, Tuple
 
@@ -13,6 +13,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType, ProjectMember, ProjectInvitation, SupplyStatus, BuildingSupply, ElectricalSupply, WorkOrderBuildingSupply, WorkOrderElectricalSupply, ProjectManager, WorkerType
+
+# Simple in-memory cache for catalog queries
+_catalog_cache = {}
+_cache_ttl = timedelta(minutes=15)  # Cache for 15 minutes
 from .progress import (
     compute_work_order_rollup, compute_schedule_stats, compute_earned_value, to_decimal, normalize_weights,
     compute_schedule_variance, compute_cost_variance, compute_workforce_metrics, compute_quality_metrics, compute_project_health_score,
@@ -1396,30 +1400,103 @@ def debug_project_access(project_id: int):
 
     return jsonify(debug_info), 200
 
+def _get_catalog_cache_key(supply_type: str, search_term: str, category: str, page: int, page_size: int) -> str:
+    """Generate cache key for catalog query"""
+    return f"catalog:{supply_type}:{search_term}:{category}:{page}:{page_size}"
+
+def _get_categories_cache_key(supply_type: str) -> str:
+    """Generate cache key for categories"""
+    return f"categories:{supply_type}"
+
+def _is_cache_valid(cache_entry: Dict) -> bool:
+    """Check if cache entry is still valid"""
+    if not cache_entry:
+        return False
+    cached_time = cache_entry.get("timestamp")
+    if not cached_time:
+        return False
+    return datetime.now() - cached_time < _cache_ttl
+
 @projects_bp.get("/supplies/catalog")
 @jwt_required()
 def get_supplies_catalog():
-    """Get master catalog supplies (where projectId is null) with optional search and category filter.
-    If supplyType is 'all', returns both building and electrical supplies."""
+    """Get master catalog supplies (where projectId is null) with optional search, category filter, and pagination.
+    If supplyType is 'all', returns both building and electrical supplies.
+    Uses lightweight catalog_dict format for better performance."""
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
 
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    # Get optional search, category, and supplyType filters from query parameters
+    # Get query parameters
     search_term = request.args.get("search", "").strip()
     category = request.args.get("category", "").strip()
     supply_type = request.args.get("supplyType", "building").strip().lower()  # 'building', 'electrical', or 'all'
+    page = int(request.args.get("page", 1))
+    page_size = int(request.args.get("pageSize", 100))  # Default 100 items per page
     
-    # If supplyType is 'all', fetch both types
+    # Validate pagination
+    if page < 1:
+        page = 1
+    if page_size < 1 or page_size > 500:  # Max 500 items per page
+        page_size = 100
+    
+    # Check cache for categories (categories don't change often)
+    categories_cache_key = _get_categories_cache_key(supply_type)
+    cached_categories = _catalog_cache.get(categories_cache_key)
+    if _is_cache_valid(cached_categories):
+        categories_data = cached_categories["data"]
+    else:
+        # Fetch categories from database
+        if supply_type == "all":
+            building_categories = db.session.query(BuildingSupply.supplyCategory).filter(
+                BuildingSupply.projectId.is_(None),
+                BuildingSupply.supplyCategory.isnot(None)
+            ).distinct().order_by(BuildingSupply.supplyCategory.asc()).all()
+            
+            electrical_categories = db.session.query(ElectricalSupply.supplyCategory).filter(
+                ElectricalSupply.projectId.is_(None),
+                ElectricalSupply.supplyCategory.isnot(None)
+            ).distinct().order_by(ElectricalSupply.supplyCategory.asc()).all()
+            
+            categories_data = {
+                "buildingCategories": [cat[0] for cat in building_categories if cat[0]],
+                "electricalCategories": [cat[0] for cat in electrical_categories if cat[0]],
+                "categories": sorted(list(set([cat[0] for cat in building_categories if cat[0]] + [cat[0] for cat in electrical_categories if cat[0]])))
+            }
+        else:
+            SupplyModel = ElectricalSupply if supply_type == "electrical" else BuildingSupply
+            categories = db.session.query(SupplyModel.supplyCategory).filter(
+                SupplyModel.projectId.is_(None),
+                SupplyModel.supplyCategory.isnot(None)
+            ).distinct().order_by(SupplyModel.supplyCategory.asc()).all()
+            categories_list = [cat[0] for cat in categories if cat[0]]
+            categories_data = {"categories": categories_list}
+        
+        # Cache categories for 15 minutes
+        _catalog_cache[categories_cache_key] = {
+            "data": categories_data,
+            "timestamp": datetime.now()
+        }
+    
+    # Check cache for supplies (only for common queries without search/category)
+    cache_key = _get_catalog_cache_key(supply_type, search_term, category, page, page_size)
+    cached_data = _catalog_cache.get(cache_key)
+    
+    # Only use cache if no search term and no category filter (most common case)
+    use_cache = not search_term and not category and _is_cache_valid(cached_data)
+    
+    if use_cache:
+        return jsonify(cached_data["data"]), 200
+    
+    # Query supplies from database
     if supply_type == "all":
         # Query building supplies
         building_query = BuildingSupply.query.filter(BuildingSupply.projectId.is_(None))
-        # Query electrical supplies
         electrical_query = ElectricalSupply.query.filter(ElectricalSupply.projectId.is_(None))
         
-        # Apply search filter to both if provided
+        # Apply search filter
         if search_term:
             search_filter = f"%{search_term}%"
             building_query = building_query.filter(
@@ -1435,88 +1512,80 @@ def get_supplies_catalog():
                 )
             )
         
-        # Apply category filter to both if provided
+        # Apply category filter
         if category:
             building_query = building_query.filter_by(supplyCategory=category)
             electrical_query = electrical_query.filter_by(supplyCategory=category)
         
-        building_supplies = building_query.order_by(BuildingSupply.name.asc()).all()
-        electrical_supplies = electrical_query.order_by(ElectricalSupply.name.asc()).all()
+        # Get total counts
+        building_total = building_query.count()
+        electrical_total = electrical_query.count()
         
-        # Get unique categories from both tables
-        building_categories = db.session.query(BuildingSupply.supplyCategory).filter(
-            BuildingSupply.projectId.is_(None),
-            BuildingSupply.supplyCategory.isnot(None)
-        ).distinct().order_by(BuildingSupply.supplyCategory.asc()).all()
+        # Apply pagination - fetch page_size items from each type
+        building_supplies = building_query.order_by(BuildingSupply.name.asc()).limit(page_size).offset((page - 1) * page_size).all()
+        electrical_supplies = electrical_query.order_by(ElectricalSupply.name.asc()).limit(page_size).offset((page - 1) * page_size).all()
         
-        electrical_categories = db.session.query(ElectricalSupply.supplyCategory).filter(
-            ElectricalSupply.projectId.is_(None),
-            ElectricalSupply.supplyCategory.isnot(None)
-        ).distinct().order_by(ElectricalSupply.supplyCategory.asc()).all()
-        
-        # Combine categories and remove duplicates
-        all_categories = set([cat[0] for cat in building_categories if cat[0]])
-        all_categories.update([cat[0] for cat in electrical_categories if cat[0]])
-        categories_list = sorted(list(all_categories))
-        
-        # Debug logging
-        print(f"Catalog query - type: 'all', search: '{search_term}', category: '{category}'")
-        print(f"Found {len(building_supplies)} building supplies and {len(electrical_supplies)} electrical supplies")
-        print(f"Found {len(categories_list)} total categories")
-        
-        return jsonify({
-            "buildingSupplies": [s.to_dict() for s in building_supplies],
-            "electricalSupplies": [s.to_dict() for s in electrical_supplies],
-            "buildingCategories": [cat[0] for cat in building_categories if cat[0]],
-            "electricalCategories": [cat[0] for cat in electrical_categories if cat[0]],
-            "categories": categories_list,
-            "supplyType": "all"
-        }), 200
-    
-    # Single type query (original behavior)
-    # Select the appropriate model based on supplyType
-    if supply_type == "electrical":
-        SupplyModel = ElectricalSupply
+        response_data = {
+            "buildingSupplies": [s.to_catalog_dict() for s in building_supplies],
+            "electricalSupplies": [s.to_catalog_dict() for s in electrical_supplies],
+            "buildingCategories": categories_data.get("buildingCategories", []),
+            "electricalCategories": categories_data.get("electricalCategories", []),
+            "categories": categories_data.get("categories", []),
+            "supplyType": "all",
+            "pagination": {
+                "page": page,
+                "pageSize": page_size,
+                "buildingTotal": building_total,
+                "electricalTotal": electrical_total,
+                "buildingTotalPages": (building_total + page_size - 1) // page_size if page_size > 0 else 0,
+                "electricalTotalPages": (electrical_total + page_size - 1) // page_size if page_size > 0 else 0,
+            }
+        }
     else:
-        SupplyModel = BuildingSupply
-    
-    # Query master catalog supplies (projectId is null)
-    query = SupplyModel.query.filter(SupplyModel.projectId.is_(None))
-    
-    # Filter by search term (name or vendor)
-    if search_term:
-        search_filter = f"%{search_term}%"
-        query = query.filter(
-            db.or_(
-                SupplyModel.name.ilike(search_filter),
-                SupplyModel.vendor.ilike(search_filter)
+        # Single type query
+        SupplyModel = ElectricalSupply if supply_type == "electrical" else BuildingSupply
+        query = SupplyModel.query.filter(SupplyModel.projectId.is_(None))
+        
+        # Apply search filter
+        if search_term:
+            search_filter = f"%{search_term}%"
+            query = query.filter(
+                db.or_(
+                    SupplyModel.name.ilike(search_filter),
+                    SupplyModel.vendor.ilike(search_filter)
+                )
             )
-        )
+        
+        # Apply category filter
+        if category:
+            query = query.filter_by(supplyCategory=category)
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        supplies = query.order_by(SupplyModel.name.asc()).limit(page_size).offset((page - 1) * page_size).all()
+        
+        response_data = {
+            "supplies": [s.to_catalog_dict() for s in supplies],
+            "categories": categories_data.get("categories", []),
+            "supplyType": supply_type,
+            "pagination": {
+                "page": page,
+                "pageSize": page_size,
+                "total": total,
+                "totalPages": (total + page_size - 1) // page_size if page_size > 0 else 0,
+            }
+        }
     
-    # Filter by category if provided
-    if category:
-        query = query.filter_by(supplyCategory=category)
+    # Cache the result if it's a common query (no search, no category)
+    if not search_term and not category:
+        _catalog_cache[cache_key] = {
+            "data": response_data,
+            "timestamp": datetime.now()
+        }
     
-    supplies = query.order_by(SupplyModel.name.asc()).all()
-    
-    # Get unique categories for dropdown (always get all categories, not filtered by search)
-    categories = db.session.query(SupplyModel.supplyCategory).filter(
-        SupplyModel.projectId.is_(None),
-        SupplyModel.supplyCategory.isnot(None)
-    ).distinct().order_by(SupplyModel.supplyCategory.asc()).all()
-    
-    categories_list = [cat[0] for cat in categories if cat[0]]
-    
-    # Debug logging
-    print(f"Catalog query - type: '{supply_type}', search: '{search_term}', category: '{category}'")
-    print(f"Found {len(supplies)} supplies")
-    print(f"Found {len(categories_list)} categories")
-    
-    return jsonify({
-        "supplies": [s.to_dict() for s in supplies],
-        "categories": categories_list,
-        "supplyType": supply_type
-    }), 200
+    return jsonify(response_data), 200
 
 
 @projects_bp.get("/<int:project_id>/supplies")

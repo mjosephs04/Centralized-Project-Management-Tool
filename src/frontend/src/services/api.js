@@ -104,9 +104,11 @@ export const projectsAPI = {
     return response.data;
   },
 
-  getSuppliesCatalog: async (search = "", category = "", supplyType = "building") => {
+  getSuppliesCatalog: async (search = "", category = "", supplyType = "building", page = 1, pageSize = 100) => {
     const params = new URLSearchParams();
     params.append("supplyType", supplyType);
+    params.append("page", page.toString());
+    params.append("pageSize", pageSize.toString());
     if (search) params.append("search", search);
     if (category) params.append("category", category);
     const url = `/projects/supplies/catalog?${params.toString()}`;

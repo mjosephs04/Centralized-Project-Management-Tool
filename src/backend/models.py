@@ -586,6 +586,20 @@ class BuildingSupply(db.Model):
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
         }
+    
+    def to_catalog_dict(self) -> dict:
+        """Lightweight dict for catalog dropdowns - only essential fields"""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "vendor": self.vendor,
+            "referenceCode": self.referenceCode,
+            "supplyCategory": self.supplyCategory,
+            "supplyType": self.supplyType,
+            "supplySubtype": self.supplySubtype,
+            "unitOfMeasure": self.unitOfMeasure,
+            "budget": float(self.budget) if self.budget else 0.0,
+        }
 
 
 class ElectricalSupply(db.Model):
@@ -647,6 +661,20 @@ class ElectricalSupply(db.Model):
             "approvedBy": self.approvedBy.to_dict() if self.approvedBy else None,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+        }
+    
+    def to_catalog_dict(self) -> dict:
+        """Lightweight dict for catalog dropdowns - only essential fields"""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "vendor": self.vendor,
+            "referenceCode": self.referenceCode,
+            "supplyCategory": self.supplyCategory,
+            "supplyType": self.supplyType,
+            "supplySubtype": self.supplySubtype,
+            "unitOfMeasure": self.unitOfMeasure,
+            "budget": float(self.budget) if self.budget else 0.0,
         }
 
 
