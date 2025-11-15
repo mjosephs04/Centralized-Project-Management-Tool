@@ -1677,18 +1677,15 @@ def update_supply_status(project_id, supply_id):
 @projects_bp.delete("/<int:project_id>/supplies/<int:supply_id>")
 @jwt_required()
 def delete_project_supply(project_id, supply_id):
-    """Delete a specific supply from a project."""
+    """Delete a specific supply from a project.
+    Workers can only delete their own pending supply requests.
+    Project managers and admins can delete any supply."""
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
     project = Project.query.get(project_id)
 
     if not user or not project:
         return jsonify({"error": "User or project not found"}), 404
-
-    if user.role not in [UserRole.ADMIN, UserRole.PROJECT_MANAGER]:
-        return jsonify({"error": "Only project managers or admins can delete supplies"}), 403
-    if user.role == UserRole.PROJECT_MANAGER and not is_project_manager(user.id, project_id):
-        return jsonify({"error": "You can only delete supplies from your own projects"}), 403
 
     # Try to find supply in both tables
     supply = BuildingSupply.query.filter_by(id=supply_id, projectId=project_id).first()
@@ -1699,6 +1696,21 @@ def delete_project_supply(project_id, supply_id):
     
     if not supply:
         return jsonify({"error": "Supply not found"}), 404
+
+    # Check permissions
+    if user.role == UserRole.WORKER:
+        # Workers can only delete their own pending supply requests
+        if supply.status != SupplyStatus.PENDING:
+            return jsonify({"error": "Workers can only delete pending supply requests"}), 403
+        if supply.requestedById != user.id:
+            return jsonify({"error": "You can only delete your own supply requests"}), 403
+    elif user.role == UserRole.PROJECT_MANAGER:
+        # Project managers can delete supplies from their own projects
+        if not is_project_manager(user.id, project_id):
+            return jsonify({"error": "You can only delete supplies from your own projects"}), 403
+    elif user.role != UserRole.ADMIN:
+        # Admins can delete any supply, others cannot
+        return jsonify({"error": "Only project managers, admins, or workers (for their own pending requests) can delete supplies"}), 403
 
     # Get work orders linked to this supply before deleting relationships
     work_order_ids = []

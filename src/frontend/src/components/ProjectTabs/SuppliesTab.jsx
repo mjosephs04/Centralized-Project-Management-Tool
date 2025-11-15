@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { FaBox, FaPlus, FaSave, FaTimes, FaTrash, FaCheck } from "react-icons/fa";
-import {projectsAPI, workOrdersAPI} from "../../services/api";
+import {projectsAPI, workOrdersAPI, authAPI} from "../../services/api";
 
 const fakeVendors = [
     { id: 1, name: "Home Depot" },
@@ -29,6 +29,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
         selectedWorkOrderIds: []  // Support multiple work orders
     });
     const [loading, setLoading] = useState(false);
+    const [currentUserId, setCurrentUserId] = useState(null);
     
     // Catalog supplies and categories - cached separately for building and electrical
     const [buildingCatalogSupplies, setBuildingCatalogSupplies] = useState([]);
@@ -42,6 +43,19 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
     const [showSupplyDropdown, setShowSupplyDropdown] = useState(false);
     const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
     const supplyInputRef = useRef(null);
+
+    // Fetch current user ID
+    useEffect(() => {
+        const fetchCurrentUser = async () => {
+            try {
+                const user = await authAPI.me();
+                setCurrentUserId(user?.id || null);
+            } catch (err) {
+                console.error("Error fetching current user:", err);
+            }
+        };
+        fetchCurrentUser();
+    }, []);
 
     // Update local state when prop changes
     useEffect(() => {
@@ -304,8 +318,21 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
         }
     };
 
+    // Helper function to get work order names from IDs
+    const getWorkOrderNames = (supply) => {
+        const workOrderIds = supply.workOrderIds || (supply.workOrderId ? [supply.workOrderId] : []);
+        if (!workOrderIds || workOrderIds.length === 0) return "------";
+        const names = workOrderIds
+            .map(id => {
+                const wo = workOrders.find(w => w.id === id);
+                return wo ? wo.name : null;
+            })
+            .filter(name => name !== null);
+        return names.length > 0 ? names.join(", ") : "------";
+    };
+
     return (
-        <div style={styles.container}>
+        <div style={(userRole === "worker" || userRole === "project_manager") ? { ...styles.container, maxWidth: "1600px" } : styles.container}>
             <div style={styles.header}>
                 <h2 style={styles.title}>Supplies</h2>
                 <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
@@ -363,7 +390,26 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                     return "building"; // Default to building
                 };
 
-                const buildingSupplies = supplies
+                // For workers, separate pending requests from other supplies
+                // For PMs, separate all pending requests from other supplies
+                let pendingSupplies = [];
+                let nonPendingSupplies = supplies;
+                
+                if (userRole === "worker" && currentUserId) {
+                    pendingSupplies = supplies.filter(s => 
+                        s.status === "pending" && 
+                        s.requestedBy && 
+                        s.requestedBy.id === currentUserId
+                    );
+                    nonPendingSupplies = supplies.filter(s => 
+                        !(s.status === "pending" && s.requestedBy && s.requestedBy.id === currentUserId)
+                    );
+                } else if (userRole === "project_manager") {
+                    pendingSupplies = supplies.filter(s => s.status === "pending");
+                    nonPendingSupplies = supplies.filter(s => s.status !== "pending");
+                }
+
+                const buildingSupplies = nonPendingSupplies
                     .filter(s => normalizeSupplyType(s.supplyType) === "building")
                     .sort((a, b) => {
                         const catA = a.supplyCategory || "";
@@ -371,7 +417,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                         return catA.localeCompare(catB);
                     });
                 
-                const electricalSupplies = supplies
+                const electricalSupplies = nonPendingSupplies
                     .filter(s => normalizeSupplyType(s.supplyType) === "electrical")
                     .sort((a, b) => {
                         const catA = a.supplyCategory || "";
@@ -379,12 +425,94 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                         return catA.localeCompare(catB);
                     });
 
+                const renderPendingSupplyCard = (supply, isPM = false) => {
+                    const workOrderNames = getWorkOrderNames(supply);
+                    
+                    return (
+                        <div key={supply.id} style={styles.pendingCard}>
+                            <div style={styles.pendingCardHeader}>
+                                <div style={{ flex: 1, paddingRight: "3rem" }}>
+                                    <div style={{ fontWeight: "600", fontSize: "0.95rem", color: "#2c3e50" }}>
+                                        {supply.name}
+                                    </div>
+                                    {supply.supplySubtype && (
+                                        <div style={{ fontSize: "0.8rem", color: "#6b7280", marginTop: "0.25rem" }}>
+                                            {supply.supplySubtype}
+                                        </div>
+                                    )}
+                                </div>
+                                <div style={styles.pendingStatusBadge}>
+                                    Pending
+                                </div>
+                            </div>
+                            <div style={styles.pendingCardDetails}>
+                                <div style={styles.pendingCardRow}>
+                                    <span style={styles.pendingLabel}>Price:</span>
+                                    <span style={styles.pendingValue}>${supply.budget.toFixed(2)}</span>
+                                </div>
+                                {supply.referenceCode && (
+                                    <div style={styles.pendingCardRow}>
+                                        <span style={styles.pendingLabel}>Code:</span>
+                                        <span style={styles.pendingValue}>{supply.referenceCode}</span>
+                                    </div>
+                                )}
+                                {supply.unitOfMeasure && (
+                                    <div style={styles.pendingCardRow}>
+                                        <span style={styles.pendingLabel}>Unit:</span>
+                                        <span style={styles.pendingValue}>{supply.unitOfMeasure}</span>
+                                    </div>
+                                )}
+                                <div style={styles.pendingCardRow}>
+                                    <span style={styles.pendingLabel}>Work Order:</span>
+                                    <span style={styles.pendingValue}>{workOrderNames}</span>
+                                </div>
+                                {isPM && supply.requestedBy && (
+                                    <div style={styles.pendingCardRow}>
+                                        <span style={styles.pendingLabel}>Requested By:</span>
+                                        <span style={styles.pendingValue}>
+                                            {supply.requestedBy.firstName} {supply.requestedBy.lastName}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                            <div style={styles.pendingCardActions}>
+                                {isPM ? (
+                                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                                        <button
+                                            style={styles.pendingApproveButton}
+                                            onClick={() => handleStatusChange(supply.id, "approved")}
+                                            title="Approve Request"
+                                        >
+                                            <FaCheck /> Approve
+                                        </button>
+                                        <button
+                                            style={styles.pendingRejectButton}
+                                            onClick={() => handleDeleteSupply(supply.id)}
+                                            title="Reject Request"
+                                        >
+                                            <FaTrash /> Reject
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        style={styles.pendingDeleteButton}
+                                        onClick={() => handleDeleteSupply(supply.id)}
+                                        title="Delete Request"
+                                    >
+                                        <FaTrash /> Delete Request
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    );
+                };
+
                 const renderSupplyTable = (supplyList, title) => {
                     if (supplyList.length === 0) return null;
 
                     return (
-                        <div style={{ marginBottom: "3rem" }}>
-                            <h3 style={{ fontSize: "1.5rem", fontWeight: "600", color: "#2c3e50", marginBottom: "1rem" }}>
+                        <div style={{ marginBottom: "3rem", marginTop: 0 }}>
+                            <h3 style={{ fontSize: "1.5rem", fontWeight: "600", color: "#2c3e50", marginBottom: "1rem", marginTop: 0 }}>
                                 {title}
                             </h3>
                             <table style={styles.table}>
@@ -395,95 +523,173 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                         <th style={styles.th}>Vendor</th>
                                         <th style={styles.th}>Price ($)</th>
                                         <th style={styles.th}>Unit of Measure</th>
+                                        <th style={styles.th}>Work Order</th>
                                         <th style={styles.th}>Status</th>
                                         {userRole === "project_manager" && <th style={styles.th}>Actions</th>}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {supplyList.map((supply) => (
-                                        <tr key={supply.id}>
-                                            <td style={styles.td}>
-                                                <div>
-                                                    <div style={{ fontWeight: "500" }}>{supply.name}</div>
-                                                    {supply.supplySubtype && (
-                                                        <div style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "0.25rem" }}>
-                                                            {supply.supplySubtype}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td style={styles.td}>{supply.referenceCode || "-"}</td>
-                                            <td style={styles.td}>{supply.vendor || "-"}</td>
-                                            <td style={styles.td}>{supply.budget.toFixed(2)}</td>
-                                            <td style={styles.td}>{supply.unitOfMeasure || "-"}</td>
-                                            <td style={styles.td}>
-                                                <span
-                                                    style={{
-                                                        color:
-                                                            supply.status === "approved"
-                                                                ? "green"
-                                                                : supply.status === "rejected"
-                                                                    ? "red"
-                                                                    : "gray",
-                                                        fontWeight: 600,
-                                                        textTransform: "capitalize",
-                                                    }}
-                                                >
-                                                    {supply.status}
-                                                </span>
-                                            </td>
-                                            {userRole === "project_manager" && (
+                                    {supplyList.map((supply) => {
+                                        const workOrderNames = getWorkOrderNames(supply);
+                                        return (
+                                            <tr key={supply.id}>
                                                 <td style={styles.td}>
-                                                    {supply.status === "pending" ? (
-                                                        <>
-                                                            <button
-                                                                style={{
-                                                                    ...styles.actionButton,
-                                                                    backgroundColor: "#dcfce7",
-                                                                    color: "#166534",
-                                                                    border: "1px solid #86efac",
-                                                                    marginRight: "0.5rem",
-                                                                }}
-                                                                onClick={() => handleStatusChange(supply.id, "approved")}
-                                                            >
-                                                                <FaCheck style={{marginRight: "0.3rem"}}/> Approve
-                                                            </button>
+                                                    <div>
+                                                        <div style={{ fontWeight: "500" }}>{supply.name}</div>
+                                                        {supply.supplySubtype && (
+                                                            <div style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "0.25rem" }}>
+                                                                {supply.supplySubtype}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td style={styles.td}>{supply.referenceCode || "-"}</td>
+                                                <td style={styles.td}>{supply.vendor || "-"}</td>
+                                                <td style={styles.td}>{supply.budget.toFixed(2)}</td>
+                                                <td style={styles.td}>{supply.unitOfMeasure || "-"}</td>
+                                                <td style={styles.td}>{workOrderNames}</td>
+                                                <td style={styles.td}>
+                                                    <span
+                                                        style={{
+                                                            color:
+                                                                supply.status === "approved"
+                                                                    ? "green"
+                                                                    : supply.status === "rejected"
+                                                                        ? "red"
+                                                                        : "gray",
+                                                            fontWeight: 600,
+                                                            textTransform: "capitalize",
+                                                        }}
+                                                    >
+                                                        {supply.status}
+                                                    </span>
+                                                </td>
+                                                {userRole === "project_manager" && (
+                                                    <td style={styles.td}>
+                                                        {supply.status === "pending" ? (
+                                                            <>
+                                                                <button
+                                                                    style={{
+                                                                        ...styles.actionButton,
+                                                                        backgroundColor: "#dcfce7",
+                                                                        color: "#166534",
+                                                                        border: "1px solid #86efac",
+                                                                        marginRight: "0.5rem",
+                                                                    }}
+                                                                    onClick={() => handleStatusChange(supply.id, "approved")}
+                                                                >
+                                                                    <FaCheck style={{marginRight: "0.3rem"}}/> Approve
+                                                                </button>
 
+                                                                <button
+                                                                    style={{
+                                                                        ...styles.actionButton,
+                                                                        backgroundColor: "#fee2e2",
+                                                                        color: "#991b1b",
+                                                                        border: "1px solid #fca5a5",
+                                                                    }}
+                                                                    onClick={() => handleDeleteSupply(supply.id)}
+                                                                >
+                                                                    <FaTrash style={{marginRight: "0.3rem"}}/> Reject
+                                                                </button>
+                                                            </>
+                                                        ) : supply.status === "approved" ? (
                                                             <button
                                                                 style={{
                                                                     ...styles.actionButton,
-                                                                    backgroundColor: "#fee2e2",
-                                                                    color: "#991b1b",
-                                                                    border: "1px solid #fca5a5",
+                                                                    backgroundColor: "#fef2f2",
+                                                                    color: "#b91c1c",
+                                                                    border: "1px solid #fecaca",
                                                                 }}
                                                                 onClick={() => handleDeleteSupply(supply.id)}
                                                             >
-                                                                <FaTrash style={{marginRight: "0.3rem"}}/> Reject
+                                                                <FaTrash style={{marginRight: "0.3rem"}}/> Delete
                                                             </button>
-                                                        </>
-                                                    ) : supply.status === "approved" ? (
-                                                        <button
-                                                            style={{
-                                                                ...styles.actionButton,
-                                                                backgroundColor: "#fef2f2",
-                                                                color: "#b91c1c",
-                                                                border: "1px solid #fecaca",
-                                                            }}
-                                                            onClick={() => handleDeleteSupply(supply.id)}
-                                                        >
-                                                            <FaTrash style={{marginRight: "0.3rem"}}/> Delete
-                                                        </button>
-                                                    ) : null}
-                                                </td>
-                                            )}
-                                        </tr>
-                                    ))}
+                                                        ) : null}
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
                     );
                 };
 
+                // Worker view: two-column layout with pending requests on left
+                if (userRole === "worker") {
+                    return (
+                        <div style={styles.workerLayout}>
+                            {/* Left sidebar for pending requests */}
+                            <div style={styles.pendingSidebar}>
+                                <h3 style={styles.pendingSidebarTitle}>Pending Requests</h3>
+                                {pendingSupplies.length === 0 ? (
+                                    <div style={styles.noPendingSupplies}>
+                                        <FaBox style={styles.noPendingIcon} />
+                                        <p style={styles.noPendingText}>No pending supplies</p>
+                                    </div>
+                                ) : (
+                                    <div style={styles.pendingList}>
+                                        {pendingSupplies.map(supply => renderPendingSupplyCard(supply, false))}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Main content area for approved/rejected supplies */}
+                            <div style={styles.mainContent}>
+                                <div style={{ marginTop: 0 }}>
+                                    {renderSupplyTable(buildingSupplies, "Building Supplies")}
+                                    {renderSupplyTable(electricalSupplies, "Electric Supplies")}
+                                    {buildingSupplies.length === 0 && electricalSupplies.length === 0 && (
+                                        <div style={styles.emptyState}>
+                                            <FaBox style={styles.emptyIcon} />
+                                            <p style={styles.emptyText}>No supplies yet.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                }
+
+                // Project manager view: two-column layout with pending requests on left
+                if (userRole === "project_manager") {
+                    return (
+                        <div style={styles.workerLayout}>
+                            {/* Left sidebar for pending requests */}
+                            <div style={styles.pendingSidebar}>
+                                <h3 style={styles.pendingSidebarTitle}>Pending Requests</h3>
+                                {pendingSupplies.length === 0 ? (
+                                    <div style={styles.noPendingSupplies}>
+                                        <FaBox style={styles.noPendingIcon} />
+                                        <p style={styles.noPendingText}>No pending supplies</p>
+                                    </div>
+                                ) : (
+                                    <div style={styles.pendingList}>
+                                        {pendingSupplies.map(supply => renderPendingSupplyCard(supply, true))}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Main content area for approved/rejected supplies */}
+                            <div style={styles.mainContent}>
+                                <div style={{ marginTop: 0 }}>
+                                    {renderSupplyTable(buildingSupplies, "Building Supplies")}
+                                    {renderSupplyTable(electricalSupplies, "Electric Supplies")}
+                                    {buildingSupplies.length === 0 && electricalSupplies.length === 0 && (
+                                        <div style={styles.emptyState}>
+                                            <FaBox style={styles.emptyIcon} />
+                                            <p style={styles.emptyText}>No supplies yet.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                }
+
+                // Fallback for other roles
                 return (
                     <div>
                         {renderSupplyTable(buildingSupplies, "Building Supplies")}
@@ -735,6 +941,161 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
 
 const styles = {
     container: { maxWidth: "900px", margin: "0 auto" },
+    workerLayout: {
+        display: "flex",
+        gap: "2rem",
+        alignItems: "flex-start",
+    },
+    pendingSidebar: {
+        width: "400px",
+        minWidth: "400px",
+        backgroundColor: "white",
+        borderRadius: "12px",
+        padding: "1.5rem",
+        paddingBottom: "1.5rem",
+        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+        position: "sticky",
+        top: "1rem",
+        maxHeight: "calc(100vh - 2rem)",
+        overflowY: "auto",
+    },
+    pendingSidebarTitle: {
+        fontSize: "1.5rem",
+        fontWeight: "600",
+        color: "#2c3e50",
+        marginBottom: "1rem",
+        marginTop: 0,
+        padding: "0",
+    },
+    noPendingSupplies: {
+        textAlign: "center",
+        padding: "3rem 1.5rem",
+        color: "#6b7280",
+    },
+    noPendingIcon: {
+        fontSize: "3rem",
+        color: "#cbd5e1",
+        marginBottom: "1rem",
+    },
+    noPendingText: {
+        fontSize: "0.95rem",
+        color: "#6b7280",
+        margin: 0,
+    },
+    pendingList: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "1rem",
+        padding: "0",
+        paddingBottom: "0.5rem",
+    },
+    pendingCard: {
+        backgroundColor: "#f8fafc",
+        border: "1px solid #e5e7eb",
+        borderRadius: "8px",
+        padding: "1rem",
+        paddingBottom: "1.25rem",
+        position: "relative",
+        transition: "all 0.2s ease",
+    },
+    pendingCardHeader: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        marginBottom: "0.75rem",
+        gap: "0.75rem",
+        position: "relative",
+    },
+    pendingCardActions: {
+        marginTop: "0.75rem",
+        paddingTop: "0.75rem",
+        paddingBottom: "0",
+        borderTop: "1px solid #e5e7eb",
+    },
+    pendingDeleteButton: {
+        backgroundColor: "#fee2e2",
+        color: "#991b1b",
+        border: "1px solid #fca5a5",
+        borderRadius: "6px",
+        padding: "0.5rem 0.75rem",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "0.4rem",
+        fontSize: "0.85rem",
+        fontWeight: "600",
+        transition: "all 0.2s ease",
+        width: "100%",
+    },
+    pendingApproveButton: {
+        backgroundColor: "#dcfce7",
+        color: "#166534",
+        border: "1px solid #86efac",
+        borderRadius: "6px",
+        padding: "0.5rem 0.75rem",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "0.4rem",
+        fontSize: "0.85rem",
+        fontWeight: "600",
+        transition: "all 0.2s ease",
+        flex: 1,
+    },
+    pendingRejectButton: {
+        backgroundColor: "#fee2e2",
+        color: "#991b1b",
+        border: "1px solid #fca5a5",
+        borderRadius: "6px",
+        padding: "0.5rem 0.75rem",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "0.4rem",
+        fontSize: "0.85rem",
+        fontWeight: "600",
+        transition: "all 0.2s ease",
+        flex: 1,
+    },
+    pendingCardDetails: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.5rem",
+        marginBottom: "0.75rem",
+    },
+    pendingCardRow: {
+        display: "flex",
+        justifyContent: "space-between",
+        fontSize: "0.85rem",
+    },
+    pendingLabel: {
+        color: "#6b7280",
+        fontWeight: "500",
+    },
+    pendingValue: {
+        color: "#374151",
+        fontWeight: "600",
+    },
+    pendingStatusBadge: {
+        backgroundColor: "#fef3c7",
+        color: "#92400e",
+        padding: "0.25rem 0.5rem",
+        borderRadius: "4px",
+        fontSize: "0.7rem",
+        fontWeight: "600",
+        textTransform: "uppercase",
+        whiteSpace: "nowrap",
+        flexShrink: 0,
+    },
+    mainContent: {
+        flex: 1,
+        minWidth: 0,
+        marginTop: 0,
+        paddingTop: "0",
+    },
     header: {
         display: "flex",
         justifyContent: "space-between",
