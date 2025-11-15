@@ -16,6 +16,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
     const [workOrders, setWorkOrders] = useState([]);
     const [selectedWorkOrderId, setSelectedWorkOrderId] = useState(propSelectedWorkOrderId || null);
     const [showModal, setShowModal] = useState(false);
+    const [selectedSupplies, setSelectedSupplies] = useState(new Set()); // Track selected supply IDs
     const [newSupply, setNewSupply] = useState({ 
         selectedSupplyId: "", 
         name: "", 
@@ -26,7 +27,8 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
         supplySubtype: "",
         referenceCode: "",
         unitOfMeasure: "",
-        selectedWorkOrderIds: []  // Support multiple work orders
+        selectedWorkOrderIds: [],  // Support multiple work orders
+        quantity: 1  // Quantity for the supply (1-10)
     });
     const [loading, setLoading] = useState(false);
     const [currentUserId, setCurrentUserId] = useState(null);
@@ -258,6 +260,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                 supplySubtype: newSupply.supplySubtype || null,
                 referenceCode: newSupply.referenceCode || null,
                 unitOfMeasure: newSupply.unitOfMeasure || null,
+                quantity: parseInt(newSupply.quantity) || 1,
                 ...(workOrderIds.length > 0 && { workOrderIds: workOrderIds }),
             })
 
@@ -276,7 +279,8 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                 supplySubtype: "",
                 referenceCode: "",
                 unitOfMeasure: "",
-                selectedWorkOrderIds: []
+                selectedWorkOrderIds: [],
+                quantity: 1
             });
             setSupplySearchTerm("");
             setSelectedCategory("");
@@ -292,8 +296,76 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
             const data = res.data;
             if (res.status !== 200) throw new Error(data.error || "Failed to update status");
             setSupplies((prev) => prev.map((s) => (s.id === id ? data.supply : s)));
+            // Remove from selected if it was selected
+            setSelectedSupplies((prev) => {
+                const newSet = new Set(prev);
+                newSet.delete(id);
+                return newSet;
+            });
         } catch (err) {
             alert(err.message);
+        }
+    };
+
+    const handleBulkStatusChange = async (status) => {
+        if (selectedSupplies.size === 0) {
+            alert("Please select at least one supply");
+            return;
+        }
+
+        const confirmMessage = status === "approved" 
+            ? `Are you sure you want to approve ${selectedSupplies.size} supply(s)?`
+            : `Are you sure you want to reject ${selectedSupplies.size} supply(s)?`;
+        
+        if (!window.confirm(confirmMessage)) return;
+
+        const supplyIds = Array.from(selectedSupplies);
+        const results = { success: [], failed: [] };
+
+        // Process all updates
+        for (const id of supplyIds) {
+            try {
+                const payload = JSON.stringify({ status });
+                const res = await projectsAPI.patchSupplies(project.id, id, payload);
+                if (res.status === 200) {
+                    results.success.push(id);
+                    setSupplies((prev) => prev.map((s) => (s.id === id ? res.data.supply : s)));
+                } else {
+                    results.failed.push({ id, error: res.data.error || "Failed to update status" });
+                }
+            } catch (err) {
+                results.failed.push({ id, error: err.message });
+            }
+        }
+
+        // Clear selection
+        setSelectedSupplies(new Set());
+
+        // Only show alert if there were failures
+        if (results.failed.length > 0) {
+            alert(`Failed to update ${results.failed.length} supply(s).`);
+        }
+    };
+
+    const handleToggleSelect = (supplyId) => {
+        setSelectedSupplies((prev) => {
+            const newSet = new Set(prev);
+            if (newSet.has(supplyId)) {
+                newSet.delete(supplyId);
+            } else {
+                newSet.add(supplyId);
+            }
+            return newSet;
+        });
+    };
+
+    const handleSelectAll = (pendingSuppliesList) => {
+        if (selectedSupplies.size === pendingSuppliesList.length) {
+            // Deselect all
+            setSelectedSupplies(new Set());
+        } else {
+            // Select all
+            setSelectedSupplies(new Set(pendingSuppliesList.map(s => s.id)));
         }
     };
 
@@ -329,6 +401,80 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
             })
             .filter(name => name !== null);
         return names.length > 0 ? names.join(", ") : "------";
+    };
+
+    // Helper function to get quantity for a supply in a specific work order
+    const getSupplyQuantity = (supply, workOrderId) => {
+        if (!workOrderId) {
+            // If no specific work order, return the first quantity or 1
+            const quantities = supply.workOrderQuantities || {};
+            const firstQuantity = Object.values(quantities)[0];
+            return firstQuantity || 1;
+        }
+        const quantities = supply.workOrderQuantities || {};
+        return quantities[workOrderId] || 1;
+    };
+
+    // Helper function to combine supplies with the same name/code and work order
+    // This handles cases where the same supply is added multiple times to the same work order
+    const combineSupplies = (supplyList) => {
+        if (!supplyList || supplyList.length === 0) return [];
+        
+        // Create a map to combine supplies by (supplyIdentifier, workOrderId) pairs
+        // Use name + referenceCode as identifier since supplies can have different IDs but be the same supply
+        const combinedMap = new Map();
+        
+        supplyList.forEach(supply => {
+            // Create a unique identifier for the supply (name + code)
+            const supplyIdentifier = `${supply.name || ''}_${supply.referenceCode || ''}_${supply.supplyType || ''}`;
+            const workOrderIds = supply.workOrderIds || [];
+            const quantities = supply.workOrderQuantities || {};
+            
+            // If supply has no work orders, treat it as a unique entry
+            if (workOrderIds.length === 0) {
+                const key = `${supplyIdentifier}_no_wo`;
+                if (!combinedMap.has(key)) {
+                    combinedMap.set(key, { 
+                        ...supply, 
+                        combinedQuantities: {},
+                        originalIds: [supply.id] // Track original IDs for deletion
+                    });
+                } else {
+                    // If same supply without work order appears multiple times, keep first one
+                    const existing = combinedMap.get(key);
+                    existing.originalIds.push(supply.id);
+                }
+            } else {
+                // For each work order this supply is linked to
+                workOrderIds.forEach(woId => {
+                    const key = `${supplyIdentifier}_wo_${woId}`;
+                    const quantity = quantities[woId] || 1;
+                    
+                    if (combinedMap.has(key)) {
+                        // Add to existing quantity and track original IDs
+                        const existing = combinedMap.get(key);
+                        existing.combinedQuantities[woId] = (existing.combinedQuantities[woId] || 0) + quantity;
+                        if (!existing.originalIds.includes(supply.id)) {
+                            existing.originalIds.push(supply.id);
+                        }
+                    } else {
+                        // Create new entry
+                        combinedMap.set(key, {
+                            ...supply,
+                            combinedQuantities: { [woId]: quantity },
+                            originalIds: [supply.id]
+                        });
+                    }
+                });
+            }
+        });
+        
+        // Convert map back to array and update workOrderQuantities
+        return Array.from(combinedMap.values()).map(supply => ({
+            ...supply,
+            workOrderQuantities: supply.combinedQuantities || supply.workOrderQuantities || {},
+            workOrderIds: Object.keys(supply.combinedQuantities || supply.workOrderQuantities || {}).map(id => parseInt(id))
+        }));
     };
 
     return (
@@ -392,8 +538,9 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
 
                 // For workers, separate pending requests from other supplies
                 // For PMs, separate all pending requests from other supplies
+                // Filter out rejected supplies from display
                 let pendingSupplies = [];
-                let nonPendingSupplies = supplies;
+                let nonPendingSupplies = supplies.filter(s => s.status !== "rejected");
                 
                 if (userRole === "worker" && currentUserId) {
                     pendingSupplies = supplies.filter(s => 
@@ -402,14 +549,18 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                         s.requestedBy.id === currentUserId
                     );
                     nonPendingSupplies = supplies.filter(s => 
+                        s.status !== "rejected" &&
                         !(s.status === "pending" && s.requestedBy && s.requestedBy.id === currentUserId)
                     );
                 } else if (userRole === "project_manager") {
                     pendingSupplies = supplies.filter(s => s.status === "pending");
-                    nonPendingSupplies = supplies.filter(s => s.status !== "pending");
+                    nonPendingSupplies = supplies.filter(s => s.status !== "pending" && s.status !== "rejected");
                 }
 
-                const buildingSupplies = nonPendingSupplies
+                // Combine supplies before filtering and sorting
+                const combinedNonPendingSupplies = combineSupplies(nonPendingSupplies);
+                
+                const buildingSupplies = combinedNonPendingSupplies
                     .filter(s => normalizeSupplyType(s.supplyType) === "building")
                     .sort((a, b) => {
                         const catA = a.supplyCategory || "";
@@ -417,7 +568,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                         return catA.localeCompare(catB);
                     });
                 
-                const electricalSupplies = nonPendingSupplies
+                const electricalSupplies = combinedNonPendingSupplies
                     .filter(s => normalizeSupplyType(s.supplyType) === "electrical")
                     .sort((a, b) => {
                         const catA = a.supplyCategory || "";
@@ -427,10 +578,19 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
 
                 const renderPendingSupplyCard = (supply, isPM = false) => {
                     const workOrderNames = getWorkOrderNames(supply);
+                    const isSelected = selectedSupplies.has(supply.id);
                     
                     return (
                         <div key={supply.id} style={styles.pendingCard}>
                             <div style={styles.pendingCardHeader}>
+                                {isPM && (
+                                    <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => handleToggleSelect(supply.id)}
+                                        style={styles.checkbox}
+                                    />
+                                )}
                                 <div style={{ flex: 1, paddingRight: "3rem" }}>
                                     <div style={{ fontWeight: "600", fontSize: "0.95rem", color: "#2c3e50" }}>
                                         {supply.name}
@@ -462,6 +622,14 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                         <span style={styles.pendingValue}>{supply.unitOfMeasure}</span>
                                     </div>
                                 )}
+                                <div style={styles.pendingCardRow}>
+                                    <span style={styles.pendingLabel}>Quantity:</span>
+                                    <span style={styles.pendingValue}>
+                                        {supply.workOrderQuantities && Object.keys(supply.workOrderQuantities).length > 0
+                                            ? Object.values(supply.workOrderQuantities)[0]
+                                            : 1}
+                                    </span>
+                                </div>
                                 <div style={styles.pendingCardRow}>
                                     <span style={styles.pendingLabel}>Work Order:</span>
                                     <span style={styles.pendingValue}>{workOrderNames}</span>
@@ -522,6 +690,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                         <th style={styles.th}>Code</th>
                                         <th style={styles.th}>Vendor</th>
                                         <th style={styles.th}>Price ($)</th>
+                                        <th style={styles.th}>Quantity</th>
                                         <th style={styles.th}>Unit of Measure</th>
                                         <th style={styles.th}>Work Order</th>
                                         <th style={styles.th}>Status</th>
@@ -529,10 +698,24 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {supplyList.map((supply) => {
+                                    {supplyList.map((supply, index) => {
                                         const workOrderNames = getWorkOrderNames(supply);
+                                        // Calculate total quantity for the selected work order or sum all if no filter
+                                        let quantity;
+                                        if (selectedWorkOrderId) {
+                                            // If filtering by work order, show quantity for that work order
+                                            quantity = getSupplyQuantity(supply, selectedWorkOrderId);
+                                        } else {
+                                            // If showing all work orders, sum all quantities for this supply
+                                            const quantities = supply.workOrderQuantities || {};
+                                            quantity = Object.values(quantities).reduce((sum, qty) => sum + (qty || 0), 0) || 1;
+                                        }
+                                        // Create unique key that includes work order to handle same supply in different work orders
+                                        const uniqueKey = selectedWorkOrderId 
+                                            ? `supply_${supply.id}_wo_${selectedWorkOrderId}`
+                                            : `supply_${supply.id}_${index}`;
                                         return (
-                                            <tr key={supply.id}>
+                                            <tr key={uniqueKey}>
                                                 <td style={styles.td}>
                                                     <div>
                                                         <div style={{ fontWeight: "500" }}>{supply.name}</div>
@@ -546,6 +729,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                                 <td style={styles.td}>{supply.referenceCode || "-"}</td>
                                                 <td style={styles.td}>{supply.vendor || "-"}</td>
                                                 <td style={styles.td}>{supply.budget.toFixed(2)}</td>
+                                                <td style={styles.td}>{quantity}</td>
                                                 <td style={styles.td}>{supply.unitOfMeasure || "-"}</td>
                                                 <td style={styles.td}>{workOrderNames}</td>
                                                 <td style={styles.td}>
@@ -659,16 +843,50 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                         <div style={styles.workerLayout}>
                             {/* Left sidebar for pending requests */}
                             <div style={styles.pendingSidebar}>
-                                <h3 style={styles.pendingSidebarTitle}>Pending Requests</h3>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                                    <h3 style={styles.pendingSidebarTitle}>Pending Requests</h3>
+                                    {pendingSupplies.length > 0 && userRole === "project_manager" && (
+                                        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={pendingSupplies.length > 0 && selectedSupplies.size === pendingSupplies.length}
+                                                onChange={() => handleSelectAll(pendingSupplies)}
+                                                style={styles.checkbox}
+                                                title="Select All"
+                                            />
+                                            <span style={{ fontSize: "0.85rem", color: "#6b7280" }}>Select All</span>
+                                        </div>
+                                    )}
+                                </div>
                                 {pendingSupplies.length === 0 ? (
                                     <div style={styles.noPendingSupplies}>
                                         <FaBox style={styles.noPendingIcon} />
                                         <p style={styles.noPendingText}>No pending supplies</p>
                                     </div>
                                 ) : (
-                                    <div style={styles.pendingList}>
-                                        {pendingSupplies.map(supply => renderPendingSupplyCard(supply, true))}
-                                    </div>
+                                    <>
+                                        {userRole === "project_manager" && selectedSupplies.size > 0 && (
+                                            <div style={styles.bulkActions}>
+                                                <button
+                                                    style={styles.bulkApproveButton}
+                                                    onClick={() => handleBulkStatusChange("approved")}
+                                                    title={`Approve ${selectedSupplies.size} selected`}
+                                                >
+                                                    <FaCheck /> Approve Selected ({selectedSupplies.size})
+                                                </button>
+                                                <button
+                                                    style={styles.bulkRejectButton}
+                                                    onClick={() => handleBulkStatusChange("rejected")}
+                                                    title={`Reject ${selectedSupplies.size} selected`}
+                                                >
+                                                    <FaTrash /> Reject Selected ({selectedSupplies.size})
+                                                </button>
+                                            </div>
+                                        )}
+                                        <div style={styles.pendingList}>
+                                            {pendingSupplies.map(supply => renderPendingSupplyCard(supply, true))}
+                                        </div>
+                                    </>
                                 )}
                             </div>
                             
@@ -918,6 +1136,17 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                 />
                             </>
                         )}
+
+                        <label style={styles.label}>Quantity (1-10)</label>
+                        <select
+                            value={newSupply.quantity}
+                            onChange={(e) => setNewSupply({...newSupply, quantity: parseInt(e.target.value)})}
+                            style={styles.input}
+                        >
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                                <option key={num} value={num}>{num}</option>
+                            ))}
+                        </select>
 
                         <div style={styles.modalActions}>
                             <button style={styles.saveButton} onClick={handleAddSupply}>
@@ -1275,6 +1504,53 @@ const styles = {
         cursor: "pointer",
         borderBottom: "1px solid #f3f4f6",
         transition: "background-color 0.2s",
+    },
+    checkbox: {
+        width: "18px",
+        height: "18px",
+        cursor: "pointer",
+        marginRight: "0.75rem",
+        flexShrink: 0,
+    },
+    bulkActions: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.5rem",
+        marginBottom: "1rem",
+        paddingBottom: "1rem",
+        borderBottom: "2px solid #e5e7eb",
+    },
+    bulkApproveButton: {
+        backgroundColor: "#dcfce7",
+        color: "#166534",
+        border: "1px solid #86efac",
+        borderRadius: "6px",
+        padding: "0.6rem 1rem",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "0.4rem",
+        fontSize: "0.9rem",
+        fontWeight: "600",
+        transition: "all 0.2s ease",
+        width: "100%",
+    },
+    bulkRejectButton: {
+        backgroundColor: "#fee2e2",
+        color: "#991b1b",
+        border: "1px solid #fca5a5",
+        borderRadius: "6px",
+        padding: "0.6rem 1rem",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "0.4rem",
+        fontSize: "0.9rem",
+        fontWeight: "600",
+        transition: "all 0.2s ease",
+        width: "100%",
     },
 };
 

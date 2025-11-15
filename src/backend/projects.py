@@ -633,7 +633,9 @@ def _update_work_order_costs_from_supplies(work_order_ids: List[int]):
         for link in building_links:
             supply = BuildingSupply.query.get(link.buildingSupplyId)
             if supply and supply.status == SupplyStatus.APPROVED:
-                supply_cost_total += to_decimal(supply.budget)
+                # Multiply budget by quantity
+                quantity = link.quantity if link.quantity else 1
+                supply_cost_total += to_decimal(supply.budget) * quantity
         
         # Get approved electrical supplies
         electrical_links = WorkOrderElectricalSupply.query.filter_by(
@@ -643,7 +645,9 @@ def _update_work_order_costs_from_supplies(work_order_ids: List[int]):
         for link in electrical_links:
             supply = ElectricalSupply.query.get(link.electricalSupplyId)
             if supply and supply.status == SupplyStatus.APPROVED:
-                supply_cost_total += to_decimal(supply.budget)
+                # Multiply budget by quantity
+                quantity = link.quantity if link.quantity else 1
+                supply_cost_total += to_decimal(supply.budget) * quantity
         
         # Update work order actualCost with total supply costs
         work_order.actualCost = supply_cost_total
@@ -1584,6 +1588,17 @@ def add_project_supply(project_id):
     db.session.flush()  # Get the supply ID
     
     # Link supply to work orders using appropriate junction table
+    # Get quantity from payload (default to 1 if not provided)
+    quantity = payload.get("quantity", 1)
+    try:
+        quantity = int(quantity)
+        if quantity < 1:
+            quantity = 1
+        elif quantity > 10:
+            quantity = 10
+    except (ValueError, TypeError):
+        quantity = 1
+    
     if work_order_ids:
         for wo_id in work_order_ids:
             if supply_type == "electrical":
@@ -1597,7 +1612,8 @@ def add_project_supply(project_id):
                 if not existing:
                     work_order_supply = WorkOrderElectricalSupply(
                         workOrderId=wo_id,
-                        electricalSupplyId=supply.id
+                        electricalSupplyId=supply.id,
+                        quantity=quantity
                     )
                     db.session.add(work_order_supply)
             else:
@@ -1611,7 +1627,8 @@ def add_project_supply(project_id):
                 if not existing:
                     work_order_supply = WorkOrderBuildingSupply(
                         workOrderId=wo_id,
-                        buildingSupplyId=supply.id
+                        buildingSupplyId=supply.id,
+                        quantity=quantity
                     )
                     db.session.add(work_order_supply)
     
@@ -1880,6 +1897,18 @@ def add_supply_to_workorder(project_id, workorder_id, supply_id):
     if not supply:
         return jsonify({"error": "Supply not found"}), 404
 
+    # Get quantity from payload (default to 1 if not provided)
+    payload = request.get_json(silent=True) or {}
+    quantity = payload.get("quantity", 1)
+    try:
+        quantity = int(quantity)
+        if quantity < 1:
+            quantity = 1
+        elif quantity > 10:
+            quantity = 10
+    except (ValueError, TypeError):
+        quantity = 1
+    
     # Check if relationship already exists
     if supply_type == "electrical":
         existing = WorkOrderElectricalSupply.query.filter_by(
@@ -1893,7 +1922,8 @@ def add_supply_to_workorder(project_id, workorder_id, supply_id):
         
         work_order_supply = WorkOrderElectricalSupply(
             workOrderId=workorder_id,
-            electricalSupplyId=supply_id
+            electricalSupplyId=supply_id,
+            quantity=quantity
         )
     else:
         existing = WorkOrderBuildingSupply.query.filter_by(
@@ -1907,7 +1937,8 @@ def add_supply_to_workorder(project_id, workorder_id, supply_id):
         
         work_order_supply = WorkOrderBuildingSupply(
             workOrderId=workorder_id,
-            buildingSupplyId=supply_id
+            buildingSupplyId=supply_id,
+            quantity=quantity
         )
     
     db.session.add(work_order_supply)
