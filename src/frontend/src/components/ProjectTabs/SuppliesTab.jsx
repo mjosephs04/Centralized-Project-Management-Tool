@@ -30,9 +30,12 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
     });
     const [loading, setLoading] = useState(false);
     
-    // Catalog supplies and categories
-    const [catalogSupplies, setCatalogSupplies] = useState([]);
-    const [categories, setCategories] = useState([]);
+    // Catalog supplies and categories - cached separately for building and electrical
+    const [buildingCatalogSupplies, setBuildingCatalogSupplies] = useState([]);
+    const [electricalCatalogSupplies, setElectricalCatalogSupplies] = useState([]);
+    const [buildingCategories, setBuildingCategories] = useState([]);
+    const [electricalCategories, setElectricalCategories] = useState([]);
+    const [catalogLoaded, setCatalogLoaded] = useState(false); // Track if initial load is complete
     const [supplySearchTerm, setSupplySearchTerm] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("");
     const [selectedSupplyType, setSelectedSupplyType] = useState("building"); // 'building' or 'electrical'
@@ -77,31 +80,78 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
         if (project?.id) fetchSupplies();
     }, [project?.id, selectedWorkOrderId]);
 
-    // Fetch catalog supplies and categories
+    // Load all catalog supplies at once when modal opens (only once)
     useEffect(() => {
-        const fetchCatalog = async () => {
+        const loadAllCatalogSupplies = async () => {
+            if (!showModal || catalogLoaded) return; // Only load once when modal opens
+            
             try {
-                console.log("Fetching catalog supplies with search:", supplySearchTerm, "category:", selectedCategory, "type:", selectedSupplyType);
-                const data = await projectsAPI.getSuppliesCatalog(supplySearchTerm, selectedCategory, selectedSupplyType);
-                console.log("Catalog data received:", data);
-                console.log("Supplies count:", data.supplies?.length || 0);
-                console.log("Categories count:", data.categories?.length || 0);
-                setCatalogSupplies(data.supplies || []);
-                if (data.categories) {
-                    setCategories(data.categories);
-                }
+                console.log("Loading all catalog supplies at once...");
+                const data = await projectsAPI.getSuppliesCatalog("", "", "all");
+                console.log("All catalog data received:", data);
+                console.log("Building supplies count:", data.buildingSupplies?.length || 0);
+                console.log("Electrical supplies count:", data.electricalSupplies?.length || 0);
+                console.log("Building categories count:", data.buildingCategories?.length || 0);
+                console.log("Electrical categories count:", data.electricalCategories?.length || 0);
+                
+                setBuildingCatalogSupplies(data.buildingSupplies || []);
+                setElectricalCatalogSupplies(data.electricalSupplies || []);
+                setBuildingCategories(data.buildingCategories || []);
+                setElectricalCategories(data.electricalCategories || []);
+                setCatalogLoaded(true);
             } catch (err) {
-                console.error("Error fetching catalog supplies:", err);
+                console.error("Error loading all catalog supplies:", err);
                 console.error("Error details:", err.response?.data || err.message);
-                setCatalogSupplies([]);
-                setCategories([]);
+                setBuildingCatalogSupplies([]);
+                setElectricalCatalogSupplies([]);
+                setBuildingCategories([]);
+                setElectricalCategories([]);
             }
         };
-        // Fetch when modal opens or when search/category/supplyType changes
-        if (showModal) {
-            fetchCatalog();
+        
+        loadAllCatalogSupplies();
+    }, [showModal, catalogLoaded]);
+
+    // Reset catalog loaded state when modal closes
+    useEffect(() => {
+        if (!showModal) {
+            setCatalogLoaded(false);
+            setSupplySearchTerm("");
+            setSelectedCategory("");
         }
-    }, [supplySearchTerm, selectedCategory, selectedSupplyType, showModal]);
+    }, [showModal]);
+
+    // Client-side filtering of catalog supplies based on search, category, and type
+    const getFilteredCatalogSupplies = () => {
+        const sourceSupplies = selectedSupplyType === "electrical" 
+            ? electricalCatalogSupplies 
+            : buildingCatalogSupplies;
+        
+        let filtered = [...sourceSupplies];
+        
+        // Filter by search term
+        if (supplySearchTerm) {
+            const searchLower = supplySearchTerm.toLowerCase();
+            filtered = filtered.filter(supply => 
+                (supply.name && supply.name.toLowerCase().includes(searchLower)) ||
+                (supply.vendor && supply.vendor.toLowerCase().includes(searchLower))
+            );
+        }
+        
+        // Filter by category
+        if (selectedCategory) {
+            filtered = filtered.filter(supply => supply.supplyCategory === selectedCategory);
+        }
+        
+        return filtered;
+    };
+
+    // Get categories for current supply type
+    const getCurrentCategories = () => {
+        return selectedSupplyType === "electrical" 
+            ? electricalCategories 
+            : buildingCategories;
+    };
 
     // Calculate dropdown position when it's shown
     useEffect(() => {
@@ -486,6 +536,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                         selectedWorkOrderIds: []
                                     });
                                     setShowSupplyDropdown(false);
+                                    // No API call needed - we already have the data cached
                                 }}
                             >
                                 Building Supplies
@@ -516,6 +567,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                         selectedWorkOrderIds: []
                                     });
                                     setShowSupplyDropdown(false);
+                                    // No API call needed - we already have the data cached
                                 }}
                             >
                                 Electric Supplies
@@ -529,7 +581,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                             style={styles.input}
                         >
                             <option value="">All Categories</option>
-                            {categories.map((cat) => (
+                            {getCurrentCategories().map((cat) => (
                                 <option key={cat} value={cat}>
                                     {cat}
                                 </option>
@@ -548,17 +600,6 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                 }}
                                 onFocus={() => {
                                     setShowSupplyDropdown(true);
-                                    // Ensure we have catalog data when focusing
-                                    if (catalogSupplies.length === 0 && !supplySearchTerm && !selectedCategory) {
-                                        projectsAPI.getSuppliesCatalog("", "", selectedSupplyType).then(data => {
-                                            setCatalogSupplies(data.supplies || []);
-                                            if (data.categories) {
-                                                setCategories(data.categories);
-                                            }
-                                        }).catch(err => {
-                                            console.error("Error fetching catalog:", err);
-                                        });
-                                    }
                                 }}
                                 placeholder="Type to search supplies..."
                             style={styles.input}
@@ -576,9 +617,11 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                 }} 
                                 data-supply-dropdown
                             >
-                                {catalogSupplies.length > 0 ? (
-                                    <>
-                                        {catalogSupplies.map((supply) => (
+                                {(() => {
+                                    const filteredSupplies = getFilteredCatalogSupplies();
+                                    return filteredSupplies.length > 0 ? (
+                                        <>
+                                            {filteredSupplies.map((supply) => (
                                             <div
                                                 key={supply.id}
                                                 style={styles.dropdownItem}
@@ -600,11 +643,14 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                     </>
                                 ) : (
                                     <div style={{ ...styles.dropdownItem, color: "#6b7280", fontStyle: "italic", cursor: "default" }}>
-                                        {supplySearchTerm || selectedCategory 
-                                            ? "No supplies found matching your search" 
-                                            : "Loading supplies..."}
+                                        {!catalogLoaded 
+                                            ? "Loading supplies..." 
+                                            : supplySearchTerm || selectedCategory 
+                                                ? "No supplies found matching your search" 
+                                                : "No supplies available"}
                                     </div>
-                                )}
+                                );
+                                })()}
                             </div>,
                             document.body
                         )}

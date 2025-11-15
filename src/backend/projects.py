@@ -1333,7 +1333,8 @@ def debug_project_access(project_id: int):
 @projects_bp.get("/supplies/catalog")
 @jwt_required()
 def get_supplies_catalog():
-    """Get master catalog supplies (where projectId is null) with optional search and category filter."""
+    """Get master catalog supplies (where projectId is null) with optional search and category filter.
+    If supplyType is 'all', returns both building and electrical supplies."""
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
 
@@ -1343,8 +1344,70 @@ def get_supplies_catalog():
     # Get optional search, category, and supplyType filters from query parameters
     search_term = request.args.get("search", "").strip()
     category = request.args.get("category", "").strip()
-    supply_type = request.args.get("supplyType", "building").strip().lower()  # 'building' or 'electrical'
+    supply_type = request.args.get("supplyType", "building").strip().lower()  # 'building', 'electrical', or 'all'
     
+    # If supplyType is 'all', fetch both types
+    if supply_type == "all":
+        # Query building supplies
+        building_query = BuildingSupply.query.filter(BuildingSupply.projectId.is_(None))
+        # Query electrical supplies
+        electrical_query = ElectricalSupply.query.filter(ElectricalSupply.projectId.is_(None))
+        
+        # Apply search filter to both if provided
+        if search_term:
+            search_filter = f"%{search_term}%"
+            building_query = building_query.filter(
+                db.or_(
+                    BuildingSupply.name.ilike(search_filter),
+                    BuildingSupply.vendor.ilike(search_filter)
+                )
+            )
+            electrical_query = electrical_query.filter(
+                db.or_(
+                    ElectricalSupply.name.ilike(search_filter),
+                    ElectricalSupply.vendor.ilike(search_filter)
+                )
+            )
+        
+        # Apply category filter to both if provided
+        if category:
+            building_query = building_query.filter_by(supplyCategory=category)
+            electrical_query = electrical_query.filter_by(supplyCategory=category)
+        
+        building_supplies = building_query.order_by(BuildingSupply.name.asc()).all()
+        electrical_supplies = electrical_query.order_by(ElectricalSupply.name.asc()).all()
+        
+        # Get unique categories from both tables
+        building_categories = db.session.query(BuildingSupply.supplyCategory).filter(
+            BuildingSupply.projectId.is_(None),
+            BuildingSupply.supplyCategory.isnot(None)
+        ).distinct().order_by(BuildingSupply.supplyCategory.asc()).all()
+        
+        electrical_categories = db.session.query(ElectricalSupply.supplyCategory).filter(
+            ElectricalSupply.projectId.is_(None),
+            ElectricalSupply.supplyCategory.isnot(None)
+        ).distinct().order_by(ElectricalSupply.supplyCategory.asc()).all()
+        
+        # Combine categories and remove duplicates
+        all_categories = set([cat[0] for cat in building_categories if cat[0]])
+        all_categories.update([cat[0] for cat in electrical_categories if cat[0]])
+        categories_list = sorted(list(all_categories))
+        
+        # Debug logging
+        print(f"Catalog query - type: 'all', search: '{search_term}', category: '{category}'")
+        print(f"Found {len(building_supplies)} building supplies and {len(electrical_supplies)} electrical supplies")
+        print(f"Found {len(categories_list)} total categories")
+        
+        return jsonify({
+            "buildingSupplies": [s.to_dict() for s in building_supplies],
+            "electricalSupplies": [s.to_dict() for s in electrical_supplies],
+            "buildingCategories": [cat[0] for cat in building_categories if cat[0]],
+            "electricalCategories": [cat[0] for cat in electrical_categories if cat[0]],
+            "categories": categories_list,
+            "supplyType": "all"
+        }), 200
+    
+    # Single type query (original behavior)
     # Select the appropriate model based on supplyType
     if supply_type == "electrical":
         SupplyModel = ElectricalSupply
