@@ -133,9 +133,11 @@ export const projectsAPI = {
     return response.data;
   },
 
-  getSuppliesCatalog: async (search = "", category = "", supplyType = "building") => {
+  getSuppliesCatalog: async (search = "", category = "", supplyType = "building", page = 1, pageSize = 100) => {
     const params = new URLSearchParams();
     params.append("supplyType", supplyType);
+    params.append("page", page.toString());
+    params.append("pageSize", pageSize.toString());
     if (search) params.append("search", search);
     if (category) params.append("category", category);
     const url = `/projects/supplies/catalog?${params.toString()}`;
@@ -272,7 +274,23 @@ export const usersAPI = {
     const response = await apiClient.get("/auth/workers");
     return response.data.users;
   },
-};
+  getAllUsers: async () => {
+    const response = await apiClient.get("/auth/allUsers");
+    return response.data.users;
+  },
+  deleteUser: async(userKey) => {
+    const response = await apiClient.post(`/auth/deleteUser/${userKey}`)
+    return response
+  },
+  activateUser: async(userKey) => {
+    const response = await apiClient.post(`/auth/activateUser/${userKey}`)
+    return response
+  },
+  updateUserRole: async (userKey, role) => {
+    const response = await apiClient.post(`/auth/updateUserRole/${userKey}`, {role})
+    return response;
+  },
+}
 
 export const authAPI = {
   me: async () => {

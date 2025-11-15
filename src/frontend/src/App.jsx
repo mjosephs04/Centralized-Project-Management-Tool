@@ -16,6 +16,7 @@ import LoginDistributionPage from "./pages/LoginDistribution";
 import RoleProtector from "./components/RoleProtector";
 import { SnackbarProvider } from "./contexts/SnackbarContext";
 import { BrowserRouter } from "react-router-dom";
+import AdminPage from "./pages/AdminPage";
 
 const App = () => {
   return (
@@ -29,7 +30,7 @@ const App = () => {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          
+          <Route path="/admin" element={<RouteProtector>{<AdminPage />}</RouteProtector>} />
           <Route path="/profile" element={<RouteProtector>{<ProfilePage />}</RouteProtector>} />
           <Route path="/messages" element={<RouteProtector>{<MessagesPage />}</RouteProtector>} />
           <Route path="/projects" element={<RouteProtector>{<ProjectsPage />}</RouteProtector>} />

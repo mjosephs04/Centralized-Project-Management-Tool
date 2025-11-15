@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FaUser, FaCalendarAlt, FaDollarSign, FaMapMarkerAlt, FaFlag, FaCog } from "react-icons/fa";
+import { FaUser, FaCalendarAlt, FaDollarSign, FaMapMarkerAlt, FaFlag, FaCog, FaBox } from "react-icons/fa";
 import { projectsAPI } from "../../services/api";
 
 const LogsTab = ({ project, refreshTrigger }) => {
@@ -40,6 +40,7 @@ const LogsTab = ({ project, refreshTrigger }) => {
                 return <FaCalendarAlt style={styles.fieldIcon} />;
             case 'estimatedBudget':
             case 'actualCost':
+            case 'budget':
                 return <FaDollarSign style={styles.fieldIcon} />;
             case 'priority':
             case 'status':
@@ -47,6 +48,15 @@ const LogsTab = ({ project, refreshTrigger }) => {
             case 'crewMembers':
             case 'assignedWorkers':
                 return <FaUser style={styles.fieldIcon} />;
+            case 'supply_created':
+            case 'supply_deleted':
+            case 'vendor':
+            case 'referenceCode':
+            case 'supplyCategory':
+            case 'supplyType':
+            case 'supplySubtype':
+            case 'unitOfMeasure':
+                return <FaBox style={styles.fieldIcon} />;
             default:
                 return <FaCog style={styles.fieldIcon} />;
         }
@@ -69,7 +79,16 @@ const LogsTab = ({ project, refreshTrigger }) => {
             'teamMembers': 'Team Members',
             'assignedWorkers': 'Assigned Workers',
             'work_order_created': 'Work Order Created',
-            'work_order_deleted': 'Work Order Deleted'
+            'work_order_deleted': 'Work Order Deleted',
+            'supply_created': 'Supply Created',
+            'supply_deleted': 'Supply Deleted',
+            'vendor': 'Vendor',
+            'referenceCode': 'Reference Code',
+            'supplyCategory': 'Category',
+            'supplyType': 'Type',
+            'supplySubtype': 'Subtype',
+            'unitOfMeasure': 'Unit of Measure',
+            'budget': 'Budget'
         };
         return fieldMap[field] || field;
     };
@@ -105,6 +124,8 @@ const LogsTab = ({ project, refreshTrigger }) => {
                 'completed': 'Completed',
                 'cancelled': 'Cancelled',
                 'planning': 'Planning',
+                'approved': 'Approved',
+                'rejected': 'Rejected',
             };
             return statusMap[value.toLowerCase()] || value;
         }
@@ -166,6 +187,8 @@ const LogsTab = ({ project, refreshTrigger }) => {
                 return <FaCog style={styles.entityIcon} />;
             case 'work_order':
                 return <FaCalendarAlt style={styles.entityIcon} />;
+            case 'supply':
+                return <FaBox style={styles.entityIcon} />;
             default:
                 return <FaCog style={styles.entityIcon} />;
         }
@@ -180,6 +203,8 @@ const LogsTab = ({ project, refreshTrigger }) => {
                 return 'Project';
             case 'work_order':
                 return 'Work Order';
+            case 'supply':
+                return 'Supply';
             default:
                 return entityType;
         }
@@ -194,6 +219,8 @@ const LogsTab = ({ project, refreshTrigger }) => {
                 return '#3b82f6'; // blue
             case 'work_order':
                 return '#10b981'; // green
+            case 'supply':
+                return '#f59e0b'; // amber/orange
             default:
                 return '#6b7280'; // gray
         }
@@ -223,11 +250,12 @@ const LogsTab = ({ project, refreshTrigger }) => {
         );
     };
 
-    // Categorize logs into Project, Work Order, and Team
+    // Categorize logs into Project, Work Order, Team, and Supplies
     const categorizeLogs = (logs) => {
         const projectLogs = [];
         const workOrderLogs = [];
         const teamLogs = [];
+        const supplyLogs = [];
 
         logs.forEach(log => {
             // Apply time filter first
@@ -237,6 +265,10 @@ const LogsTab = ({ project, refreshTrigger }) => {
             if ((log.entityType === 'project' && (log.field === 'crewMembers' || log.field === 'teamMembers')) ||
                 (log.entityType === 'work_order' && log.field === 'assignedWorkers')) {
                 teamLogs.push(log);
+            }
+            // Supply logs: all supply logs
+            else if (log.entityType === 'supply') {
+                supplyLogs.push(log);
             }
             // Work order logs: all other work order logs
             else if (log.entityType === 'work_order') {
@@ -251,7 +283,8 @@ const LogsTab = ({ project, refreshTrigger }) => {
         return {
             project: groupLogsBySession(projectLogs),
             workOrder: groupLogsBySession(workOrderLogs),
-            team: groupLogsBySession(teamLogs)
+            team: groupLogsBySession(teamLogs),
+            supply: groupLogsBySession(supplyLogs)
         };
     };
 
@@ -297,27 +330,15 @@ const LogsTab = ({ project, refreshTrigger }) => {
                         <div key={session.sessionId || `session_${sessionIndex}`} style={styles.logEntry}>
                             <div style={styles.logHeader}>
                                 <div style={styles.logField}>
-                                    {session.logs.length === 1 
-                                        ? getFieldIcon(session.logs[0].field)
-                                        : <FaCog style={styles.fieldIcon} />
-                                    }
                                     <span style={styles.fieldName}>
                                         {session.logs.length === 1 
-                                            ? formatFieldName(session.logs[0].field)
+                                            ? (session.logs[0].field === 'status' && session.entityType === 'supply' && 
+                                               (session.logs[0].newValue?.toLowerCase() === 'approved' || formatValue(session.logs[0].newValue, 'status')?.toLowerCase() === 'approved'))
+                                                ? 'Supply Approved'
+                                                : formatFieldName(session.logs[0].field)
                                             : `${session.logs.length} fields updated`
                                         }
                                     </span>
-                                    <div style={{
-                                        ...styles.entityTypeBadge,
-                                        backgroundColor: getEntityTypeColor(session.entityType, session.primaryField) + '20',
-                                        color: getEntityTypeColor(session.entityType, session.primaryField),
-                                        borderColor: getEntityTypeColor(session.entityType, session.primaryField) + '40'
-                                    }}>
-                                        {getEntityTypeIcon(session.entityType, session.primaryField)}
-                                        <span style={styles.entityTypeText}>
-                                            {getEntityTypeLabel(session.entityType, session.primaryField)}
-                                        </span>
-                                    </div>
                                 </div>
                                 <div style={styles.logTime}>
                                     {formatDate(session.createdAt)}
@@ -326,19 +347,38 @@ const LogsTab = ({ project, refreshTrigger }) => {
                             <div style={styles.logContent}>
                                 {session.logs.map((log, logIndex) => (
                                     <div key={log.id} style={styles.changeGroup}>
-                                        {/* Special handling for work order creation/deletion */}
-                                        {(log.field === 'work_order_created' || log.field === 'work_order_deleted') ? (
+                                        {/* Special handling for work order and supply creation/deletion */}
+                                        {(log.field === 'work_order_created' || log.field === 'work_order_deleted' || 
+                                          log.field === 'supply_created' || log.field === 'supply_deleted' ||
+                                          (log.field === 'status' && log.entityType === 'supply' && 
+                                           (log.newValue?.toLowerCase() === 'approved' || formatValue(log.newValue, 'status')?.toLowerCase() === 'approved'))) ? (
                                             <div style={styles.specialEventRow}>
                                                 <span style={{
                                                     ...styles.specialEventLabel,
-                                                    color: log.field === 'work_order_created' ? '#059669' : '#dc2626'
+                                                    color: (log.field === 'work_order_created' || log.field === 'supply_created') 
+                                                        ? '#3b82f6'  // Blue for creation
+                                                        : (log.field === 'status' && log.entityType === 'supply')
+                                                        ? '#059669'  // Green for approval
+                                                        : '#dc2626'  // Red for deletion
                                                 }}>
-                                                    {log.field === 'work_order_created' ? '✓' : '✗'}
+                                                    {(log.field === 'work_order_created' || log.field === 'supply_created')
+                                                        ? '+'  // Blue plus for creation
+                                                        : (log.field === 'status' && log.entityType === 'supply')
+                                                        ? '✓'  // Green checkmark for approval
+                                                        : '✗'}
                                                 </span>
                                                 <span style={styles.specialEventText}>
                                                     {log.field === 'work_order_created' 
                                                         ? `Work order "${log.newValue}" was created`
-                                                        : `Work order "${log.oldValue}" was deleted`
+                                                        : log.field === 'work_order_deleted'
+                                                        ? `Work order "${log.oldValue}" was deleted`
+                                                        : log.field === 'supply_created'
+                                                        ? `Supply "${log.newValue}" request was created`
+                                                        : log.field === 'supply_deleted'
+                                                        ? `Supply "${log.oldValue}" was deleted`
+                                                        : (log.field === 'status' && log.entityType === 'supply')
+                                                        ? `Supply "${log.supplyName || 'Unknown'}" was approved`
+                                                        : ''
                                                     }
                                                 </span>
                                             </div>
@@ -367,6 +407,9 @@ const LogsTab = ({ project, refreshTrigger }) => {
                                                             {formatFieldName(log.field)}
                                                             {log.field === 'assignedWorkers' && log.workOrderName && (
                                                                 <span style={styles.workOrderName}> for "{log.workOrderName}"</span>
+                                                            )}
+                                                            {log.supplyName && (
+                                                                <span style={styles.workOrderName}> for "{log.supplyName}"</span>
                                                             )}:
                                                         </span>
                                                     </div>
@@ -402,7 +445,7 @@ const LogsTab = ({ project, refreshTrigger }) => {
         );
     };
 
-    const totalLogs = categorizedLogs.project.length + categorizedLogs.workOrder.length + categorizedLogs.team.length;
+    const totalLogs = categorizedLogs.project.length + categorizedLogs.workOrder.length + categorizedLogs.team.length + categorizedLogs.supply.length;
 
     return (
         <div style={styles.container}>
@@ -486,6 +529,12 @@ const LogsTab = ({ project, refreshTrigger }) => {
                         <FaUser style={styles.categoryIcon} />,
                         '#8b5cf6'
                     )}
+                    {renderLogSection(
+                        'Supplies',
+                        categorizedLogs.supply,
+                        <FaBox style={styles.categoryIcon} />,
+                        '#f59e0b'
+                    )}
                 </div>
             )}
         </div>
@@ -560,7 +609,7 @@ const styles = {
     },
     categoriesContainer: {
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateColumns: 'repeat(4, 1fr)',
         gap: '1.5rem',
         marginTop: '1rem',
     },
@@ -617,6 +666,9 @@ const styles = {
         display: 'flex',
         alignItems: 'center',
         gap: '0.5rem',
+        flex: 1,
+        minWidth: 0,
+        overflow: 'hidden',
     },
     fieldIcon: {
         color: '#3b82f6',
@@ -626,10 +678,16 @@ const styles = {
         fontSize: '1rem',
         fontWeight: '600',
         color: '#1f2937',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
     },
     logTime: {
         fontSize: '0.9rem',
         color: '#6b7280',
+        flexShrink: 0,
+        marginLeft: '1rem',
+        whiteSpace: 'nowrap',
     },
     logContent: {
         display: 'flex',
@@ -747,6 +805,7 @@ const styles = {
         fontWeight: '600',
         marginLeft: '0.75rem',
         border: '1px solid',
+        flexShrink: 0,
     },
     entityTypeText: {
         fontSize: '0.75rem',

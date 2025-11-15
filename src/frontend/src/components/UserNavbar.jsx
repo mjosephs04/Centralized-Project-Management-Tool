@@ -60,22 +60,24 @@ const styles = {
         background: 'linear-gradient(180deg, transparent, rgba(0, 82, 212, 1), transparent)',
     },
 
-    roleContainer: {
+    roleContainer: (userRole) => ({
         display: 'flex',
         alignItems: 'center',
         gap: '0.5rem',
         padding: '0.5rem 1rem',
-        background: 'linear-gradient(135deg, #0052D4 0%, #4facfe 100%)',
+        background: userRole === 'project_manager' ? '#b356bc' : '#bc8056',
         borderRadius: '8px',
-        boxShadow: '0 2px 8px rgba(0, 82, 212, 0.25)',
-    },
+        boxShadow: userRole === 'project_manager' 
+            ? '0 2px 8px rgba(179, 86, 188, 0.3)' 
+            : '0 2px 8px rgba(188, 128, 86, 0.3)',
+    }),
 
     roleIcon: {
         width: '8px',
         height: '8px',
         borderRadius: '50%',
-        background: '#10b981',
-        boxShadow: '0 0 8px rgba(16, 185, 129, 0.6)',
+        background: '#ffffff',
+        boxShadow: '0 0 8px rgba(255, 255, 255, 0.8)',
     },
 
     roleText: {
@@ -174,7 +176,7 @@ const styles = {
         background: 'transparent',
         border: '1px solid rgba(239, 68, 68, 0.3)',
         borderRadius: '8px',
-        color: '#dc2626',
+        color: '#FF6961',
         fontSize: '0.9rem',
         fontWeight: '600',
         cursor: 'pointer',
@@ -183,9 +185,9 @@ const styles = {
     },
 
     logoutButtonHover: {
-        background: '#dc2626',
+        background: '#FF6961',
         color: 'white',
-        borderColor: '#dc2626',
+        borderColor: '#FF6961',
     }
 };
 
@@ -217,6 +219,7 @@ const UserNavbar = () => {
         if (!role) return '';
         if (role === 'project_manager') return 'Project Manager';
         if (role === 'worker') return 'Crew Member';
+        if (role === 'admin') return 'Admin';
         return role.replace(/_/g, ' ');
     };
 
@@ -237,7 +240,7 @@ const UserNavbar = () => {
                 <div style={styles.divider}></div>
 
                 {userRole && (
-                    <div style={styles.roleContainer}>
+                    <div style={styles.roleContainer(userRole)}>
                         <div style={styles.roleIcon}></div>
                         <span style={styles.roleText}>
                             {formatRole(userRole)}

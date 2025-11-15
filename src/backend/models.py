@@ -46,6 +46,7 @@ class WorkOrderStatus(enum.Enum):
 class AuditEntityType(enum.Enum):
     PROJECT = "project"
     WORK_ORDER = "work_order"
+    SUPPLY = "supply"
 
 
 class User(db.Model):
@@ -444,7 +445,7 @@ class Audit(db.Model):
     __tablename__ = "audit_logs"
 
     id = db.Column(db.Integer, primary_key=True)
-    entityType = db.Column(db.Enum(AuditEntityType), nullable=False)
+    entityType = db.Column(db.Enum(AuditEntityType, native_enum=False, length=20), nullable=False)
     entityId = db.Column(db.Integer, nullable=False, index=True)
     userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
     field = db.Column(db.String(100), nullable=False)
@@ -457,26 +458,73 @@ class Audit(db.Model):
     user = db.relationship('User', backref=db.backref('audit_logs', lazy=True))
     project = db.relationship('Project', backref=db.backref('audit_logs', lazy=True))
 
-    def to_dict(self) -> dict:
-        result = {
-            "id": self.id,
-            "entityType": self.entityType.value if self.entityType else None,
-            "entityId": self.entityId,
-            "userId": self.userId,
-            "user": self.user.to_dict() if self.user else None,
-            "field": self.field,
-            "oldValue": self.oldValue,
-            "newValue": self.newValue,
-            "sessionId": self.sessionId,
-            "projectId": self.projectId,
-            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
-        }
-        # Include work order name if this is a work order audit log
-        if self.entityType == AuditEntityType.WORK_ORDER:
-            work_order = WorkOrder.query.filter_by(id=self.entityId, isActive=True).first()
-            if work_order:
-                result["workOrderName"] = work_order.name
-        return result
+    def to_dict(self, work_orders: dict = None, supplies: dict = None) -> dict:
+        """Convert audit log to dictionary.
+        
+        Args:
+            work_orders: Optional dict mapping work order ID to WorkOrder object (to avoid N+1 queries)
+            supplies: Optional dict mapping supply ID to Supply object (to avoid N+1 queries)
+        """
+        try:
+            result = {
+                "id": self.id,
+                "entityType": self.entityType.value if self.entityType else None,
+                "entityId": self.entityId,
+                "userId": self.userId,
+                "user": self.user.to_dict() if self.user else None,
+                "field": self.field,
+                "oldValue": self.oldValue,
+                "newValue": self.newValue,
+                "sessionId": self.sessionId,
+                "projectId": self.projectId,
+                "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+            }
+            
+            # Include work order name if this is a work order audit log
+            if self.entityType == AuditEntityType.WORK_ORDER:
+                if work_orders and self.entityId in work_orders:
+                    work_order = work_orders[self.entityId]
+                    if work_order:
+                        result["workOrderName"] = work_order.name
+                else:
+                    # Fallback to query if not provided (for backward compatibility)
+                    work_order = WorkOrder.query.filter_by(id=self.entityId, isActive=True).first()
+                    if work_order:
+                        result["workOrderName"] = work_order.name
+            
+            # Include supply name if this is a supply audit log
+            elif self.entityType == AuditEntityType.SUPPLY:
+                if supplies and self.entityId in supplies:
+                    supply = supplies[self.entityId]
+                    if supply:
+                        result["supplyName"] = supply.name
+                else:
+                    # Fallback to query if not provided (for backward compatibility)
+                    supply = BuildingSupply.query.filter_by(id=self.entityId).first()
+                    if not supply:
+                        supply = ElectricalSupply.query.filter_by(id=self.entityId).first()
+                    if supply:
+                        result["supplyName"] = supply.name
+            
+            return result
+        except Exception as e:
+            # Return minimal dict if serialization fails
+            import traceback
+            print(f"Error in Audit.to_dict for log {self.id}: {str(e)}")
+            print(traceback.format_exc())
+            return {
+                "id": self.id,
+                "entityType": self.entityType.value if self.entityType else None,
+                "entityId": self.entityId,
+                "userId": self.userId,
+                "field": self.field,
+                "oldValue": self.oldValue,
+                "newValue": self.newValue,
+                "sessionId": self.sessionId,
+                "projectId": self.projectId,
+                "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+                "error": "Failed to serialize audit log"
+            }
 
 class BuildingSupply(db.Model):
     __tablename__ = "building_supplies"
@@ -537,6 +585,20 @@ class BuildingSupply(db.Model):
             "approvedBy": self.approvedBy.to_dict() if self.approvedBy else None,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+        }
+    
+    def to_catalog_dict(self) -> dict:
+        """Lightweight dict for catalog dropdowns - only essential fields"""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "vendor": self.vendor,
+            "referenceCode": self.referenceCode,
+            "supplyCategory": self.supplyCategory,
+            "supplyType": self.supplyType,
+            "supplySubtype": self.supplySubtype,
+            "unitOfMeasure": self.unitOfMeasure,
+            "budget": float(self.budget) if self.budget else 0.0,
         }
 
 
@@ -599,6 +661,20 @@ class ElectricalSupply(db.Model):
             "approvedBy": self.approvedBy.to_dict() if self.approvedBy else None,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+        }
+    
+    def to_catalog_dict(self) -> dict:
+        """Lightweight dict for catalog dropdowns - only essential fields"""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "vendor": self.vendor,
+            "referenceCode": self.referenceCode,
+            "supplyCategory": self.supplyCategory,
+            "supplyType": self.supplyType,
+            "supplySubtype": self.supplySubtype,
+            "unitOfMeasure": self.unitOfMeasure,
+            "budget": float(self.budget) if self.budget else 0.0,
         }
 
 

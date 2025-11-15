@@ -13,7 +13,10 @@ const ProjectCreationForm = ({ onCreate }) => {
     const [formData, setFormData] = useState({
         name: '',
         description: '',
-        location: '',
+        address: '',
+        city: '',
+        state: '',
+        zipCode: '',
         startDate: '',
         endDate: '',
         estimatedBudget: '',
@@ -48,10 +51,20 @@ const ProjectCreationForm = ({ onCreate }) => {
        setError(null);
 
        try {
+            // Combine address fields into single location string
+            const locationParts = [
+                formData.address,
+                formData.city,
+                formData.state,
+                formData.zipCode
+            ].filter(part => part.trim()); // Remove empty parts
+            
+            const location = locationParts.join(', ');
+
             const projectData = {
                 name: formData.name,
                 description: formData.description,
-                location: formData.location,
+                location: location,
                 startDate: formData.startDate,
                 endDate: formData.endDate,
                 estimatedBudget: formData.estimatedBudget ? parseFloat(formData.estimatedBudget) : null,
@@ -79,8 +92,8 @@ const ProjectCreationForm = ({ onCreate }) => {
 
     const styles = {
         pageContainer: {
-            padding: '2.5rem 2.5rem',
-            background: 'linear-gradient(135deg, rgb(35, 115, 243) 0%, #4facfe 100%)',
+            padding: '1.5rem 1rem',
+            background: 'rgb(219, 219, 219)',
             minHeight: 'calc(100vh - 80px)',
             fontFamily: 'sans-serif',
         },
@@ -88,7 +101,7 @@ const ProjectCreationForm = ({ onCreate }) => {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '2rem',
+            marginBottom: '1rem',
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
             padding: '2rem',
             borderRadius: '16px',
@@ -102,7 +115,7 @@ const ProjectCreationForm = ({ onCreate }) => {
             fontWeight: '700',
             color: '#1a202c',
             margin: '0 0 0.5rem 0',
-            background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+            background: '#515557',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             MozBackgroundClip: 'text',
@@ -121,7 +134,7 @@ const ProjectCreationForm = ({ onCreate }) => {
             padding: '0.9rem 2rem',
             border: 'none',
             borderRadius: '10px',
-            background: 'linear-gradient(135deg, #2373f3 0%, #4facfe 100%)',
+            background: '#5692bc',
             color: 'white',
             fontSize: '1rem',
             fontWeight: '600',
@@ -180,6 +193,25 @@ const ProjectCreationForm = ({ onCreate }) => {
             resize: 'vertical',
             fontFamily: 'sans-serif',
         },
+        locationSection: {
+            gridColumn: '1 / -1',
+            backgroundColor: '#f7fafc',
+            border: '2px solid #e2e8f0',
+            borderRadius: '12px',
+            padding: '1.5rem',
+            marginTop: '1rem',
+        },
+        locationSectionTitle: {
+            fontSize: '1.1rem',
+            fontWeight: '600',
+            color: '#2c3e50',
+            marginBottom: '1rem',
+        },
+        locationGrid: {
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '1rem',
+        },
         crewMembersSection: {
             gridColumn: '1 / -1',
             marginTop: '1rem',
@@ -220,11 +252,11 @@ const ProjectCreationForm = ({ onCreate }) => {
             fontWeight: '600',
         },
         addButton: {
-            color: '#2373f3',
+            color: '#5692bc',
             marginTop: '0.5rem',
         },
         removeButton: {
-            color: '#dc2626',
+            color: '#FF6961',
             padding: '0.5rem',
         },
         errorBanner: {
@@ -304,21 +336,6 @@ const ProjectCreationForm = ({ onCreate }) => {
                         />
                     </div>
 
-                    <div style={styles.formGroup}>
-                        <label style={styles.label}>Location *</label>
-                        <input
-                            style={getInputStyle('location')}
-                            type="text"
-                            name="location"
-                            required
-                            placeholder="Project location"
-                            value={formData.location}
-                            onChange={handleChange}
-                            onFocus={() => setFocusedInput('location')}
-                            onBlur={() => setFocusedInput(null)}
-                        />
-                    </div>
-
                     <div style={{ ...styles.formGroup, gridColumn: '1 / -1' }}>
                         <label style={styles.label}>Description</label>
                         <textarea
@@ -332,6 +349,68 @@ const ProjectCreationForm = ({ onCreate }) => {
                         />
                     </div>
 
+                    {/* Location Section */}
+                    <div style={styles.locationSection}>
+                        <div style={styles.locationSectionTitle}>Project Location *</div>
+                        <div style={styles.locationGrid}>
+                            <div style={{ ...styles.formGroup, gridColumn: '1 / -1' }}>
+                                <label style={styles.label}>Street Address</label>
+                                <input
+                                    style={getInputStyle('address')}
+                                    type="text"
+                                    name="address"
+                                    required
+                                    placeholder="123 Main Street"
+                                    value={formData.address}
+                                    onChange={handleChange}
+                                    onFocus={() => setFocusedInput('address')}
+                                    onBlur={() => setFocusedInput(null)}
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>City</label>
+                                <input
+                                    style={getInputStyle('city')}
+                                    type="text"
+                                    name="city"
+                                    required
+                                    placeholder="City"
+                                    value={formData.city}
+                                    onChange={handleChange}
+                                    onFocus={() => setFocusedInput('city')}
+                                    onBlur={() => setFocusedInput(null)}
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>State</label>
+                                <input
+                                    style={getInputStyle('state')}
+                                    type="text"
+                                    name="state"
+                                    required
+                                    placeholder="State"
+                                    value={formData.state}
+                                    onChange={handleChange}
+                                    onFocus={() => setFocusedInput('state')}
+                                    onBlur={() => setFocusedInput(null)}
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>ZIP Code</label>
+                                <input
+                                    style={getInputStyle('zipCode')}
+                                    type="text"
+                                    name="zipCode"
+                                    required
+                                    placeholder="12345"
+                                    value={formData.zipCode}
+                                    onChange={handleChange}
+                                    onFocus={() => setFocusedInput('zipCode')}
+                                    onBlur={() => setFocusedInput(null)}
+                                />
+                            </div>
+                        </div>
+                    </div>
 
                     <div style={styles.formGroup}>
                         <label style={styles.label}>Start Date *</label>

@@ -151,31 +151,31 @@ const MetricsTab = ({ project }) => {
             label="Planned Duration"
             value={formatDays(metrics.schedule?.plannedDuration)}
             icon={<FaCalendarAlt />}
-            tooltip="The original planned number of days for the project from start to end date.Planned Duration = endDate - startDate"
+            tooltip="The original planned number of days for the project from start to end date. Duration = endDate - startDate"
           />
           <DetailCard
             label="Actual Duration"
             value={formatDays(metrics.schedule?.actualDuration)}
             icon={<FaClock />}
-            tooltip="The actual number of days the project has taken or is currently taking.Actual Duration = actualEndDate - actualStartDate (if completed) or today - actualStartDate (if in progress)"
+            tooltip="The actual number of days the project has taken or is currently taking. Duration = actualEndDate - actualStartDate (if completed) or today - actualStartDate (if in progress)"
           />
           <DetailCard
             label="Schedule Variance"
             value={formatDays(metrics.schedule?.scheduleVariance)}
             icon={metrics.schedule?.scheduleVariance < 0 ? <FaTimesCircle style={{ color: "#dc2626" }} /> : <FaCheckCircle style={{ color: "#059669" }} />}
-            tooltip="Schedule Variance shows the difference between planned and actual project duration.Schedule Variance = Planned Duration - Actual Duration"
+            tooltip="Schedule Variance shows the difference between planned and actual project duration. Variance = Planned Duration - Actual Duration"
           />
           <DetailCard
             label="Forecasted Completion"
             value={formatDate(metrics.schedule?.forecastEndDate)}
             icon={<FaCalendarAlt />}
-            tooltip="The projected completion date based on current schedule performance.Forecast Duration = Planned Duration / SPI"
+            tooltip="The projected completion date based on current schedule performance. Duration = Planned Duration / SPI"
           />
           <DetailCard
             label="Planned Value (PV)"
             value={formatCurrency(metrics.progress?.details?.budget?.plannedValuePV ? parseFloat(metrics.progress.details.budget.plannedValuePV) : null)}
             icon={<FaDollarSign />}
-            tooltip="The budgeted cost of work that should have been completed by now based on the planned schedule.PV = (Days Elapsed / Total Planned Days) × Total Estimated Budget"
+            tooltip="The budgeted cost of work that should have been completed by now based on the planned schedule. PV = (Days Elapsed / Total Planned Days) × Total Estimated Budget"
           />
         </div>
       </div>
@@ -191,37 +191,37 @@ const MetricsTab = ({ project }) => {
             label="Earned Value (EV)"
             value={formatCurrency(metrics.cost?.earnedValue)}
             icon={<FaCheckCircle style={{ color: "#059669" }} />}
-            tooltip="The value of work actually completed to date, expressed in dollar terms.EV = Sum of completed work orders' budgets + (50% × in-progress work orders' budgets)"
+            tooltip="The value of work actually completed to date, expressed in dollar terms.  EV = Sum of completed work orders' budgets + (50% × in-progress work orders' budgets)"
           />
           <DetailCard
             label="Actual Cost (AC)"
             value={formatCurrency(metrics.cost?.actualCost)}
             icon={<FaDollarSign />}
-            tooltip="The total cost actually incurred so far on the project.AC = Sum of all work order actual costs"
+            tooltip="The total cost actually incurred so far on the project.  AC = Sum of all work order actual costs"
           />
           <DetailCard
             label="Cost Variance (CV)"
             value={formatCurrency(metrics.cost?.costVariance)}
             icon={metrics.cost?.costVariance >= 0 ? <FaCheckCircle style={{ color: "#059669" }} /> : <FaTimesCircle style={{ color: "#dc2626" }} />}
-            tooltip="Cost Variance shows the difference between earned value and actual cost.CV = EV - AC"
+            tooltip="Cost Variance shows the difference between earned value and actual cost.  CV = EV - AC"
           />
           <DetailCard
             label="Estimate at Completion"
             value={formatCurrency(metrics.cost?.estimateAtCompletion)}
             icon={<FaChartLine />}
-            tooltip="The forecasted total cost of the project when complete, based on current cost performance.EAC = BAC / CPI"
+            tooltip="The forecasted total cost of the project when complete, based on current cost performance.  EAC = BAC / CPI"
           />
           <DetailCard
             label="Remaining Budget"
             value={formatCurrency(metrics.cost?.remainingBudget)}
             icon={<FaDollarSign />}
-            tooltip="The amount of budget remaining for the rest of the project.Remaining Budget = BAC - AC"
+            tooltip="The amount of budget remaining for the rest of the project.  RB = BAC - AC"
           />
           <DetailCard
             label="Budget at Completion"
             value={formatCurrency(metrics.cost?.budgetAtCompletion)}
             icon={<FaDollarSign />}
-            tooltip="The total planned budget for the entire project.BAC = Sum of all active work orders' estimated budgets"
+            tooltip="The total planned budget for the entire project.  BAC = Sum of all active work orders' estimated budgets"
           />
         </div>
       </div>
@@ -238,21 +238,21 @@ const MetricsTab = ({ project }) => {
             value={metrics.workforce?.teamSize || 0}
             icon={<FaUsers />}
             description="Active members"
-            tooltip="The number of active team members assigned to this project.Team Size = Count of active project members"
+            tooltip="The number of active team members assigned to this project.  Size = Count of active project members"
           />
           <MetricCard
             title="Work Orders per Worker"
             value={metrics.workforce?.activeWorkOrdersPerWorker?.toFixed(1) || "0"}
             icon={<FaUsers />}
             description="Current workload"
-            tooltip="The average number of active work orders assigned per team member.Work Orders per Worker = (Pending + In-Progress work orders) / Team Size"
+            tooltip="The average number of active work orders assigned per team member.  WOPW = (Pending + In-Progress work orders) / Team Size"
           />
           <MetricCard
             title="Avg Work Order Duration"
             value={formatDays(metrics.workforce?.averageWorkOrderDurationDays)}
             icon={<FaClock />}
             description="Time to complete"
-            tooltip="The average number of days it takes to complete a work order, calculated from completed work orders only.Avg Work Order Duration = Average of (actualEndDate - actualStartDate) for all completed work orders"
+            tooltip="The average number of days it takes to complete a work order, calculated from completed work orders only.  AWOD = Average of (actualEndDate - actualStartDate) for all completed work orders"
           />
         </div>
         
@@ -281,27 +281,27 @@ const MetricsTab = ({ project }) => {
             value={`${(metrics.quality?.riskIndex || 0).toFixed(1)}%`}
             icon={<FaShieldAlt style={{ color: metrics.quality?.riskIndex > 50 ? "#dc2626" : "#059669" }} />}
             description={metrics.quality?.riskIndex > 50 ? "High risk" : "Low risk"}
-            tooltip="A composite risk score (0-100%) calculated from overdue orders and cost overruns.Risk Index = (Overdue Ratio × 50% + Cost Overrun Ratio × 50%) × 100"
+            tooltip="A composite risk score (0-100%) calculated from overdue orders and cost overruns.  RI = (Overdue Ratio × 50% + Cost Overrun Ratio × 50%) × 100"
             tooltipAlignLeft={true}
           />
           <DetailCard
             label="Overdue Orders"
             value={metrics.quality?.overdueOrders || 0}
             icon={<FaExclamationTriangle style={{ color: "#dc2626" }} />}
-            tooltip="The number of work orders that are past their end date and not yet completed or cancelled.Overdue Orders = Count of work orders where status ≠ Completed/Cancelled AND endDate < today"
+            tooltip="The number of work orders that are past their end date and not yet completed or cancelled.  Overdue = Count of work orders where status ≠ Completed/Cancelled AND endDate < today"
           />
           <DetailCard
             label="Cost Overruns"
             value={metrics.quality?.costOverruns || 0}
             icon={<FaTimesCircle style={{ color: "#dc2626" }} />}
-            tooltip="The number of work orders where the actual cost exceeded the estimated budget.Cost Overruns = Count of work orders where actualCost > estimatedBudget"
+            tooltip="The number of work orders where the actual cost exceeded the estimated budget.  Overruns = Count of work orders where actualCost > estimatedBudget"
             tooltipAlignRight={true}
           />
           <DetailCard
             label="Total Completed"
             value={metrics.quality?.totalCompleted || 0}
             icon={<FaCheckCircle style={{ color: "#059669" }} />}
-            tooltip="The total number of work orders that have been marked as completed.Total Completed = Count of work orders with status = Completed"
+            tooltip="The total number of work orders that have been marked as completed.  Completed = Count of work orders with status = Completed"
             tooltipAlignRight={true}
           />
         </div>
