@@ -46,6 +46,7 @@ class WorkOrderStatus(enum.Enum):
 class AuditEntityType(enum.Enum):
     PROJECT = "project"
     WORK_ORDER = "work_order"
+    SUPPLY = "supply"
 
 
 class User(db.Model):
@@ -444,7 +445,7 @@ class Audit(db.Model):
     __tablename__ = "audit_logs"
 
     id = db.Column(db.Integer, primary_key=True)
-    entityType = db.Column(db.Enum(AuditEntityType), nullable=False)
+    entityType = db.Column(db.Enum(AuditEntityType, native_enum=False, length=20), nullable=False)
     entityId = db.Column(db.Integer, nullable=False, index=True)
     userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
     field = db.Column(db.String(100), nullable=False)
@@ -476,6 +477,13 @@ class Audit(db.Model):
             work_order = WorkOrder.query.filter_by(id=self.entityId, isActive=True).first()
             if work_order:
                 result["workOrderName"] = work_order.name
+        # Include supply name if this is a supply audit log
+        elif self.entityType == AuditEntityType.SUPPLY:
+            supply = BuildingSupply.query.filter_by(id=self.entityId).first()
+            if not supply:
+                supply = ElectricalSupply.query.filter_by(id=self.entityId).first()
+            if supply:
+                result["supplyName"] = supply.name
         return result
 
 class BuildingSupply(db.Model):

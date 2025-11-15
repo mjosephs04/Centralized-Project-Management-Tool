@@ -547,7 +547,7 @@ def get_project_audit_logs(project_id):
     if not has_access:
         return jsonify({"error": "Access denied"}), 403
     
-    # Get audit logs for this project (both project and work order logs)
+    # Get audit logs for this project (project, work order, and supply logs)
     # First get project-level audit logs
     project_audit_logs = Audit.query.filter_by(
         entityType=AuditEntityType.PROJECT,
@@ -561,8 +561,14 @@ def get_project_audit_logs(project_id):
         Audit.projectId == project_id
     ).all()
     
+    # Get supply audit logs for supplies in this project
+    supply_audit_logs = Audit.query.filter(
+        Audit.entityType == AuditEntityType.SUPPLY,
+        Audit.projectId == project_id
+    ).all()
+    
     # Combine and sort all audit logs by creation date
-    all_audit_logs = project_audit_logs + work_order_audit_logs
+    all_audit_logs = project_audit_logs + work_order_audit_logs + supply_audit_logs
     all_audit_logs.sort(key=lambda log: log.createdAt, reverse=True)
     
     return jsonify({"auditLogs": [log.to_dict() for log in all_audit_logs]}), 200
@@ -1612,8 +1618,7 @@ def add_project_supply(project_id):
                 if not existing:
                     work_order_supply = WorkOrderElectricalSupply(
                         workOrderId=wo_id,
-                        electricalSupplyId=supply.id,
-                        quantity=quantity
+                        electricalSupplyId=supply.id
                     )
                     db.session.add(work_order_supply)
             else:
@@ -1627,14 +1632,26 @@ def add_project_supply(project_id):
                 if not existing:
                     work_order_supply = WorkOrderBuildingSupply(
                         workOrderId=wo_id,
-                        buildingSupplyId=supply.id,
-                        quantity=quantity
+                        buildingSupplyId=supply.id
                     )
                     db.session.add(work_order_supply)
     
     # Update work order costs if supply is approved and linked to work orders
     if status == SupplyStatus.APPROVED and work_order_ids:
         _update_work_order_costs_from_supplies(work_order_ids)
+    
+    # Create audit log for supply creation
+    session_id = str(uuid.uuid4())
+    create_audit_log(
+        AuditEntityType.SUPPLY,
+        supply.id,
+        user_id,
+        "supply_created",
+        None,
+        supply.name,
+        session_id=session_id,
+        project_id=project_id
+    )
     
     db.session.commit()
     return jsonify({"supply": supply.to_dict()}), 201
@@ -1686,6 +1703,20 @@ def update_supply_status(project_id, supply_id):
     # Update work order costs if status changed (approved/rejected)
     if old_status != supply.status and work_order_ids:
         _update_work_order_costs_from_supplies(work_order_ids)
+    
+    # Create audit log for status change
+    if old_status != supply.status:
+        session_id = str(uuid.uuid4())
+        create_audit_log(
+            AuditEntityType.SUPPLY,
+            supply_id,
+            user_id,
+            "status",
+            old_status.value if old_status else None,
+            supply.status.value,
+            session_id=session_id,
+            project_id=project_id
+        )
     
     db.session.commit()
     return jsonify({"supply": supply.to_dict()}), 200
@@ -1740,6 +1771,19 @@ def delete_project_supply(project_id, supply_id):
         work_order_ids = [link.workOrderId for link in links]
         WorkOrderBuildingSupply.query.filter_by(buildingSupplyId=supply_id).delete()
 
+    # Create audit log for supply deletion before deleting
+    supply_name = supply.name
+    create_audit_log(
+        AuditEntityType.SUPPLY,
+        supply_id,
+        user_id,
+        "supply_deleted",
+        supply_name,
+        None,
+        session_id=str(uuid.uuid4()),
+        project_id=project_id
+    )
+
     db.session.delete(supply)
     
     # Update work order costs after deleting supply
@@ -1778,27 +1822,64 @@ def update_project_supply(project_id, supply_id):
 
     payload = request.get_json(silent=True) or {}
     
-    # Update allowed fields
-    if "name" in payload:
+    # Store original values for audit logging
+    original_values = {
+        "name": supply.name,
+        "vendor": supply.vendor,
+        "referenceCode": supply.referenceCode,
+        "supplyCategory": supply.supplyCategory,
+        "supplyType": supply.supplyType,
+        "supplySubtype": supply.supplySubtype,
+        "unitOfMeasure": supply.unitOfMeasure,
+        "budget": f"{supply.budget:.2f}" if supply.budget else None,
+    }
+    
+    # Generate a session ID for this update to group all changes together
+    session_id = str(uuid.uuid4())
+    
+    # Update allowed fields with audit logging
+    if "name" in payload and payload["name"].strip() != original_values["name"]:
+        create_audit_log(AuditEntityType.SUPPLY, supply_id, user_id, "name", original_values["name"], payload["name"].strip(), session_id, project_id)
         supply.name = payload["name"].strip()
     if "vendor" in payload:
-        supply.vendor = payload["vendor"].strip() if payload["vendor"] else None
+        new_vendor = payload["vendor"].strip() if payload["vendor"] else None
+        if new_vendor != original_values["vendor"]:
+            create_audit_log(AuditEntityType.SUPPLY, supply_id, user_id, "vendor", original_values["vendor"] or "Not set", new_vendor or "Not set", session_id, project_id)
+            supply.vendor = new_vendor
     if "referenceCode" in payload:
-        supply.referenceCode = payload["referenceCode"].strip() if payload["referenceCode"] else None
+        new_ref = payload["referenceCode"].strip() if payload["referenceCode"] else None
+        if new_ref != original_values["referenceCode"]:
+            create_audit_log(AuditEntityType.SUPPLY, supply_id, user_id, "referenceCode", original_values["referenceCode"] or "Not set", new_ref or "Not set", session_id, project_id)
+            supply.referenceCode = new_ref
     if "supplyCategory" in payload:
-        supply.supplyCategory = payload["supplyCategory"].strip() if payload["supplyCategory"] else None
+        new_cat = payload["supplyCategory"].strip() if payload["supplyCategory"] else None
+        if new_cat != original_values["supplyCategory"]:
+            create_audit_log(AuditEntityType.SUPPLY, supply_id, user_id, "supplyCategory", original_values["supplyCategory"] or "Not set", new_cat or "Not set", session_id, project_id)
+            supply.supplyCategory = new_cat
     if "supplyType" in payload:
-        supply.supplyType = payload["supplyType"].strip() if payload["supplyType"] else None
+        new_type = payload["supplyType"].strip() if payload["supplyType"] else None
+        if new_type != original_values["supplyType"]:
+            create_audit_log(AuditEntityType.SUPPLY, supply_id, user_id, "supplyType", original_values["supplyType"] or "Not set", new_type or "Not set", session_id, project_id)
+            supply.supplyType = new_type
     if "supplySubtype" in payload:
-        supply.supplySubtype = payload["supplySubtype"].strip() if payload["supplySubtype"] else None
+        new_subtype = payload["supplySubtype"].strip() if payload["supplySubtype"] else None
+        if new_subtype != original_values["supplySubtype"]:
+            create_audit_log(AuditEntityType.SUPPLY, supply_id, user_id, "supplySubtype", original_values["supplySubtype"] or "Not set", new_subtype or "Not set", session_id, project_id)
+            supply.supplySubtype = new_subtype
     if "unitOfMeasure" in payload:
-        supply.unitOfMeasure = payload["unitOfMeasure"].strip() if payload["unitOfMeasure"] else None
+        new_uom = payload["unitOfMeasure"].strip() if payload["unitOfMeasure"] else None
+        if new_uom != original_values["unitOfMeasure"]:
+            create_audit_log(AuditEntityType.SUPPLY, supply_id, user_id, "unitOfMeasure", original_values["unitOfMeasure"] or "Not set", new_uom or "Not set", session_id, project_id)
+            supply.unitOfMeasure = new_uom
     if "budget" in payload:
         try:
             budget = float(payload["budget"])
             if budget < 0:
                 return jsonify({"error": "Budget must be positive"}), 400
-            supply.budget = budget
+            budget_str = f"{budget:.2f}"
+            if budget_str != original_values["budget"]:
+                create_audit_log(AuditEntityType.SUPPLY, supply_id, user_id, "budget", original_values["budget"] or "Not set", budget_str, session_id, project_id)
+                supply.budget = budget
         except ValueError:
             return jsonify({"error": "Invalid budget format"}), 400
 
