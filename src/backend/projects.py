@@ -523,55 +523,111 @@ def worker_update_project(project_id):
 @jwt_required()
 def get_project_audit_logs(project_id):
     """Get audit logs for a specific project"""
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
-    
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    
-    project = Project.query.get(project_id)
-    if not project:
-        return jsonify({"error": "Project not found"}), 404
-    
-    # Check if user has access to this project
-    has_access = False
-    if user.role == UserRole.ADMIN:
-        has_access = True
-    elif user.role == UserRole.PROJECT_MANAGER and is_project_manager(int(user_id), project_id):
-        has_access = True
-    elif user.role == UserRole.WORKER:
-        crew_members = project.get_crew_members()
-        if int(user_id) in crew_members:
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        project = Project.query.get(project_id)
+        if not project:
+            return jsonify({"error": "Project not found"}), 404
+        
+        # Check if user has access to this project
+        has_access = False
+        if user.role == UserRole.ADMIN:
             has_access = True
+        elif user.role == UserRole.PROJECT_MANAGER and is_project_manager(int(user_id), project_id):
+            has_access = True
+        elif user.role == UserRole.WORKER:
+            crew_members = project.get_crew_members()
+            if int(user_id) in crew_members:
+                has_access = True
+        
+        if not has_access:
+            return jsonify({"error": "Access denied"}), 403
+        
+        # Get audit logs for this project (project, work order, and supply logs)
+        # Use eager loading to avoid N+1 queries for user relationships
+        project_audit_logs = Audit.query.options(
+            joinedload(Audit.user)
+        ).filter_by(
+            entityType=AuditEntityType.PROJECT,
+            entityId=project_id
+        ).all()
+        
+        # Get work order audit logs for work orders in this project
+        work_order_audit_logs = Audit.query.options(
+            joinedload(Audit.user)
+        ).filter(
+            Audit.entityType == AuditEntityType.WORK_ORDER,
+            Audit.projectId == project_id
+        ).all()
+        
+        # Get supply audit logs for supplies in this project
+        supply_audit_logs = Audit.query.options(
+            joinedload(Audit.user)
+        ).filter(
+            Audit.entityType == AuditEntityType.SUPPLY,
+            Audit.projectId == project_id
+        ).all()
+        
+        # Combine and sort all audit logs by creation date
+        all_audit_logs = project_audit_logs + work_order_audit_logs + supply_audit_logs
+        all_audit_logs.sort(key=lambda log: log.createdAt if log.createdAt else datetime.min, reverse=True)
+        
+        # Batch load work orders and supplies to avoid N+1 queries
+        work_order_ids = {log.entityId for log in all_audit_logs if log.entityType == AuditEntityType.WORK_ORDER}
+        supply_ids = {log.entityId for log in all_audit_logs if log.entityType == AuditEntityType.SUPPLY}
+        
+        work_orders = {}
+        if work_order_ids:
+            work_orders_list = WorkOrder.query.filter(
+                WorkOrder.id.in_(work_order_ids),
+                WorkOrder.isActive == True
+            ).all()
+            work_orders = {wo.id: wo for wo in work_orders_list}
+        
+        supplies = {}
+        if supply_ids:
+            building_supplies = BuildingSupply.query.filter(BuildingSupply.id.in_(supply_ids)).all()
+            electrical_supplies = ElectricalSupply.query.filter(ElectricalSupply.id.in_(supply_ids)).all()
+            supplies = {s.id: s for s in building_supplies + electrical_supplies}
+        
+        # Serialize audit logs with pre-loaded data
+        audit_logs_dict = []
+        for log in all_audit_logs:
+            try:
+                log_dict = log.to_dict(work_orders=work_orders, supplies=supplies)
+                audit_logs_dict.append(log_dict)
+            except Exception as e:
+                # Log the error but continue processing other logs
+                import traceback
+                print(f"Error serializing audit log {log.id}: {str(e)}")
+                print(traceback.format_exc())
+                # Return a minimal dict for this log
+                audit_logs_dict.append({
+                    "id": log.id,
+                    "entityType": log.entityType.value if log.entityType else None,
+                    "entityId": log.entityId,
+                    "userId": log.userId,
+                    "field": log.field,
+                    "oldValue": log.oldValue,
+                    "newValue": log.newValue,
+                    "sessionId": log.sessionId,
+                    "projectId": log.projectId,
+                    "createdAt": log.createdAt.isoformat() if log.createdAt else None,
+                    "error": "Failed to load full details"
+                })
+        
+        return jsonify({"auditLogs": audit_logs_dict}), 200
     
-    if not has_access:
-        return jsonify({"error": "Access denied"}), 403
-    
-    # Get audit logs for this project (project, work order, and supply logs)
-    # First get project-level audit logs
-    project_audit_logs = Audit.query.filter_by(
-        entityType=AuditEntityType.PROJECT,
-        entityId=project_id
-    ).all()
-    
-    # Get work order audit logs for work orders in this project
-    # Now we can use the projectId field to get all work order logs for this project
-    work_order_audit_logs = Audit.query.filter(
-        Audit.entityType == AuditEntityType.WORK_ORDER,
-        Audit.projectId == project_id
-    ).all()
-    
-    # Get supply audit logs for supplies in this project
-    supply_audit_logs = Audit.query.filter(
-        Audit.entityType == AuditEntityType.SUPPLY,
-        Audit.projectId == project_id
-    ).all()
-    
-    # Combine and sort all audit logs by creation date
-    all_audit_logs = project_audit_logs + work_order_audit_logs + supply_audit_logs
-    all_audit_logs.sort(key=lambda log: log.createdAt, reverse=True)
-    
-    return jsonify({"auditLogs": [log.to_dict() for log in all_audit_logs]}), 200
+    except Exception as e:
+        import traceback
+        print(f"Error in get_project_audit_logs: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({"error": "Internal server error while fetching audit logs"}), 500
 
 
 #
