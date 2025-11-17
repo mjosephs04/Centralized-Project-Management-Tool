@@ -1636,150 +1636,144 @@ def get_project_supplies(project_id):
 @jwt_required()
 def add_project_supply(project_id):
     """Create a new supply request or auto-approved supply."""
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
-    project = Project.query.get(project_id)
-
-    if not user or not project:
-        return jsonify({"error": "User or project not found"}), 404
-
-    payload = request.get_json(silent=True) or {}
-    required_fields = ["name", "budget"]
-    missing = [f for f in required_fields if not payload.get(f)]
-    if missing:
-        return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
-
     try:
-        budget = float(payload["budget"])
-        if budget < 0:
-            return jsonify({"error": "Budget must be positive"}), 400
-    except ValueError:
-        return jsonify({"error": "Invalid budget format"}), 400
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        project = Project.query.get(project_id)
 
-    # Determine supply type (default to "building" if not specified)
-    supply_type_raw = payload.get("supplyType", "building")
-    # Handle both string and None values
-    if supply_type_raw:
-        supply_type = str(supply_type_raw).strip().lower()
-    else:
-        supply_type = "building"
-    
-    if supply_type not in ["building", "electrical"]:
-        # Default to building if invalid value
-        supply_type = "building"
+        if not user or not project:
+            return jsonify({"error": "User or project not found"}), 404
 
-    # Determine role-based flow
-    if user.role == UserRole.PROJECT_MANAGER:
-        status = SupplyStatus.APPROVED
-        approved_by = user.id
-        requested_by = user.id
-    elif user.role == UserRole.WORKER:
-        status = SupplyStatus.PENDING
-        approved_by = None
-        requested_by = user.id
-    else:
-        return jsonify({"error": "Only project managers or workers can request supplies"}), 403
+        payload = request.get_json(silent=True) or {}
+        required_fields = ["name", "budget"]
+        missing = [f for f in required_fields if not payload.get(f)]
+        if missing:
+            return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
 
-    # Get workOrderIds (can be single ID or list of IDs)
-    work_order_ids = payload.get("workOrderIds") or payload.get("workOrderId")  # Support both formats
-    if work_order_ids:
-        # Convert single ID to list for consistent handling
-        if not isinstance(work_order_ids, list):
-            work_order_ids = [work_order_ids]
+        try:
+            budget = float(payload["budget"])
+            if budget < 0:
+                return jsonify({"error": "Budget must be positive"}), 400
+        except ValueError:
+            return jsonify({"error": "Invalid budget format"}), 400
+
+        # Determine supply type (default to "building" if not specified)
+        supply_type_raw = payload.get("supplyType", "building")
+        # Handle both string and None values
+        if supply_type_raw:
+            supply_type = str(supply_type_raw).strip().lower()
+        else:
+            supply_type = "building"
         
-        # Validate that all work orders exist and belong to this project
-        for wo_id in work_order_ids:
-            work_order = WorkOrder.query.filter_by(id=wo_id, projectId=project_id, isActive=True).first()
-            if not work_order:
-                return jsonify({"error": f"Work order {wo_id} not found or does not belong to this project"}), 400
+        if supply_type not in ["building", "electrical"]:
+            # Default to building if invalid value
+            supply_type = "building"
 
-    # Create the appropriate supply type
-    common_fields = {
-        "name": payload["name"].strip(),
-        "vendor": payload.get("vendor", "").strip() if payload.get("vendor") else None,
-        "referenceCode": payload.get("referenceCode", "").strip() if payload.get("referenceCode") else None,
-        "supplyCategory": payload.get("supplyCategory", "").strip() if payload.get("supplyCategory") else None,
-        "supplyType": payload.get("supplyType", "").strip() if payload.get("supplyType") else None,
-        "supplySubtype": payload.get("supplySubtype", "").strip() if payload.get("supplySubtype") else None,
-        "unitOfMeasure": payload.get("unitOfMeasure", "").strip() if payload.get("unitOfMeasure") else None,
-        "budget": budget,
-        "projectId": project_id,
-        "workOrderId": None,  # No longer using single workOrderId
-        "status": status,
-        "requestedById": requested_by,
-        "approvedById": approved_by,
-    }
+        # Determine role-based flow
+        if user.role == UserRole.PROJECT_MANAGER:
+            status = SupplyStatus.APPROVED
+            approved_by = user.id
+            requested_by = user.id
+        elif user.role == UserRole.WORKER:
+            status = SupplyStatus.PENDING
+            approved_by = None
+            requested_by = user.id
+        else:
+            return jsonify({"error": "Only project managers or workers can request supplies"}), 403
 
-    if supply_type == "electrical":
-        supply = ElectricalSupply(**common_fields)
-    else:
-        supply = BuildingSupply(**common_fields)
+        # Get workOrderIds (can be single ID or list of IDs)
+        work_order_ids = payload.get("workOrderIds") or payload.get("workOrderId")  # Support both formats
+        if work_order_ids:
+            # Convert single ID to list for consistent handling
+            if not isinstance(work_order_ids, list):
+                work_order_ids = [work_order_ids]
+            
+            # Validate that all work orders exist and belong to this project
+            for wo_id in work_order_ids:
+                work_order = WorkOrder.query.filter_by(id=wo_id, projectId=project_id, isActive=True).first()
+                if not work_order:
+                    return jsonify({"error": f"Work order {wo_id} not found or does not belong to this project"}), 400
 
-    db.session.add(supply)
-    db.session.flush()  # Get the supply ID
-    
-    # Link supply to work orders using appropriate junction table
-    # Get quantity from payload (default to 1 if not provided)
-    quantity = payload.get("quantity", 1)
-    try:
-        quantity = int(quantity)
-        if quantity < 1:
-            quantity = 1
-        elif quantity > 10:
-            quantity = 10
-    except (ValueError, TypeError):
-        quantity = 1
-    
-    if work_order_ids:
-        for wo_id in work_order_ids:
-            if supply_type == "electrical":
-                # Check if relationship already exists
-                existing = WorkOrderElectricalSupply.query.filter_by(
-                    workOrderId=wo_id,
-                    electricalSupplyId=supply.id,
-                    isActive=True
-                ).first()
-                
-                if not existing:
-                    work_order_supply = WorkOrderElectricalSupply(
+        # Create the appropriate supply type
+        common_fields = {
+            "name": payload["name"].strip(),
+            "vendor": payload.get("vendor", "").strip() if payload.get("vendor") else None,
+            "referenceCode": payload.get("referenceCode", "").strip() if payload.get("referenceCode") else None,
+            "supplyCategory": payload.get("supplyCategory", "").strip() if payload.get("supplyCategory") else None,
+            "supplyType": payload.get("supplyType", "").strip() if payload.get("supplyType") else None,
+            "supplySubtype": payload.get("supplySubtype", "").strip() if payload.get("supplySubtype") else None,
+            "unitOfMeasure": payload.get("unitOfMeasure", "").strip() if payload.get("unitOfMeasure") else None,
+            "budget": budget,
+            "projectId": project_id,
+            "workOrderId": None,  # No longer using single workOrderId
+            "status": status,
+            "requestedById": requested_by,
+            "approvedById": approved_by,
+        }
+
+        if supply_type == "electrical":
+            supply = ElectricalSupply(**common_fields)
+        else:
+            supply = BuildingSupply(**common_fields)
+
+        db.session.add(supply)
+        db.session.flush()  # Get the supply ID
+        
+        # Link supply to work orders using appropriate junction table
+        # Note: quantity is stored on the supply itself, not in the junction table
+        if work_order_ids:
+            for wo_id in work_order_ids:
+                if supply_type == "electrical":
+                    # Check if relationship already exists
+                    existing = WorkOrderElectricalSupply.query.filter_by(
                         workOrderId=wo_id,
-                        electricalSupplyId=supply.id
-                    )
-                    db.session.add(work_order_supply)
-            else:
-                # Building supply
-                existing = WorkOrderBuildingSupply.query.filter_by(
-                    workOrderId=wo_id,
-                    buildingSupplyId=supply.id,
-                    isActive=True
-                ).first()
-                
-                if not existing:
-                    work_order_supply = WorkOrderBuildingSupply(
+                        electricalSupplyId=supply.id,
+                        isActive=True
+                    ).first()
+                    
+                    if not existing:
+                        work_order_supply = WorkOrderElectricalSupply(
+                            workOrderId=wo_id,
+                            electricalSupplyId=supply.id
+                        )
+                        db.session.add(work_order_supply)
+                else:
+                    # Building supply
+                    existing = WorkOrderBuildingSupply.query.filter_by(
                         workOrderId=wo_id,
-                        buildingSupplyId=supply.id
-                    )
-                    db.session.add(work_order_supply)
-    
-    # Update work order costs if supply is approved and linked to work orders
-    if status == SupplyStatus.APPROVED and work_order_ids:
-        _update_work_order_costs_from_supplies(work_order_ids)
-    
-    # Create audit log for supply creation
-    session_id = str(uuid.uuid4())
-    create_audit_log(
-        AuditEntityType.SUPPLY,
-        supply.id,
-        user_id,
-        "supply_created",
-        None,
-        supply.name,
-        session_id=session_id,
-        project_id=project_id
-    )
-    
-    db.session.commit()
-    return jsonify({"supply": supply.to_dict()}), 201
+                        buildingSupplyId=supply.id,
+                        isActive=True
+                    ).first()
+                    
+                    if not existing:
+                        work_order_supply = WorkOrderBuildingSupply(
+                            workOrderId=wo_id,
+                            buildingSupplyId=supply.id
+                        )
+                        db.session.add(work_order_supply)
+        
+        # Update work order costs if supply is approved and linked to work orders
+        if status == SupplyStatus.APPROVED and work_order_ids:
+            _update_work_order_costs_from_supplies(work_order_ids)
+        
+        # Create audit log for supply creation
+        session_id = str(uuid.uuid4())
+        create_audit_log(
+            AuditEntityType.SUPPLY,
+            supply.id,
+            user_id,
+            "supply_created",
+            None,
+            supply.name,
+            session_id=session_id,
+            project_id=project_id
+        )
+        
+        db.session.commit()
+        return jsonify({"supply": supply.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Failed to create supply: {str(e)}"}), 500
 
 @projects_bp.patch("/<int:project_id>/supplies/<int:supply_id>/status")
 @jwt_required()
@@ -2078,86 +2072,76 @@ def get_workorder_supplies(project_id, workorder_id):
 @jwt_required()
 def add_supply_to_workorder(project_id, workorder_id, supply_id):
     """Add an existing supply to a work order."""
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
-    project = Project.query.get(project_id)
-    workorder = WorkOrder.query.filter_by(id=workorder_id, projectId=project_id, isActive=True).first()
-
-    if not user or not project:
-        return jsonify({"error": "User or project not found"}), 404
-    if not workorder:
-        return jsonify({"error": "Work order not found or does not belong to this project"}), 404
-
-    if user.role not in [UserRole.ADMIN, UserRole.PROJECT_MANAGER]:
-        return jsonify({"error": "Only project managers or admins can add supplies to work orders"}), 403
-    if user.role == UserRole.PROJECT_MANAGER and project.projectManagerId != user.id:
-        return jsonify({"error": "You can only manage supplies for your own projects"}), 403
-
-    # Try to find supply in both tables
-    supply = BuildingSupply.query.filter_by(id=supply_id, projectId=project_id).first()
-    supply_type = "building"
-    if not supply:
-        supply = ElectricalSupply.query.filter_by(id=supply_id, projectId=project_id).first()
-        supply_type = "electrical"
-    
-    if not supply:
-        return jsonify({"error": "Supply not found"}), 404
-
-    # Get quantity from payload (default to 1 if not provided)
-    payload = request.get_json(silent=True) or {}
-    quantity = payload.get("quantity", 1)
     try:
-        quantity = int(quantity)
-        if quantity < 1:
-            quantity = 1
-        elif quantity > 10:
-            quantity = 10
-    except (ValueError, TypeError):
-        quantity = 1
-    
-    # Check if relationship already exists
-    if supply_type == "electrical":
-        existing = WorkOrderElectricalSupply.query.filter_by(
-            workOrderId=workorder_id,
-            electricalSupplyId=supply_id,
-            isActive=True
-        ).first()
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        project = Project.query.get(project_id)
+        workorder = WorkOrder.query.filter_by(id=workorder_id, projectId=project_id, isActive=True).first()
+
+        if not user or not project:
+            return jsonify({"error": "User or project not found"}), 404
+        if not workorder:
+            return jsonify({"error": "Work order not found or does not belong to this project"}), 404
+
+        if user.role not in [UserRole.ADMIN, UserRole.PROJECT_MANAGER]:
+            return jsonify({"error": "Only project managers or admins can add supplies to work orders"}), 403
+        if user.role == UserRole.PROJECT_MANAGER and project.projectManagerId != user.id:
+            return jsonify({"error": "You can only manage supplies for your own projects"}), 403
+
+        # Try to find supply in both tables
+        supply = BuildingSupply.query.filter_by(id=supply_id, projectId=project_id).first()
+        supply_type = "building"
+        if not supply:
+            supply = ElectricalSupply.query.filter_by(id=supply_id, projectId=project_id).first()
+            supply_type = "electrical"
         
-        if existing:
-            return jsonify({"error": "Supply is already assigned to this work order"}), 400
+        if not supply:
+            return jsonify({"error": "Supply not found"}), 404
         
-        work_order_supply = WorkOrderElectricalSupply(
-            workOrderId=workorder_id,
-            electricalSupplyId=supply_id,
-            quantity=quantity
-        )
-    else:
-        existing = WorkOrderBuildingSupply.query.filter_by(
-            workOrderId=workorder_id,
-            buildingSupplyId=supply_id,
-            isActive=True
-        ).first()
+        # Check if relationship already exists
+        if supply_type == "electrical":
+            existing = WorkOrderElectricalSupply.query.filter_by(
+                workOrderId=workorder_id,
+                electricalSupplyId=supply_id,
+                isActive=True
+            ).first()
+            
+            if existing:
+                return jsonify({"error": "Supply is already assigned to this work order"}), 400
+            
+            work_order_supply = WorkOrderElectricalSupply(
+                workOrderId=workorder_id,
+                electricalSupplyId=supply_id
+            )
+        else:
+            existing = WorkOrderBuildingSupply.query.filter_by(
+                workOrderId=workorder_id,
+                buildingSupplyId=supply_id,
+                isActive=True
+            ).first()
+            
+            if existing:
+                return jsonify({"error": "Supply is already assigned to this work order"}), 400
+            
+            work_order_supply = WorkOrderBuildingSupply(
+                workOrderId=workorder_id,
+                buildingSupplyId=supply_id
+            )
         
-        if existing:
-            return jsonify({"error": "Supply is already assigned to this work order"}), 400
+        db.session.add(work_order_supply)
         
-        work_order_supply = WorkOrderBuildingSupply(
-            workOrderId=workorder_id,
-            buildingSupplyId=supply_id,
-            quantity=quantity
-        )
-    
-    db.session.add(work_order_supply)
-    
-    # Update work order costs if supply is approved
-    if supply.status == SupplyStatus.APPROVED:
-        _update_work_order_costs_from_supplies([workorder_id])
-    
-    db.session.commit()
-    return jsonify({
-        "message": "Supply added to work order successfully",
-        "workOrderSupply": work_order_supply.to_dict()
-    }), 201
+        # Update work order costs if supply is approved
+        if supply.status == SupplyStatus.APPROVED:
+            _update_work_order_costs_from_supplies([workorder_id])
+        
+        db.session.commit()
+        return jsonify({
+            "message": "Supply added to work order successfully",
+            "workOrderSupply": work_order_supply.to_dict()
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Failed to add supply to work order: {str(e)}"}), 500
 
 
 @projects_bp.delete("/<int:project_id>/workorders/<int:workorder_id>/supplies/<int:supply_id>")
