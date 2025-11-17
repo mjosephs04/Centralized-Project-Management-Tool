@@ -57,11 +57,7 @@ def create_app() -> Flask:
 
     env = os.getenv("ENV", "development")
     with app.app_context():
-        try:
-            db.create_all()
-        except Exception as e:
-            # Log error but don't crash the app
-            app.logger.warning(f"Could not create database tables: {e}")
+        db.create_all()
 
     return app
 
