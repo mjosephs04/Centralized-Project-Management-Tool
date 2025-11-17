@@ -88,7 +88,7 @@ const AdminPage = () => {
     };
 
     const handleDeleteUser = async (id) => {
-        if (!window.confirm("Are you sure you want to inactivate this user?")) return;
+        if (!window.confirm("Are you sure you want to deactivate this user?")) return;
         try {
             const res = await usersAPI.deleteUser(id);
             if (res.status !== 200) throw new Error(res.data.error || "Failed to delete user");
@@ -218,7 +218,7 @@ const AdminPage = () => {
                                             onClick={() => handleDeleteUser(user.id)}
                                         >
                                             <FaTrash style={{ marginRight: "0.3rem" }} />
-                                            Inactivate
+                                            Deactivate
                                         </button>
                                     ) : (
                                         <button
