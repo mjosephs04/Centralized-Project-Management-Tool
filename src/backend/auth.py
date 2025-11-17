@@ -369,7 +369,7 @@ def upload_profile_picture():
     try:
         # Initialize Google Cloud Storage client
         client = storage.Client()
-        bucket_name = "profile_pics_capstone"
+        bucket_name = "profile_pics_capstone637485"
         bucket = client.bucket(bucket_name)
 
         # Unique filename
