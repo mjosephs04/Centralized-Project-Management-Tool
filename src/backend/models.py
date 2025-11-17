@@ -62,7 +62,7 @@ class User(db.Model):
     role = db.Column(db.Enum(UserRole), nullable=False)
     workerType = db.Column(db.Enum(WorkerType), nullable=True)
 
-    profileImageUrl = db.Column(db.String(500), nullable=False, default="https://storage.googleapis.com/profile_pics_capstone/defaults/profile-default.png")
+    profileImageUrl = db.Column(db.String(500), nullable=False, default="https://storage.googleapis.com/https://storage.googleapis.com/profile_pics_capstone637485/defaults/profile-default.png/defaults/profile-default.png")
 
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
