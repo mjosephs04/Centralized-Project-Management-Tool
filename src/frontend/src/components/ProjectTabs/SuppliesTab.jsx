@@ -389,7 +389,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
             // Use selected work order from dropdown if available
             const workOrderIds = selectedWorkOrderId ? [selectedWorkOrderId] : [];
 
-            const payload = JSON.stringify({
+            const payload = {
                 name: newSupply.name.trim(),
                 vendor: newSupply.vendor || null,
                 budget: parseFloat(newSupply.budget),
@@ -400,7 +400,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                 unitOfMeasure: newSupply.unitOfMeasure || null,
                 quantity: parseInt(newSupply.quantity) || 1,
                 ...(workOrderIds.length > 0 && { workOrderIds: workOrderIds }),
-            })
+            };
 
             const res = await projectsAPI.postSupplies(project.id, payload)
             const data = res.data;
@@ -429,7 +429,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
 
     const handleStatusChange = async (id, status) => {
         try {
-            const payload = JSON.stringify({ status })
+            const payload = { status };
             const res = await projectsAPI.patchSupplies(project.id, id, payload)
             const data = res.data;
             if (res.status !== 200) throw new Error(data.error || "Failed to update status");
@@ -463,7 +463,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
         // Process all updates
         for (const id of supplyIds) {
             try {
-                const payload = JSON.stringify({ status });
+                const payload = { status };
                 const res = await projectsAPI.patchSupplies(project.id, id, payload);
                 if (res.status === 200) {
                     results.success.push(id);
