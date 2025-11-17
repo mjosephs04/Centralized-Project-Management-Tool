@@ -99,12 +99,6 @@ const ProfilePage = () => {
         return workerTypeMap[workerType] || workerType;
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem("accessToken");
-        showSnackbar("Successfully logged out", "info");
-        navigate("/login");
-    };
-
     const handleUpload = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -136,9 +130,6 @@ const ProfilePage = () => {
             <div style={styles.pageContainer}>
                 <div style={styles.header}>
                     <h2 style={styles.pageTitle}>My Profile</h2>
-                    <button onClick={handleLogout} style={styles.logoutButton}>
-                        Logout
-                    </button>
                 </div>
 
                 {loading ? (
