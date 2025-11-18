@@ -102,6 +102,19 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
 
                 const data = res.data;
                 if (res.status !== 200) throw new Error(data.error || "Failed to load supplies");
+                
+                // Debug: Log first supply to check structure
+                if (data.supplies && data.supplies.length > 0) {
+                    console.log("Sample supply data:", {
+                        id: data.supplies[0].id,
+                        name: data.supplies[0].name,
+                        workOrderAssignments: data.supplies[0].workOrderAssignments,
+                        workOrderQuantities: data.supplies[0].workOrderQuantities,
+                        hasAssignments: !!data.supplies[0].workOrderAssignments,
+                        assignmentsLength: data.supplies[0].workOrderAssignments?.length
+                    });
+                }
+                
                 setSupplies(data.supplies || []);
             } catch (err) {
                 console.error(err);
@@ -549,7 +562,17 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
     // Helper function to get quantity for a supply in a specific work order
     // Reads from workOrderAssignments array which contains {workOrderId, quantity} objects
     const getSupplyQuantity = (supply, workOrderId) => {
-        const assignments = supply.workOrderAssignments || [];
+        // Check for workOrderAssignments (new format) or fallback to workOrderQuantities (old format) for backward compatibility
+        let assignments = supply.workOrderAssignments || [];
+        
+        // Fallback: if workOrderAssignments is empty but workOrderQuantities exists, convert it
+        if (assignments.length === 0 && supply.workOrderQuantities && typeof supply.workOrderQuantities === 'object') {
+            assignments = Object.entries(supply.workOrderQuantities).map(([woId, qty]) => ({
+                workOrderId: parseInt(woId),
+                quantity: qty
+            }));
+        }
+        
         if (!workOrderId) {
             // If no specific work order, return the first quantity or 1
             return assignments.length > 0 ? assignments[0].quantity : 1;
@@ -571,7 +594,15 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
         supplyList.forEach(supply => {
             // Create a unique identifier for the supply (name + code)
             const supplyIdentifier = `${supply.name || ''}_${supply.referenceCode || ''}_${supply.supplyType || ''}`;
-            const assignments = supply.workOrderAssignments || [];
+            let assignments = supply.workOrderAssignments || [];
+            
+            // Fallback: if workOrderAssignments is empty but workOrderQuantities exists, convert it
+            if (assignments.length === 0 && supply.workOrderQuantities && typeof supply.workOrderQuantities === 'object') {
+                assignments = Object.entries(supply.workOrderQuantities).map(([woId, qty]) => ({
+                    workOrderId: parseInt(woId),
+                    quantity: qty
+                }));
+            }
             
             // If supply has no work orders, treat it as a unique entry
             if (assignments.length === 0) {
@@ -786,9 +817,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                 <div style={styles.pendingCardRow}>
                                     <span style={styles.pendingLabel}>Quantity:</span>
                                     <span style={styles.pendingValue}>
-                                        {supply.workOrderAssignments && supply.workOrderAssignments.length > 0
-                                            ? supply.workOrderAssignments[0].quantity
-                                            : 1}
+                                        {getSupplyQuantity(supply, null)}
                                     </span>
                                 </div>
                                 <div style={styles.pendingCardRow}>
@@ -868,7 +897,14 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                             quantity = getSupplyQuantity(supply, selectedWorkOrderId);
                                         } else {
                                             // If showing all work orders, sum all quantities for this supply
-                                            const assignments = supply.workOrderAssignments || [];
+                                            let assignments = supply.workOrderAssignments || [];
+                                            // Fallback: if workOrderAssignments is empty but workOrderQuantities exists, convert it
+                                            if (assignments.length === 0 && supply.workOrderQuantities && typeof supply.workOrderQuantities === 'object') {
+                                                assignments = Object.entries(supply.workOrderQuantities).map(([woId, qty]) => ({
+                                                    workOrderId: parseInt(woId),
+                                                    quantity: qty
+                                                }));
+                                            }
                                             quantity = assignments.reduce((sum, assignment) => sum + (assignment.quantity || 0), 0) || 1;
                                         }
                                         // Create unique key that includes work order to handle same supply in different work orders

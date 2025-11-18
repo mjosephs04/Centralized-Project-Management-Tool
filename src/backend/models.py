@@ -574,6 +574,21 @@ class BuildingSupply(db.Model):
         except Exception:
             return []
 
+    def get_work_order_assignments(self) -> list:
+        """Get work order assignments with quantities from junction table"""
+        try:
+            assignments = []
+            for assignment in self.work_order_assignments:
+                if assignment.isActive:
+                    assignments.append({
+                        "workOrderId": assignment.workOrderId,
+                        "quantity": assignment.quantity,
+                        "id": assignment.id
+                    })
+            return assignments
+        except Exception:
+            return []
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -589,6 +604,7 @@ class BuildingSupply(db.Model):
             "projectId": self.projectId,
             "workOrderId": self.workOrderId,
             "workOrderIds": self.get_work_orders(),
+            "workOrderAssignments": self.get_work_order_assignments(),
             "requestedBy": self.requestedBy.to_dict() if self.requestedBy else None,
             "approvedBy": self.approvedBy.to_dict() if self.approvedBy else None,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
@@ -650,6 +666,21 @@ class ElectricalSupply(db.Model):
         except Exception:
             return []
 
+    def get_work_order_assignments(self) -> list:
+        """Get work order assignments with quantities from junction table"""
+        try:
+            assignments = []
+            for assignment in self.work_order_assignments:
+                if assignment.isActive:
+                    assignments.append({
+                        "workOrderId": assignment.workOrderId,
+                        "quantity": assignment.quantity,
+                        "id": assignment.id
+                    })
+            return assignments
+        except Exception:
+            return []
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -665,6 +696,7 @@ class ElectricalSupply(db.Model):
             "projectId": self.projectId,
             "workOrderId": self.workOrderId,
             "workOrderIds": self.get_work_orders(),
+            "workOrderAssignments": self.get_work_order_assignments(),
             "requestedBy": self.requestedBy.to_dict() if self.requestedBy else None,
             "approvedBy": self.approvedBy.to_dict() if self.approvedBy else None,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
