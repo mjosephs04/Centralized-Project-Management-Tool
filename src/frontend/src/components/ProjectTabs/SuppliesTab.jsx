@@ -380,14 +380,19 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
     };
 
     const handleAddSupply = async () => {
+        if (!selectedWorkOrderId) {
+            alert("Please select a work order before adding supplies");
+            return;
+        }
+
         if (!newSupply.selectedSupplyId || !newSupply.name || !newSupply.budget) {
             alert("Please select a supply from the catalog");
             return;
         }
 
         try {
-            // Use selected work order from dropdown if available
-            const workOrderIds = selectedWorkOrderId ? [selectedWorkOrderId] : [];
+            // Require selected work order from dropdown
+            const workOrderIds = [selectedWorkOrderId];
 
             const payload = {
                 name: newSupply.name.trim(),
@@ -399,7 +404,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                 referenceCode: newSupply.referenceCode || null,
                 unitOfMeasure: newSupply.unitOfMeasure || null,
                 quantity: parseInt(newSupply.quantity) || 1,
-                ...(workOrderIds.length > 0 && { workOrderIds: workOrderIds }),
+                workOrderIds: workOrderIds,
             };
 
             const res = await projectsAPI.postSupplies(project.id, payload)
@@ -542,15 +547,16 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
     };
 
     // Helper function to get quantity for a supply in a specific work order
+    // Reads from workOrderAssignments array which contains {workOrderId, quantity} objects
     const getSupplyQuantity = (supply, workOrderId) => {
+        const assignments = supply.workOrderAssignments || [];
         if (!workOrderId) {
             // If no specific work order, return the first quantity or 1
-            const quantities = supply.workOrderQuantities || {};
-            const firstQuantity = Object.values(quantities)[0];
-            return firstQuantity || 1;
+            return assignments.length > 0 ? assignments[0].quantity : 1;
         }
-        const quantities = supply.workOrderQuantities || {};
-        return quantities[workOrderId] || 1;
+        // Find the assignment for this work order
+        const assignment = assignments.find(a => a.workOrderId === workOrderId);
+        return assignment ? assignment.quantity : 1;
     };
 
     // Helper function to combine supplies with the same name/code and work order
@@ -565,16 +571,15 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
         supplyList.forEach(supply => {
             // Create a unique identifier for the supply (name + code)
             const supplyIdentifier = `${supply.name || ''}_${supply.referenceCode || ''}_${supply.supplyType || ''}`;
-            const workOrderIds = supply.workOrderIds || [];
-            const quantities = supply.workOrderQuantities || {};
+            const assignments = supply.workOrderAssignments || [];
             
             // If supply has no work orders, treat it as a unique entry
-            if (workOrderIds.length === 0) {
+            if (assignments.length === 0) {
                 const key = `${supplyIdentifier}_no_wo`;
                 if (!combinedMap.has(key)) {
                     combinedMap.set(key, { 
                         ...supply, 
-                        combinedQuantities: {},
+                        combinedAssignments: [],
                         originalIds: [supply.id] // Track original IDs for deletion
                     });
                 } else {
@@ -583,15 +588,21 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                     existing.originalIds.push(supply.id);
                 }
             } else {
-                // For each work order this supply is linked to
-                workOrderIds.forEach(woId => {
+                // For each work order assignment this supply is linked to
+                assignments.forEach(assignment => {
+                    const woId = assignment.workOrderId;
+                    const quantity = assignment.quantity || 1;
                     const key = `${supplyIdentifier}_wo_${woId}`;
-                    const quantity = quantities[woId] || 1;
                     
                     if (combinedMap.has(key)) {
                         // Add to existing quantity and track original IDs
                         const existing = combinedMap.get(key);
-                        existing.combinedQuantities[woId] = (existing.combinedQuantities[woId] || 0) + quantity;
+                        const existingAssignment = existing.combinedAssignments.find(a => a.workOrderId === woId);
+                        if (existingAssignment) {
+                            existingAssignment.quantity = (existingAssignment.quantity || 0) + quantity;
+                        } else {
+                            existing.combinedAssignments.push({ workOrderId: woId, quantity: quantity });
+                        }
                         if (!existing.originalIds.includes(supply.id)) {
                             existing.originalIds.push(supply.id);
                         }
@@ -599,7 +610,7 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                         // Create new entry
                         combinedMap.set(key, {
                             ...supply,
-                            combinedQuantities: { [woId]: quantity },
+                            combinedAssignments: [{ workOrderId: woId, quantity: quantity }],
                             originalIds: [supply.id]
                         });
                     }
@@ -607,11 +618,11 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
             }
         });
         
-        // Convert map back to array and update workOrderQuantities
+        // Convert map back to array and update workOrderAssignments
         return Array.from(combinedMap.values()).map(supply => ({
             ...supply,
-            workOrderQuantities: supply.combinedQuantities || supply.workOrderQuantities || {},
-            workOrderIds: Object.keys(supply.combinedQuantities || supply.workOrderQuantities || {}).map(id => parseInt(id))
+            workOrderAssignments: supply.combinedAssignments || supply.workOrderAssignments || [],
+            workOrderIds: (supply.combinedAssignments || supply.workOrderAssignments || []).map(a => a.workOrderId)
         }));
     };
 
@@ -632,27 +643,39 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                             </option>
                         ))}
                     </select>
-                    <button style={styles.addButton} onClick={() => {
-                        setShowModal(true);
-                        // Reset form and fetch catalog when opening modal
-                        setNewSupply({ 
-                            selectedSupplyId: "", 
-                            name: "", 
-                            vendor: "", 
-                            budget: "",
-                            supplyCategory: "",
-                            supplyType: "",
-                            supplySubtype: "",
-                            referenceCode: "",
-                            unitOfMeasure: "",
-                            selectedWorkOrderIds: []
-                        });
-                        setSupplySearchTerm("");
-                        setSelectedCategory("");
-                        setShowSupplyDropdown(false);
-                    }}>
-                    <FaPlus /> {userRole === "worker" ? "Request Supply" : "Add Supply"}
-                </button>
+                    <button 
+                        style={{
+                            ...styles.addButton,
+                            opacity: !selectedWorkOrderId ? 0.5 : 1,
+                            cursor: !selectedWorkOrderId ? "not-allowed" : "pointer"
+                        }}
+                        disabled={!selectedWorkOrderId}
+                        onClick={() => {
+                            if (!selectedWorkOrderId) {
+                                alert("Please select a work order before adding supplies");
+                                return;
+                            }
+                            setShowModal(true);
+                            // Reset form and fetch catalog when opening modal
+                            setNewSupply({ 
+                                selectedSupplyId: "", 
+                                name: "", 
+                                vendor: "", 
+                                budget: "",
+                                supplyCategory: "",
+                                supplyType: "",
+                                supplySubtype: "",
+                                referenceCode: "",
+                                unitOfMeasure: "",
+                                selectedWorkOrderIds: []
+                            });
+                            setSupplySearchTerm("");
+                            setSelectedCategory("");
+                            setShowSupplyDropdown(false);
+                        }}
+                    >
+                        <FaPlus /> {userRole === "worker" ? "Request Supply" : "Add Supply"}
+                    </button>
                 </div>
             </div>
 
@@ -763,8 +786,8 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                 <div style={styles.pendingCardRow}>
                                     <span style={styles.pendingLabel}>Quantity:</span>
                                     <span style={styles.pendingValue}>
-                                        {supply.workOrderQuantities && Object.keys(supply.workOrderQuantities).length > 0
-                                            ? Object.values(supply.workOrderQuantities)[0]
+                                        {supply.workOrderAssignments && supply.workOrderAssignments.length > 0
+                                            ? supply.workOrderAssignments[0].quantity
                                             : 1}
                                     </span>
                                 </div>
@@ -845,8 +868,8 @@ const SuppliesTab = ({ project, userRole, selectedWorkOrderId: propSelectedWorkO
                                             quantity = getSupplyQuantity(supply, selectedWorkOrderId);
                                         } else {
                                             // If showing all work orders, sum all quantities for this supply
-                                            const quantities = supply.workOrderQuantities || {};
-                                            quantity = Object.values(quantities).reduce((sum, qty) => sum + (qty || 0), 0) || 1;
+                                            const assignments = supply.workOrderAssignments || [];
+                                            quantity = assignments.reduce((sum, assignment) => sum + (assignment.quantity || 0), 0) || 1;
                                         }
                                         // Create unique key that includes work order to handle same supply in different work orders
                                         const uniqueKey = selectedWorkOrderId 
