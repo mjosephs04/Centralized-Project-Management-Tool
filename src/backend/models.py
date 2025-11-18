@@ -271,6 +271,9 @@ class WorkOrderBuildingSupply(db.Model):
     workOrderId = db.Column(db.Integer, db.ForeignKey('work_orders.id'), nullable=False)
     buildingSupplyId = db.Column(db.Integer, db.ForeignKey('building_supplies.id'), nullable=False)
 
+    # Quantity for this supply in this work order
+    quantity = db.Column(db.Integer, default=1, nullable=False)
+
     # Metadata
     assignedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     isActive = db.Column(db.Boolean, default=True, nullable=False)
@@ -287,6 +290,7 @@ class WorkOrderBuildingSupply(db.Model):
             "id": self.id,
             "workOrderId": self.workOrderId,
             "buildingSupplyId": self.buildingSupplyId,
+            "quantity": self.quantity,
             "workOrder": self.workOrder.to_dict() if self.workOrder else None,
             "buildingSupply": self.buildingSupply.to_dict() if self.buildingSupply else None,
             "assignedAt": self.assignedAt.isoformat() if self.assignedAt else None,
@@ -300,6 +304,9 @@ class WorkOrderElectricalSupply(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     workOrderId = db.Column(db.Integer, db.ForeignKey('work_orders.id'), nullable=False)
     electricalSupplyId = db.Column(db.Integer, db.ForeignKey('electrical_supplies.id'), nullable=False)
+
+    # Quantity for this supply in this work order
+    quantity = db.Column(db.Integer, default=1, nullable=False)
 
     # Metadata
     assignedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -317,6 +324,7 @@ class WorkOrderElectricalSupply(db.Model):
             "id": self.id,
             "workOrderId": self.workOrderId,
             "electricalSupplyId": self.electricalSupplyId,
+            "quantity": self.quantity,
             "workOrder": self.workOrder.to_dict() if self.workOrder else None,
             "electricalSupply": self.electricalSupply.to_dict() if self.electricalSupply else None,
             "assignedAt": self.assignedAt.isoformat() if self.assignedAt else None,
