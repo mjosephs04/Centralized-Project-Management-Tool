@@ -16,8 +16,8 @@ class Config:
     if not SQLALCHEMY_DATABASE_URI:
         ENV = os.getenv("ENV")
         if ENV == "production":
-            SQLALCHEMY_DATABASE_URI = "mysql+pymysql://mysql:password@/CAPSTONE?unix_socket=/cloudsql/capstone"
-            # SQLALCHEMY_DATABASE_URI = "mysql+pymysql://mysql:password@34.67.41.7:3306/CAPSTONE"
+            # SQLALCHEMY_DATABASE_URI = "mysql+pymysql://mysql:password@/CAPSTONE?unix_socket=/cloudsql/capstone"
+            SQLALCHEMY_DATABASE_URI = "mysql+pymysql://mysql:password@34.67.41.7:3306/CAPSTONE"
         else:
             # Local dev, running MySQL on your host machine.
             # If you mapped container port 3306 to host 3307, use 3307 here.
