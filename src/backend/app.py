@@ -31,6 +31,8 @@ def create_app() -> Flask:
 
     db.init_app(app)
     jwt = JWTManager(app)
+    with app.app_context():
+        db.create_all()
     mail = Mail(app)
 
     # JWT Identity Loader
@@ -54,10 +56,6 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(projects_bp)
     app.register_blueprint(workorders_bp)
-
-    env = os.getenv("ENV", "development")
-    with app.app_context():
-        db.create_all()
 
     return app
 
