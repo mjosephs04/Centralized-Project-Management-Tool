@@ -561,7 +561,7 @@ def update_user_role(user_id):
         db.session.rollback()
         return jsonify({"error": f"Failed to update user role: {str(e)}"}), 500
 
-@app.get("/ip")
+@auth_bp.get("/ip")
 def get_ip():
     import requests
     return requests.get("https://ipinfo.io/ip").text
