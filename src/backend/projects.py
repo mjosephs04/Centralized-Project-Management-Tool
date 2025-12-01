@@ -12,7 +12,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType, ProjectMember, ProjectInvitation, SupplyStatus, BuildingSupply, ElectricalSupply, WorkOrderBuildingSupply, WorkOrderElectricalSupply, ProjectManager, WorkerType
+from .models import db, User, Project, ProjectStatus, UserRole, WorkOrder, WorkOrderStatus, Audit, AuditEntityType, ProjectMember, ProjectInvitation, SupplyStatus, BuildingSupply, ElectricalSupply, WorkOrderBuildingSupply, WorkOrderElectricalSupply, ProjectManager, WorkerType, NotificationPreference, NotificationDismissal
 
 # Simple in-memory cache for catalog queries
 _catalog_cache = {}
@@ -23,12 +23,13 @@ from .progress import (
     compute_project_progress
 )
 from .email_service import create_project_invitation, send_invitation_email, validate_invitation_token, accept_invitation
+from .notification_service import notify_project_managers_of_change
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/api/projects")
 
 
 def create_audit_log(entity_type: AuditEntityType, entity_id: int, user_id: int, field: str, old_value: str, new_value: str, session_id: str = None, project_id: int = None):
-    """Helper function to create an audit log entry"""
+    """Helper function to create an audit log entry and notify project managers"""
     audit_log = Audit(
         entityType=entity_type,
         entityId=entity_id,
@@ -40,6 +41,30 @@ def create_audit_log(entity_type: AuditEntityType, entity_id: int, user_id: int,
         projectId=project_id
     )
     db.session.add(audit_log)
+    
+    # Notify project managers of important changes
+    # Only notify for project-level changes (not work order changes from this file)
+    if entity_type == AuditEntityType.PROJECT and project_id:
+        try:
+            # Get entity name if it's a project
+            project = Project.query.get(project_id) if project_id else None
+            entity_name = project.name if project else None
+            
+            notify_project_managers_of_change(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                project_id=project_id,
+                user_id=user_id,
+                field=field,
+                old_value=old_value,
+                new_value=new_value,
+                entity_name=entity_name
+            )
+        except Exception as e:
+            # Log error but don't fail the audit log creation
+            import traceback
+            print(f"Failed to send notification for audit log: {str(e)}")
+            print(traceback.format_exc())
 
 
 def get_crew_member_names(crew_json: str) -> str:
@@ -250,8 +275,8 @@ def get_project(project_id):
         # Admins can view all projects
         pass
     elif user.role == UserRole.PROJECT_MANAGER:
-        # Project managers can only view projects they manage
-        if project.projectManagerId != user_id:
+        # Project managers can only view projects they manage (check both legacy and new relation)
+        if not is_project_manager(user_id, project_id):
             return jsonify({"error": "You do not have permission to view this project"}), 403
     elif user.role == UserRole.WORKER:
         # Workers can only view projects they are members of
@@ -289,8 +314,15 @@ def get_my_projects():
     if user.role == UserRole.ADMIN:
         # Admins can see all projects
         projects = Project.query.filter_by(isActive=True).all()
+    elif user.role == UserRole.WORKER:
+        # Workers ONLY see projects where they are active members (not managers or invited)
+        member_proj_ids = [m.projectId for m in ProjectMember.query.filter_by(userId=user_id, isActive=True).all()]
+        if not member_proj_ids:
+            projects = []
+        else:
+            projects = Project.query.filter(Project.isActive == True, Project.id.in_(member_proj_ids)).all()
     else:
-        # Combine projects where user is a manager (new table + legacy field)
+        # Project managers: Combine projects where user is a manager (new table + legacy field)
         manager_proj_ids = [pm.projectId for pm in ProjectManager.query.filter_by(userId=user_id, isActive=True).all()]
         legacy_manager_ids = [p.id for p in Project.query.filter_by(projectManagerId=user_id, isActive=True).all()]
         # Projects where user is a member
@@ -634,6 +666,324 @@ def get_project_audit_logs(project_id):
         return jsonify({"error": "Internal server error while fetching audit logs"}), 500
 
 
+@projects_bp.get("/notifications")
+@jwt_required()
+def get_notifications():
+    """Get recent notifications for project managers (important changes to their projects)"""
+    user_id = int(get_jwt_identity())
+    user = User.query.filter_by(id=user_id, isActive=True).first()
+    
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    # Only project managers can get notifications
+    if user.role != UserRole.PROJECT_MANAGER:
+        return jsonify({"error": "Only project managers can view notifications"}), 403
+    
+    # Get all projects the user manages
+    manager_proj_ids = [pm.projectId for pm in ProjectManager.query.filter_by(userId=user_id, isActive=True).all()]
+    legacy_manager_ids = [p.id for p in Project.query.filter_by(projectManagerId=user_id, isActive=True).all()]
+    project_ids = list(set(manager_proj_ids) | set(legacy_manager_ids))
+    
+    if not project_ids:
+        return jsonify({"notifications": [], "unreadCount": 0}), 200
+    
+    # Get query parameters
+    limit = request.args.get("limit", type=int) or 50
+    only_unread = request.args.get("only_unread", "false").lower() == "true"
+    
+    # Fields that trigger notifications (matching notification_service.py logic)
+    important_fields = [
+        "status", "priority", "estimatedBudget", "actualCost",
+        "startDate", "endDate", "actualStartDate", "actualEndDate",
+        "teamMembers", "work_order_created"
+    ]
+    
+    # Get user's notification preferences
+    preferences = NotificationPreference.query.filter_by(userId=user_id).first()
+    
+    # Get dismissed notification IDs for this user
+    dismissed_audit_ids = {
+        dismissal.auditLogId 
+        for dismissal in NotificationDismissal.query.filter_by(userId=user_id).all()
+    }
+    
+    # Get recent audit logs from managed projects
+    query = Audit.query.filter(
+        Audit.projectId.in_(project_ids),
+        Audit.field.in_(important_fields),
+        Audit.userId != user_id  # Exclude changes made by the manager themselves
+    )
+    
+    # Exclude dismissed notifications if any exist
+    if dismissed_audit_ids:
+        query = query.filter(~Audit.id.in_(dismissed_audit_ids))
+    
+    query = query.order_by(Audit.createdAt.desc()).limit(limit * 2)  # Get more to filter by preferences
+    
+    audit_logs = query.all()
+    
+    # Format notifications and filter by preferences
+    notifications = []
+    for log in audit_logs:
+        # Check if user wants this type of notification
+        from .notification_service import get_user_preference_key, should_send_notification
+        preference_key = get_user_preference_key(log.entityType, log.field, log.newValue)
+        should_in_app, _ = should_send_notification(user_id, preference_key)
+        
+        # Skip if user doesn't want in-app notifications for this type
+        if not should_in_app:
+            continue
+        # Get project name
+        project = Project.query.get(log.projectId) if log.projectId else None
+        project_name = project.name if project else f"Project #{log.projectId}"
+        
+        # Format change description
+        field_display = log.field.replace("_", " ").title()
+        old_display = log.oldValue if log.oldValue and log.oldValue != "None" else "Not set"
+        new_display = log.newValue if log.newValue and log.newValue != "None" else "Not set"
+        
+        # Special formatting
+        if log.field == "work_order_created":
+            change_desc = f"New work order created: {new_display}"
+        elif log.field == "status":
+            old_display = log.oldValue.replace("_", " ").title() if log.oldValue else "Not set"
+            new_display = log.newValue.replace("_", " ").title() if log.newValue else "Not set"
+            change_desc = f"{field_display}: {old_display} → {new_display}"
+        elif log.field in ["estimatedBudget", "actualCost"]:
+            try:
+                old_val = float(log.oldValue) if log.oldValue and log.oldValue != "None" else 0
+                new_val = float(log.newValue) if log.newValue and log.newValue != "None" else 0
+                old_display = f"${old_val:,.2f}" if old_val > 0 else "Not set"
+                new_display = f"${new_val:,.2f}" if new_val > 0 else "Not set"
+            except (ValueError, TypeError):
+                pass
+            change_desc = f"{field_display}: {old_display} → {new_display}"
+        else:
+            change_desc = f"{field_display}: {old_display} → {new_display}"
+        
+        # Get work order name if applicable
+        work_order_name = None
+        if log.entityType == AuditEntityType.WORK_ORDER and log.entityId:
+            work_order = WorkOrder.query.filter_by(id=log.entityId, isActive=True).first()
+            if work_order:
+                work_order_name = work_order.name
+        
+        # Get user who made the change
+        changed_by = None
+        if log.user:
+            changed_by = f"{log.user.firstName} {log.user.lastName}"
+        
+        notification = {
+            "id": log.id,
+            "projectId": log.projectId,
+            "projectName": project_name,
+            "entityType": log.entityType.value if log.entityType else None,
+            "entityId": log.entityId,
+            "entityName": work_order_name,
+            "field": log.field,
+            "changeDescription": change_desc,
+            "changedBy": changed_by,
+            "changedByUserId": log.userId,
+            "createdAt": log.createdAt.isoformat() if log.createdAt else None,
+            "isRead": False  # Legacy field, kept for compatibility
+        }
+        notifications.append(notification)
+        
+        # Stop if we've reached the limit
+        if len(notifications) >= limit:
+            break
+    
+    # For now, all notifications are considered unread
+    # In the future, you could add a NotificationRead model to track read status
+    unread_count = len(notifications) if only_unread else len(notifications)
+    
+    return jsonify({
+        "notifications": notifications,
+        "unreadCount": unread_count
+    }), 200
+
+
+@projects_bp.get("/notification-preferences")
+@jwt_required()
+def get_notification_preferences():
+    """Get notification preferences for the current user (project managers only)"""
+    user_id = int(get_jwt_identity())
+    user = User.query.filter_by(id=user_id, isActive=True).first()
+    
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    # Only project managers can have notification preferences
+    if user.role != UserRole.PROJECT_MANAGER:
+        return jsonify({"error": "Only project managers can have notification preferences"}), 403
+    
+    # Get or create preferences (defaults to all enabled)
+    preferences = NotificationPreference.query.filter_by(userId=user_id).first()
+    if not preferences:
+        # Create default preferences
+        preferences = NotificationPreference(userId=user_id)
+        db.session.add(preferences)
+        db.session.commit()
+    
+    return jsonify({"preferences": preferences.to_dict()}), 200
+
+
+@projects_bp.put("/notification-preferences")
+@jwt_required()
+def update_notification_preferences():
+    """Update notification preferences for the current user (project managers only)"""
+    user_id = int(get_jwt_identity())
+    user = User.query.filter_by(id=user_id, isActive=True).first()
+    
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    # Only project managers can have notification preferences
+    if user.role != UserRole.PROJECT_MANAGER:
+        return jsonify({"error": "Only project managers can have notification preferences"}), 403
+    
+    payload = request.get_json(silent=True) or {}
+    
+    # Get or create preferences
+    preferences = NotificationPreference.query.filter_by(userId=user_id).first()
+    if not preferences:
+        preferences = NotificationPreference(userId=user_id)
+        db.session.add(preferences)
+    
+    # Update preferences from payload
+    boolean_fields = [
+        "projectStatusChange", "projectStatusChangeEmail",
+        "projectPriorityChange", "projectPriorityChangeEmail",
+        "projectBudgetChange", "projectBudgetChangeEmail",
+        "projectDateChange", "projectDateChangeEmail",
+        "projectTeamChange", "projectTeamChangeEmail",
+        "workOrderCreated", "workOrderCreatedEmail",
+        "workOrderStatusChange", "workOrderStatusChangeEmail",
+        "workOrderCompleted", "workOrderCompletedEmail",
+        "workOrderPriorityChange", "workOrderPriorityChangeEmail",
+        "workOrderBudgetChange", "workOrderBudgetChangeEmail",
+        "workOrderDateChange", "workOrderDateChangeEmail",
+    ]
+    
+    for field in boolean_fields:
+        if field in payload:
+            setattr(preferences, field, bool(payload[field]))
+    
+    db.session.commit()
+    
+    return jsonify({"preferences": preferences.to_dict()}), 200
+
+
+@projects_bp.post("/notifications/<int:notification_id>/dismiss")
+@jwt_required()
+def dismiss_notification(notification_id):
+    """Dismiss a notification (mark it as dismissed for the current user)"""
+    user_id = int(get_jwt_identity())
+    user = User.query.filter_by(id=user_id, isActive=True).first()
+    
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    # Only project managers can dismiss notifications
+    if user.role != UserRole.PROJECT_MANAGER:
+        return jsonify({"error": "Only project managers can dismiss notifications"}), 403
+    
+    # Verify the audit log exists and belongs to a project the user manages
+    audit_log = Audit.query.filter_by(id=notification_id).first()
+    if not audit_log:
+        return jsonify({"error": "Notification not found"}), 404
+    
+    # Check if user manages this project
+    if not is_project_manager(user_id, audit_log.projectId):
+        return jsonify({"error": "You can only dismiss notifications for projects you manage"}), 403
+    
+    # Check if already dismissed
+    existing_dismissal = NotificationDismissal.query.filter_by(
+        userId=user_id,
+        auditLogId=notification_id
+    ).first()
+    
+    if existing_dismissal:
+        return jsonify({"message": "Notification already dismissed"}), 200
+    
+    # Create dismissal record
+    dismissal = NotificationDismissal(
+        userId=user_id,
+        auditLogId=notification_id
+    )
+    db.session.add(dismissal)
+    db.session.commit()
+    
+    return jsonify({"message": "Notification dismissed successfully"}), 200
+
+
+@projects_bp.post("/notifications/dismiss-all")
+@jwt_required()
+def dismiss_all_notifications():
+    """Dismiss all current notifications for the current user"""
+    user_id = int(get_jwt_identity())
+    user = User.query.filter_by(id=user_id, isActive=True).first()
+    
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    # Only project managers can dismiss notifications
+    if user.role != UserRole.PROJECT_MANAGER:
+        return jsonify({"error": "Only project managers can dismiss notifications"}), 403
+    
+    # Get all projects the user manages
+    manager_proj_ids = [pm.projectId for pm in ProjectManager.query.filter_by(userId=user_id, isActive=True).all()]
+    legacy_manager_ids = [p.id for p in Project.query.filter_by(projectManagerId=user_id, isActive=True).all()]
+    project_ids = list(set(manager_proj_ids) | set(legacy_manager_ids))
+    
+    if not project_ids:
+        return jsonify({"message": "No notifications to dismiss", "dismissedCount": 0}), 200
+    
+    # Get all undismissed audit logs from managed projects
+    important_fields = [
+        "status", "priority", "estimatedBudget", "actualCost",
+        "startDate", "endDate", "actualStartDate", "actualEndDate",
+        "teamMembers", "work_order_created"
+    ]
+    
+    # Get already dismissed audit log IDs
+    dismissed_audit_ids = {
+        dismissal.auditLogId 
+        for dismissal in NotificationDismissal.query.filter_by(userId=user_id).all()
+    }
+    
+    # Get all relevant audit logs
+    query = Audit.query.filter(
+        Audit.projectId.in_(project_ids),
+        Audit.field.in_(important_fields),
+        Audit.userId != user_id
+    )
+    
+    # Exclude already dismissed notifications
+    if dismissed_audit_ids:
+        query = query.filter(~Audit.id.in_(dismissed_audit_ids))
+    
+    audit_logs = query.all()
+    
+    # Create dismissals for all
+    dismissed_count = 0
+    for log in audit_logs:
+        dismissal = NotificationDismissal(
+            userId=user_id,
+            auditLogId=log.id
+        )
+        db.session.add(dismissal)
+        dismissed_count += 1
+    
+    db.session.commit()
+    
+    return jsonify({
+        "message": f"Dismissed {dismissed_count} notifications",
+        "dismissedCount": dismissed_count
+    }), 200
+
+
 #
 #    DASHBOARD / PROGRESS APIs
 #
@@ -913,9 +1263,31 @@ def get_project_progress_detail(project_id: int):
     try:
         today = _parse_iso_date(request.args.get("date"))
 
+        user_id = int(get_jwt_identity())
+        user = User.query.filter_by(id=user_id, isActive=True).first()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
         project = Project.query.filter_by(id=project_id, isActive=True).first()
         if not project:
             return jsonify({"error": "Project not found"}), 404
+
+        # Access control: Check if user has permission to view this project
+        if user.role == UserRole.ADMIN:
+            # Admins can view all projects
+            pass
+        elif user.role == UserRole.PROJECT_MANAGER:
+            # Project managers can only view projects they manage
+            if not is_project_manager(user_id, project_id):
+                return jsonify({"error": "You do not have permission to view this project"}), 403
+        elif user.role == UserRole.WORKER:
+            # Workers can only view projects they are members of
+            if not is_project_member(user_id, project_id):
+                return jsonify({"error": "You do not have permission to view this project"}), 403
+        else:
+            # Unknown role - deny access
+            return jsonify({"error": "You do not have permission to view this project"}), 403
 
         wos = WorkOrder.query.filter_by(projectId=project_id, isActive=True).all()
         rollup = compute_work_order_rollup(wos)
@@ -1231,7 +1603,7 @@ def invite_user_to_project(project_id: int):
     worker_type = None
     if role == UserRole.WORKER:
         worker_type_str = payload.get("workerType")
-        if not worker_type_str:
+        if worker_type_str is None or worker_type_str == "":
             return jsonify({"error": "workerType is required when role is worker."}), 400
         try:
             worker_type = WorkerType(worker_type_str.lower())
@@ -1305,6 +1677,10 @@ def invite_user_to_project(project_id: int):
             }), 201
 
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error creating invitation: {str(e)}")
+        print(error_trace)
         return jsonify({"error": f"Failed to create invitation: {str(e)}"}), 500
 
 
@@ -1592,12 +1968,30 @@ def get_supplies_catalog():
 @jwt_required()
 def get_project_supplies(project_id):
     """Get all supplies for a project (pending + approved). Optionally filter by workOrderId."""
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
-    project = Project.query.get(project_id)
+    user_id = int(get_jwt_identity())
+    user = User.query.filter_by(id=user_id, isActive=True).first()
+    project = Project.query.filter_by(id=project_id, isActive=True).first()
 
-    if not user or not project:
-        return jsonify({"error": "User or project not found"}), 404
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+
+    # Access control: Check if user has permission to view this project
+    if user.role == UserRole.ADMIN:
+        # Admins can view all projects
+        pass
+    elif user.role == UserRole.PROJECT_MANAGER:
+        # Project managers can only view projects they manage
+        if not is_project_manager(user_id, project_id):
+            return jsonify({"error": "You do not have permission to view this project"}), 403
+    elif user.role == UserRole.WORKER:
+        # Workers can only view projects they are members of
+        if not is_project_member(user_id, project_id):
+            return jsonify({"error": "You do not have permission to view this project"}), 403
+    else:
+        # Unknown role - deny access
+        return jsonify({"error": "You do not have permission to view this project"}), 403
 
     # Get optional workOrderId from query parameters
     work_order_id = request.args.get("workOrderId", type=int)
@@ -2227,9 +2621,31 @@ def remove_supply_from_workorder(project_id, workorder_id, supply_id):
 def get_schedule_metrics(project_id: int):
     """Get schedule variance and forecasted completion metrics"""
     try:
+        user_id = int(get_jwt_identity())
+        user = User.query.filter_by(id=user_id, isActive=True).first()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
         project = Project.query.filter_by(id=project_id, isActive=True).first()
         if not project:
             return jsonify({"error": "Project not found"}), 404
+
+        # Access control: Check if user has permission to view this project
+        if user.role == UserRole.ADMIN:
+            # Admins can view all projects
+            pass
+        elif user.role == UserRole.PROJECT_MANAGER:
+            # Project managers can only view projects they manage
+            if not is_project_manager(user_id, project_id):
+                return jsonify({"error": "You do not have permission to view this project"}), 403
+        elif user.role == UserRole.WORKER:
+            # Workers can only view projects they are members of
+            if not is_project_member(user_id, project_id):
+                return jsonify({"error": "You do not have permission to view this project"}), 403
+        else:
+            # Unknown role - deny access
+            return jsonify({"error": "You do not have permission to view this project"}), 403
         
         metrics = compute_schedule_variance(project)
         return jsonify(metrics), 200
@@ -2242,9 +2658,31 @@ def get_schedule_metrics(project_id: int):
 def get_cost_metrics(project_id: int):
     """Get cost variance, EAC, and TCPI metrics"""
     try:
+        user_id = int(get_jwt_identity())
+        user = User.query.filter_by(id=user_id, isActive=True).first()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
         project = Project.query.filter_by(id=project_id, isActive=True).first()
         if not project:
             return jsonify({"error": "Project not found"}), 404
+
+        # Access control: Check if user has permission to view this project
+        if user.role == UserRole.ADMIN:
+            # Admins can view all projects
+            pass
+        elif user.role == UserRole.PROJECT_MANAGER:
+            # Project managers can only view projects they manage
+            if not is_project_manager(user_id, project_id):
+                return jsonify({"error": "You do not have permission to view this project"}), 403
+        elif user.role == UserRole.WORKER:
+            # Workers can only view projects they are members of
+            if not is_project_member(user_id, project_id):
+                return jsonify({"error": "You do not have permission to view this project"}), 403
+        else:
+            # Unknown role - deny access
+            return jsonify({"error": "You do not have permission to view this project"}), 403
         
         metrics = compute_cost_variance(project, project_id)
         return jsonify(metrics), 200
@@ -2257,9 +2695,31 @@ def get_cost_metrics(project_id: int):
 def get_workforce_metrics(project_id: int):
     """Get workforce and resource efficiency metrics"""
     try:
+        user_id = int(get_jwt_identity())
+        user = User.query.filter_by(id=user_id, isActive=True).first()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
         project = Project.query.filter_by(id=project_id, isActive=True).first()
         if not project:
             return jsonify({"error": "Project not found"}), 404
+
+        # Access control: Check if user has permission to view this project
+        if user.role == UserRole.ADMIN:
+            # Admins can view all projects
+            pass
+        elif user.role == UserRole.PROJECT_MANAGER:
+            # Project managers can only view projects they manage
+            if not is_project_manager(user_id, project_id):
+                return jsonify({"error": "You do not have permission to view this project"}), 403
+        elif user.role == UserRole.WORKER:
+            # Workers can only view projects they are members of
+            if not is_project_member(user_id, project_id):
+                return jsonify({"error": "You do not have permission to view this project"}), 403
+        else:
+            # Unknown role - deny access
+            return jsonify({"error": "You do not have permission to view this project"}), 403
         
         metrics = compute_workforce_metrics(project_id)
         return jsonify(metrics), 200
@@ -2272,9 +2732,31 @@ def get_workforce_metrics(project_id: int):
 def get_quality_metrics(project_id: int):
     """Get quality and risk indicators"""
     try:
+        user_id = int(get_jwt_identity())
+        user = User.query.filter_by(id=user_id, isActive=True).first()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
         project = Project.query.filter_by(id=project_id, isActive=True).first()
         if not project:
             return jsonify({"error": "Project not found"}), 404
+
+        # Access control: Check if user has permission to view this project
+        if user.role == UserRole.ADMIN:
+            # Admins can view all projects
+            pass
+        elif user.role == UserRole.PROJECT_MANAGER:
+            # Project managers can only view projects they manage
+            if not is_project_manager(user_id, project_id):
+                return jsonify({"error": "You do not have permission to view this project"}), 403
+        elif user.role == UserRole.WORKER:
+            # Workers can only view projects they are members of
+            if not is_project_member(user_id, project_id):
+                return jsonify({"error": "You do not have permission to view this project"}), 403
+        else:
+            # Unknown role - deny access
+            return jsonify({"error": "You do not have permission to view this project"}), 403
         
         metrics = compute_quality_metrics(project_id)
         return jsonify(metrics), 200
@@ -2287,9 +2769,31 @@ def get_quality_metrics(project_id: int):
 def get_health_score(project_id: int):
     """Get overall project health score (0-100)"""
     try:
+        user_id = int(get_jwt_identity())
+        user = User.query.filter_by(id=user_id, isActive=True).first()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
         project = Project.query.filter_by(id=project_id, isActive=True).first()
         if not project:
             return jsonify({"error": "Project not found"}), 404
+
+        # Access control: Check if user has permission to view this project
+        if user.role == UserRole.ADMIN:
+            # Admins can view all projects
+            pass
+        elif user.role == UserRole.PROJECT_MANAGER:
+            # Project managers can only view projects they manage
+            if not is_project_manager(user_id, project_id):
+                return jsonify({"error": "You do not have permission to view this project"}), 403
+        elif user.role == UserRole.WORKER:
+            # Workers can only view projects they are members of
+            if not is_project_member(user_id, project_id):
+                return jsonify({"error": "You do not have permission to view this project"}), 403
+        else:
+            # Unknown role - deny access
+            return jsonify({"error": "You do not have permission to view this project"}), 403
         
         health = compute_project_health_score(project_id)
         return jsonify(health), 200
@@ -2302,9 +2806,31 @@ def get_health_score(project_id: int):
 def get_all_metrics(project_id: int):
     """Get all metrics for a project"""
     try:
+        user_id = int(get_jwt_identity())
+        user = User.query.filter_by(id=user_id, isActive=True).first()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
         project = Project.query.filter_by(id=project_id, isActive=True).first()
         if not project:
             return jsonify({"error": "Project not found"}), 404
+
+        # Access control: Check if user has permission to view this project
+        if user.role == UserRole.ADMIN:
+            # Admins can view all projects
+            pass
+        elif user.role == UserRole.PROJECT_MANAGER:
+            # Project managers can only view projects they manage
+            if not is_project_manager(user_id, project_id):
+                return jsonify({"error": "You do not have permission to view this project"}), 403
+        elif user.role == UserRole.WORKER:
+            # Workers can only view projects they are members of
+            if not is_project_member(user_id, project_id):
+                return jsonify({"error": "You do not have permission to view this project"}), 403
+        else:
+            # Unknown role - deny access
+            return jsonify({"error": "You do not have permission to view this project"}), 403
         
         # Try to get base progress first
         progress = compute_project_progress(project_id)

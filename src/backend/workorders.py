@@ -7,13 +7,14 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from .models import db, User, Project, WorkOrder, WorkOrderWorker, WorkOrderStatus, UserRole, Audit, AuditEntityType, ProjectMember
+from .notification_service import notify_project_managers_of_change
 
 
 workorders_bp = Blueprint("workorders", __name__, url_prefix="/api/workorders")
 
 
 def create_audit_log(entity_type: AuditEntityType, entity_id: int, user_id: int, field: str, old_value: str, new_value: str, session_id: str = None, project_id: int = None):
-    """Helper function to create an audit log entry"""
+    """Helper function to create an audit log entry and notify project managers"""
     audit_log = Audit(
         entityType=entity_type,
         entityId=entity_id,
@@ -25,6 +26,29 @@ def create_audit_log(entity_type: AuditEntityType, entity_id: int, user_id: int,
         projectId=project_id
     )
     db.session.add(audit_log)
+    
+    # Notify project managers of important work order changes
+    if entity_type == AuditEntityType.WORK_ORDER and project_id:
+        try:
+            # Get work order name for better notification
+            work_order = WorkOrder.query.get(entity_id) if entity_id else None
+            entity_name = work_order.name if work_order else None
+            
+            notify_project_managers_of_change(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                project_id=project_id,
+                user_id=user_id,
+                field=field,
+                old_value=old_value,
+                new_value=new_value,
+                entity_name=entity_name
+            )
+        except Exception as e:
+            # Log error but don't fail the audit log creation
+            import traceback
+            print(f"Failed to send notification for audit log: {str(e)}")
+            print(traceback.format_exc())
 
 
 def update_project_actual_cost(project_id: int):

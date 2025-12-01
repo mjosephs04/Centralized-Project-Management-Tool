@@ -64,6 +64,35 @@ export const projectsAPI = {
     return response.data;
   },
 
+  getNotifications: async (limit = 50, onlyUnread = false) => {
+    const params = new URLSearchParams();
+    if (limit) params.append("limit", limit);
+    if (onlyUnread) params.append("only_unread", "true");
+    const url = `/projects/notifications${params.toString() ? `?${params.toString()}` : ''}`;
+    const response = await apiClient.get(url);
+    return response.data;
+  },
+
+  getNotificationPreferences: async () => {
+    const response = await apiClient.get("/projects/notification-preferences");
+    return response.data.preferences;
+  },
+
+  updateNotificationPreferences: async (preferences) => {
+    const response = await apiClient.put("/projects/notification-preferences", preferences);
+    return response.data.preferences;
+  },
+
+  dismissNotification: async (notificationId) => {
+    const response = await apiClient.post(`/projects/notifications/${notificationId}/dismiss`);
+    return response.data;
+  },
+
+  dismissAllNotifications: async () => {
+    const response = await apiClient.post("/projects/notifications/dismiss-all");
+    return response.data;
+  },
+
   postSupplies: async (projectId, payload) => {
     const response = await apiClient.post(`/projects/${projectId}/supplies`, payload);
     return response;
@@ -124,6 +153,50 @@ export const projectsAPI = {
   validateInvitationToken: async (token) => {
     const response = await apiClient.get(`/projects/invitations/validate/${token}`);
     return response.data;
+  },
+};
+
+export const messagesAPI = {
+  getConversations: async () => {
+    const response = await apiClient.get("/messages/conversations");
+    return response.data.conversations;
+  },
+
+  getConversation: async (conversationId) => {
+    const response = await apiClient.get(`/messages/conversations/${conversationId}`);
+    return response.data.conversation;
+  },
+
+  createConversation: async (otherUserId) => {
+    const response = await apiClient.post("/messages/conversations", { otherUserId });
+    return response.data.conversation;
+  },
+
+  getMessages: async (conversationId, limit = 50, offset = 0) => {
+    const response = await apiClient.get(`/messages/conversations/${conversationId}/messages`, {
+      params: { limit, offset }
+    });
+    return response.data;
+  },
+
+  sendMessage: async (conversationId, content) => {
+    const response = await apiClient.post(`/messages/conversations/${conversationId}/messages`, { content });
+    return response.data.message;
+  },
+
+  markMessageRead: async (messageId) => {
+    const response = await apiClient.put(`/messages/messages/${messageId}/read`);
+    return response.data.message;
+  },
+
+  markConversationRead: async (conversationId) => {
+    const response = await apiClient.put(`/messages/conversations/${conversationId}/read`);
+    return response.data;
+  },
+
+  getUnreadCount: async () => {
+    const response = await apiClient.get("/messages/unread-count");
+    return response.data.unreadCount;
   },
 
   getMetrics: {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import UserNavbar from "../components/UserNavbar";
+import NotificationSettings from "../components/NotificationSettings";
 import { authAPI } from "../services/api";
 import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "../contexts/SnackbarContext";
@@ -264,6 +265,13 @@ const ProfilePage = () => {
                         )}
                     </div>
                 )}
+
+                {/* Notification Settings - Only for Project Managers */}
+                {!loading && !error && user && user.role === "project_manager" && (
+                    <div style={styles.settingsSection}>
+                        <NotificationSettings />
+                    </div>
+                )}
             </div>
         </>
     );
@@ -431,6 +439,9 @@ const styles = {
         fontSize: "1rem",
         boxSizing: "border-box",
         backgroundColor: "white",
+    },
+    settingsSection: {
+        marginTop: "2rem",
     },
 };
 

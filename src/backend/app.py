@@ -9,6 +9,7 @@ from .models import db
 from .auth import auth_bp
 from .projects import projects_bp
 from .workorders import workorders_bp
+from .messages import messages_bp
 
 
 def create_app() -> Flask:
@@ -56,6 +57,7 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(projects_bp)
     app.register_blueprint(workorders_bp)
+    app.register_blueprint(messages_bp)
 
     return app
 
