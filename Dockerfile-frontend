@@ -8,7 +8,7 @@ COPY src/frontend/package*.json ./
 RUN npm ci
 
 # Build
-ENV REACT_APP_ISPROD=false
+ENV REACT_APP_ISPROD=true
 COPY src/frontend/ .
 RUN npm run build
 
