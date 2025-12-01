@@ -154,6 +154,33 @@ export const projectsAPI = {
     const response = await apiClient.get(`/projects/invitations/validate/${token}`);
     return response.data;
   },
+
+  getMetrics: {
+    all: async (projectId) => {
+      const response = await apiClient.get(`/projects/${projectId}/metrics/all`);
+      return response.data;
+    },
+    schedule: async (projectId) => {
+      const response = await apiClient.get(`/projects/${projectId}/metrics/schedule`);
+      return response.data;
+    },
+    cost: async (projectId) => {
+      const response = await apiClient.get(`/projects/${projectId}/metrics/cost`);
+      return response.data;
+    },
+    workforce: async (projectId) => {
+      const response = await apiClient.get(`/projects/${projectId}/metrics/workforce`);
+      return response.data;
+    },
+    quality: async (projectId) => {
+      const response = await apiClient.get(`/projects/${projectId}/metrics/quality`);
+      return response.data;
+    },
+    health: async (projectId) => {
+      const response = await apiClient.get(`/projects/${projectId}/metrics/health`);
+      return response.data;
+    },
+  },
 };
 
 export const messagesAPI = {
@@ -197,33 +224,6 @@ export const messagesAPI = {
   getUnreadCount: async () => {
     const response = await apiClient.get("/messages/unread-count");
     return response.data.unreadCount;
-  },
-
-  getMetrics: {
-    all: async (projectId) => {
-      const response = await apiClient.get(`/projects/${projectId}/metrics/all`);
-      return response.data;
-    },
-    schedule: async (projectId) => {
-      const response = await apiClient.get(`/projects/${projectId}/metrics/schedule`);
-      return response.data;
-    },
-    cost: async (projectId) => {
-      const response = await apiClient.get(`/projects/${projectId}/metrics/cost`);
-      return response.data;
-    },
-    workforce: async (projectId) => {
-      const response = await apiClient.get(`/projects/${projectId}/metrics/workforce`);
-      return response.data;
-    },
-    quality: async (projectId) => {
-      const response = await apiClient.get(`/projects/${projectId}/metrics/quality`);
-      return response.data;
-    },
-    health: async (projectId) => {
-      const response = await apiClient.get(`/projects/${projectId}/metrics/health`);
-      return response.data;
-    },
   },
 };
 
