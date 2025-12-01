@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FaEdit, FaSave, FaTimes, FaMapMarkerAlt, FaCalendarAlt, FaDollarSign, FaFlag, FaChartLine, FaTrashAlt} from "react-icons/fa";
 import { projectsAPI } from "../../services/api";
 import { useSnackbar } from '../../contexts/SnackbarContext';
@@ -9,6 +9,64 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [password, setPassword] = useState('');
     const [deleteError, setDeleteError] = useState('');
+    const [estimatedCost, setEstimatedCost] = useState(null);
+    const [loadingMetrics, setLoadingMetrics] = useState(false);
+    const [forecastEndDate, setForecastEndDate] = useState(null);
+    const [loadingSchedule, setLoadingSchedule] = useState(false);
+
+    // Load metrics to get estimated cost and forecast end date
+    useEffect(() => {
+        const loadMetrics = async () => {
+            if (userRole !== 'worker' && project?.id) {
+                try {
+                    setLoadingMetrics(true);
+                    setLoadingSchedule(true);
+                    
+                    // Load cost metrics
+                    const costMetrics = await projectsAPI.getMetrics.cost(project.id);
+                    setEstimatedCost(costMetrics.estimateAtCompletion);
+                    
+                    // Load schedule metrics for forecast end date
+                    const scheduleMetrics = await projectsAPI.getMetrics.schedule(project.id);
+                    setForecastEndDate(scheduleMetrics.forecastEndDate);
+                } catch (err) {
+                    console.error('Error loading metrics:', err);
+                    // Don't show error to user, just leave values as null
+                } finally {
+                    setLoadingMetrics(false);
+                    setLoadingSchedule(false);
+                }
+            }
+        };
+        loadMetrics();
+    }, [project?.id, userRole]);
+
+    // Helper function to format currency
+    const formatCurrency = (value) => {
+        if (value === null || value === undefined || value === '') {
+            return 'Not specified';
+        }
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(parseFloat(value));
+    };
+
+    // Helper function to format date as YYYY-MM-DD
+    const formatDate = (dateString) => {
+        if (!dateString) return 'Not specified';
+        try {
+            const date = new Date(dateString);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        } catch {
+            return dateString;
+        }
+    };
 
     // Helper functions defined before use
     const parseLocation = (locationString) => {
@@ -48,12 +106,52 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
         return priority.charAt(0).toUpperCase() + priority.slice(1);
     };
 
+    // Status descriptions mapping
+    const getStatusDescription = (status) => {
+        const statusMap = {
+            'planning': 'Project idea is under review; no formal approval or scope has been defined.',
+            'initiated': 'Project is approved with a defined scope and budget; early planning is underway.',
+            'regulatory_scoping': 'Regulatory, routing, and environmental reviews are in progress.',
+            'design_procurement': 'Engineering design is underway and materials are being procured.',
+            'construction_prep': 'Crews and contractors are mobilizing, and all permits and equipment are staged.',
+            'in_construction': 'Construction work is actively underway on site.',
+            'commissioning': 'System testing and validation is in progress prior to energization.',
+            'energized': 'System is operational and placed into service.',
+            'closeout': 'As-built documentation, final reviews, and project financials are being completed.',
+            'on_hold': 'Project is temporarily paused due to external or internal constraints.',
+            'cancelled': 'Project has been officially terminated before completion.',
+            'archived': 'Project is fully closed and archived for recordkeeping.'
+        };
+        return statusMap[status?.toLowerCase()] || '';
+    };
+
+    // Format status for display
+    const formatStatus = (status) => {
+        if (!status) return 'Not Set';
+        const statusMap = {
+            'planning': 'Planning',
+            'initiated': 'Initiated',
+            'regulatory_scoping': 'Regulatory & Scoping',
+            'design_procurement': 'Design & Procurement',
+            'construction_prep': 'Construction Prep',
+            'in_construction': 'In Construction',
+            'commissioning': 'Commissioning',
+            'energized': 'Energized',
+            'closeout': 'Closeout',
+            'on_hold': 'On Hold',
+            'cancelled': 'Cancelled',
+            'archived': 'Archived'
+        };
+        return statusMap[status.toLowerCase()] || status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
+    };
+
     const [editedData, setEditedData] = useState({
         ...parseLocation(project.location),
         actualStartDate: project.actualStartDate || '',
         endDate: project.endDate || '',
         priority: capitalizePriority(project.priority),
-        estimatedBudget: project.estimatedBudget || ''
+        estimatedBudget: project.estimatedBudget || '',
+        status: project.status || 'planning'
     });
 
     const handleSave = async () => {
@@ -72,7 +170,8 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                     priority: editedData.priority.toLowerCase(),
                     estimatedBudget: editedData.estimatedBudget ? parseFloat(editedData.estimatedBudget) : null,
                     actualStartDate: editedData.actualStartDate || null,
-                    endDate: editedData.endDate || null
+                    endDate: editedData.endDate || null,
+                    status: editedData.status.toLowerCase()
                 };
                 await onUpdate(processedData);
                 showSnackbar('Project details updated successfully!', 'success');
@@ -89,7 +188,8 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
             actualStartDate: project.actualStartDate || '',
             endDate: project.endDate || '',
             priority: capitalizePriority(project.priority),
-            estimatedBudget: project.estimatedBudget || ''
+            estimatedBudget: project.estimatedBudget || '',
+            status: project.status || 'planning'
         });
         setIsEditing(false);
         showSnackbar('Changes discarded', 'warning');
@@ -131,13 +231,34 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
     }
 
     const getStatusColor = (status) => {
-        switch(status?.toLowerCase()) {
-            case 'behind':
-                return { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5'};
-            case 'on track':
+        if (!status) return { bg: '#e5e7eb', text: '#374151', border: '#d1d5db'};
+        
+        const statusLower = status.toLowerCase();
+        switch(statusLower) {
+            case 'planning':
+                return { bg: '#e0e7ff', text: '#3730a3', border: '#c7d2fe'};
+            case 'initiated':
+                return { bg: '#dbeafe', text: '#1e40af', border: '#93c5fd'};
+            case 'regulatory_scoping':
+                return { bg: '#fef3c7', text: '#92400e', border: '#fde68a'};
+            case 'design_procurement':
+                return { bg: '#fce7f3', text: '#9f1239', border: '#fbcfe8'};
+            case 'construction_prep':
+                return { bg: '#fef3c7', text: '#854d0e', border: '#fde68a'};
+            case 'in_construction':
                 return { bg: '#d1fae5', text: '#065f46', border: '#6ee7b7'};
-            case 'ahead':
+            case 'commissioning':
+                return { bg: '#dbeafe', text: '#1e3a8a', border: '#93c5fd'};
+            case 'energized':
                 return { bg: '#d1fae5', text: '#047857', border: '#34d399'};
+            case 'closeout':
+                return { bg: '#e0e7ff', text: '#4338ca', border: '#c7d2fe'};
+            case 'on_hold':
+                return { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5'};
+            case 'cancelled':
+                return { bg: '#fee2e2', text: '#7f1d1d', border: '#fca5a5'};
+            case 'archived':
+                return { bg: '#f3f4f6', text: '#4b5563', border: '#d1d5db'};
             default:
                 return { bg: '#e5e7eb', text: '#374151', border: '#d1d5db'};
         }
@@ -272,14 +393,14 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                         </div>
                     </div>
 
-                    {/* Budget & Priority Section */}
-                    <div style={styles.formSection}>
-                        <h3 style={styles.sectionTitle}>
-                            <FaDollarSign style={styles.sectionIcon} />
-                            Budget & Priority
-                        </h3>
-                        <div style={styles.formGrid}>
-                            {userRole !== 'worker' && (
+                    {/* Budget Section */}
+                    {userRole !== 'worker' && (
+                        <div style={styles.formSection}>
+                            <h3 style={styles.sectionTitle}>
+                                <FaDollarSign style={styles.sectionIcon} />
+                                Budget
+                            </h3>
+                            <div style={styles.formGrid}>
                                 <div>
                                     <label style={styles.inputLabel}>Allocated Budget</label>
                                     <input
@@ -290,21 +411,59 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                                         placeholder="50000"
                                     />
                                 </div>
-                            )}
-                            <div>
-                                <label style={styles.inputLabel}>Priority</label>
-                                <select
-                                    value={editedData.priority}
-                                    onChange={(e) => setEditedData({...editedData, priority: e.target.value})}
-                                    style={styles.formSelect}
-                                >
-                                    <option value="Low">Low</option>
-                                    <option value="Medium">Medium</option>
-                                    <option value="High">High</option>
-                                </select>
                             </div>
                         </div>
-                    </div>
+                    )}
+
+                    {/* Priority & Status Section - Only for Project Managers */}
+                    {userRole !== 'worker' && (
+                        <div style={styles.priorityStatusSection}>
+                            <h3 style={styles.sectionTitle}>
+                                <FaFlag style={styles.sectionIcon} />
+                                Priority & Status
+                            </h3>
+                            <div style={styles.priorityStatusGrid}>
+                                <div>
+                                    <label style={styles.inputLabel}>Priority</label>
+                                    <select
+                                        value={editedData.priority}
+                                        onChange={(e) => setEditedData({...editedData, priority: e.target.value})}
+                                        style={styles.formSelect}
+                                    >
+                                        <option value="Low">Low</option>
+                                        <option value="Medium">Medium</option>
+                                        <option value="High">High</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={styles.inputLabel}>Project Status</label>
+                                    <select
+                                        value={editedData.status}
+                                        onChange={(e) => setEditedData({...editedData, status: e.target.value})}
+                                        style={styles.formSelect}
+                                    >
+                                        <option value="planning">Planning</option>
+                                        <option value="initiated">Initiated</option>
+                                        <option value="regulatory_scoping">Regulatory & Scoping</option>
+                                        <option value="design_procurement">Design & Procurement</option>
+                                        <option value="construction_prep">Construction Prep</option>
+                                        <option value="in_construction">In Construction</option>
+                                        <option value="commissioning">Commissioning</option>
+                                        <option value="energized">Energized</option>
+                                        <option value="closeout">Closeout</option>
+                                        <option value="on_hold">On Hold</option>
+                                        <option value="cancelled">Cancelled</option>
+                                        <option value="archived">Archived</option>
+                                    </select>
+                                    {editedData.status && (
+                                        <p style={styles.statusDescription}>
+                                            {getStatusDescription(editedData.status)}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             ) : (
                 // View Mode - Original Card Grid
@@ -337,15 +496,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                             <FaCalendarAlt style={styles.icon} />
                             <span style={styles.label}>Actual Start Date</span>
                         </div>
-                        <p style={styles.value}>{project.actualStartDate || 'Not specified'}</p>
-                    </div>
-
-                    <div style={styles.card}>
-                        <div style={styles.cardHeader}>
-                            <FaCalendarAlt style={styles.icon} />
-                            <span style={styles.label}>Estimated End Date</span>
-                        </div>
-                        <p style={styles.value}>Not Specified, will be added with algorithm introduction</p> 
+                        <p style={styles.value}>{project.startDate || 'Not specified'}</p>
                     </div>
 
                     <div style={styles.card}>
@@ -354,6 +505,16 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                             <span style={styles.label}>Scheduled End Date</span>
                         </div>
                         <p style={styles.value}>{project.endDate || 'Not specified'}</p>
+                    </div>
+
+                    <div style={styles.card}>
+                        <div style={styles.cardHeader}>
+                            <FaCalendarAlt style={styles.icon} />
+                            <span style={styles.label}>Estimated End Date</span>
+                        </div>
+                        <p style={styles.value}>
+                            {loadingSchedule ? 'Loading...' : formatDate(forecastEndDate)}
+                        </p> 
                     </div>
 
                     {userRole !== 'worker' && (
@@ -374,7 +535,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                                 <FaDollarSign style={styles.icon} />
                                 <span style={styles.label}>Current Cost</span>
                             </div>
-                            <p style={styles.value}>Not specified will be introduced with database update and work orders.</p>
+                            <p style={styles.value}>{formatCurrency(project.actualCost)}</p>
                         </div>
                     )}
 
@@ -384,7 +545,9 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                                 <FaDollarSign style={styles.icon} />
                                 <span style={styles.label}>Estimated Cost</span>
                             </div>
-                            <p style={styles.value}>Not specified, will be added with algorithm introduction.</p>
+                            <p style={styles.value}>
+                                {loadingMetrics ? 'Loading...' : formatCurrency(estimatedCost)}
+                            </p>
                         </div>
                     )}
 
@@ -396,7 +559,9 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                         <div style={{
                             ...styles.priorityBadge,
                             backgroundColor: priorityStyle.bg,
-                            color: priorityStyle.text
+                            color: priorityStyle.text,
+                            width: 'auto',
+                            minWidth: '120px'
                         }}>
                             <span style={styles.priorityIcon}>{priorityStyle.icon}</span>
                             {capitalizePriority(project.priority)}
@@ -412,10 +577,18 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                             ...styles.statusBadge,
                             background: statusColors.bg,
                             color: statusColors.text,
-                            border: `2px solid ${statusColors.border}`
+                            border: 'none',
+                            width: 'auto',
+                            minWidth: '120px',
+                            padding: '0.4rem 1rem'
                         }}>
-                            {project.status || 'Not Set'}
+                            {formatStatus(project.status)}
                         </div>
+                        {project.status && getStatusDescription(project.status) && (
+                            <p style={styles.statusDescriptionText}>
+                                {getStatusDescription(project.status)}
+                            </p>
+                        )}
                     </div>
                 </div>
             )}
@@ -585,6 +758,22 @@ const styles = {
         height: '40px',
         width: '100px',
     },
+    statusDescription: {
+        fontSize: '0.85rem',
+        color: '#6b7280',
+        marginTop: '0.5rem',
+        marginBottom: 0,
+        lineHeight: '1.5',
+        fontStyle: 'italic',
+    },
+    statusDescriptionText: {
+        fontSize: '0.85rem',
+        color: '#6b7280',
+        marginTop: '0.75rem',
+        marginBottom: 0,
+        lineHeight: '1.5',
+        fontStyle: 'italic',
+    },
     priorityBadge: {
         display: 'inline-flex',
         alignItems: 'center',
@@ -627,6 +816,17 @@ const styles = {
         padding: '2rem',
         borderRadius: '12px',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+    },
+    priorityStatusSection: {
+        backgroundColor: 'white',
+        padding: '2rem',
+        borderRadius: '12px',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+    },
+    priorityStatusGrid: {
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '1.5rem',
     },
     sectionTitle: {
         display: 'flex',

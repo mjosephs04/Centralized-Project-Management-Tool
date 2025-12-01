@@ -47,14 +47,28 @@ const MetricsTab = ({ project }) => {
     return new Intl.NumberFormat("en-US", { 
       style: "currency", 
       currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(value);
   };
 
   const formatDays = (value) => {
     if (value === null || value === undefined) return "N/A";
-    return `${value} ${Math.abs(value) === 1 ? 'day' : 'days'}`;
+    const rounded = Math.round(value * 10) / 10; // Round to 1 decimal place
+    return `${rounded} ${Math.abs(rounded) === 1 ? 'day' : 'days'}`;
+  };
+
+  const formatScheduleVariance = (value) => {
+    if (value === null || value === undefined) return "N/A";
+    const rounded = Math.round(value * 10) / 10; // Round to 1 decimal place
+    const absValue = Math.abs(rounded);
+    if (rounded < 0) {
+      return `${absValue} ${absValue === 1 ? 'day' : 'days'} behind schedule`;
+    } else if (rounded > 0) {
+      return `${absValue} ${absValue === 1 ? 'day' : 'days'} ahead of schedule`;
+    } else {
+      return "On schedule";
+    }
   };
 
   const formatDate = (dateString) => {
@@ -161,7 +175,7 @@ const MetricsTab = ({ project }) => {
           />
           <DetailCard
             label="Schedule Variance"
-            value={formatDays(metrics.schedule?.scheduleVariance)}
+            value={formatScheduleVariance(metrics.schedule?.scheduleVariance)}
             icon={metrics.schedule?.scheduleVariance < 0 ? <FaTimesCircle style={{ color: "#dc2626" }} /> : <FaCheckCircle style={{ color: "#059669" }} />}
             tooltip="Schedule Variance shows the difference between planned and actual project duration. Variance = Planned Duration - Actual Duration"
           />
@@ -187,6 +201,12 @@ const MetricsTab = ({ project }) => {
           <h3>Cost & Budget</h3>
         </div>
         <div style={styles.detailGrid}>
+          <DetailCard
+            label="Allocated Budget (AB)"
+            value={formatCurrency(metrics.cost?.allocatedBudget)}
+            icon={<FaDollarSign />}
+            tooltip="The total budget allocated to this project at the project level. This is the project's estimatedBudget field. AB = Allocated Budget"
+          />
           <DetailCard
             label="Earned Value (EV)"
             value={formatCurrency(metrics.cost?.earnedValue)}
@@ -215,15 +235,104 @@ const MetricsTab = ({ project }) => {
             label="Remaining Budget"
             value={formatCurrency(metrics.cost?.remainingBudget)}
             icon={<FaDollarSign />}
-            tooltip="The amount of budget remaining for the rest of the project.  RB = BAC - AC"
+            tooltip="The amount of allocated budget remaining for the rest of the project.  RB = AB - AC"
           />
           <DetailCard
             label="Budget at Completion"
             value={formatCurrency(metrics.cost?.budgetAtCompletion)}
             icon={<FaDollarSign />}
             tooltip="The total planned budget for the entire project.  BAC = Sum of all active work orders' estimated budgets"
+            tooltipAlignRight={true}
           />
         </div>
+      </div>
+
+      {/* Project Costs Section */}
+      <div style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <FaDollarSign style={styles.sectionIcon} />
+          <h3>Project Costs</h3>
+        </div>
+        <div style={styles.detailGrid}>
+          <DetailCard
+            label="Allocated Budget (AB)"
+            value={formatCurrency(metrics.cost?.allocatedBudget)}
+            icon={<FaDollarSign />}
+            tooltip="The total budget allocated to this project at the project level. AB = Allocated Budget"
+          />
+          <DetailCard
+            label="Current Cost"
+            value={formatCurrency(metrics.cost?.actualCost)}
+            icon={<FaDollarSign />}
+            tooltip="The total actual cost incurred so far on the project (sum of all work order actual costs)."
+          />
+          <DetailCard
+            label="Estimated Cost"
+            value={formatCurrency(metrics.cost?.estimateAtCompletion)}
+            icon={<FaChartLine />}
+            tooltip="The forecasted total cost when the project is complete, based on current performance."
+          />
+        </div>
+      </div>
+
+      {/* Work Order Costs Section */}
+      <div style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <FaDollarSign style={styles.sectionIcon} />
+          <h3>Work Order Costs</h3>
+        </div>
+        {metrics.cost?.workOrderCosts ? (
+          <div style={styles.workOrderCostsGrid}>
+            {['pending', 'in_progress', 'on_hold', 'completed', 'cancelled'].map((status) => {
+              const costs = metrics.cost.workOrderCosts[status];
+              if (!costs || costs.count === 0) return null;
+              
+              const statusLabel = status.split('_').map(word => 
+                word.charAt(0).toUpperCase() + word.slice(1)
+              ).join(' ');
+              const statusColor = {
+                pending: "#f59e0b",
+                in_progress: "#3b82f6",
+                completed: "#10b981",
+                on_hold: "#f97316",
+                cancelled: "#ef4444"
+              }[status] || "#6b7280";
+              
+              return (
+                <div key={status} style={styles.workOrderCostCard}>
+                  <div style={styles.workOrderCostHeader}>
+                    <div style={{ ...styles.workOrderStatusDot, backgroundColor: statusColor }}></div>
+                    <span style={styles.workOrderCostTitle}>{statusLabel}</span>
+                    <span style={styles.workOrderCostCount}>({costs.count})</span>
+                  </div>
+                  <div style={styles.workOrderCostDetails}>
+                    <div style={styles.workOrderCostRow}>
+                      <span style={styles.workOrderCostLabel}>Estimated:</span>
+                      <span style={styles.workOrderCostValue}>{formatCurrency(costs.estimated)}</span>
+                    </div>
+                    <div style={styles.workOrderCostRow}>
+                      <span style={styles.workOrderCostLabel}>Actual:</span>
+                      <span style={styles.workOrderCostValue}>{formatCurrency(costs.actual)}</span>
+                    </div>
+                    {costs.estimated > 0 && (
+                      <div style={styles.workOrderCostRow}>
+                        <span style={styles.workOrderCostLabel}>Variance:</span>
+                        <span style={{
+                          ...styles.workOrderCostValue,
+                          color: costs.actual > costs.estimated ? "#dc2626" : "#059669"
+                        }}>
+                          {formatCurrency(costs.actual - costs.estimated)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p style={styles.noDataText}>No work order cost data available</p>
+        )}
       </div>
 
       {/* Workforce Metrics */}
@@ -252,7 +361,7 @@ const MetricsTab = ({ project }) => {
             value={formatDays(metrics.workforce?.averageWorkOrderDurationDays)}
             icon={<FaClock />}
             description="Time to complete"
-            tooltip="The average number of days it takes to complete a work order, calculated from completed work orders only.  AWOD = Average of (actualEndDate - actualStartDate) for all completed work orders"
+            tooltip="The average number of days it takes to complete a work order, calculated from completed work orders only.  AWOD = Average of (updatedAt - createdAt) for all completed work orders"
           />
         </div>
         
@@ -689,6 +798,73 @@ const styles = {
     fontSize: "14px",
     fontWeight: "bold",
     color: "#111827",
+  },
+  workOrderCostsGrid: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "14px",
+    justifyContent: "flex-start",
+  },
+  workOrderCostCard: {
+    backgroundColor: "#f9fafb",
+    borderRadius: "8px",
+    padding: "16px",
+    border: "1px solid #e5e7eb",
+    minWidth: "180px",
+    flex: "0 0 auto",
+  },
+  workOrderStatusDot: {
+    width: "8px",
+    height: "8px",
+    borderRadius: "50%",
+    flexShrink: 0,
+  },
+  workOrderCostHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    marginBottom: "12px",
+    paddingBottom: "10px",
+    borderBottom: "1px solid #e5e7eb",
+  },
+  workOrderCostTitle: {
+    fontSize: "14px",
+    fontWeight: "600",
+    color: "#111827",
+    flex: 1,
+  },
+  workOrderCostCount: {
+    fontSize: "12px",
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  workOrderCostDetails: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  workOrderCostRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "8px",
+  },
+  workOrderCostLabel: {
+    fontSize: "12px",
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  workOrderCostValue: {
+    fontSize: "13px",
+    fontWeight: "600",
+    color: "#111827",
+  },
+  noDataText: {
+    color: "#6b7280",
+    fontSize: "14px",
+    fontStyle: "italic",
+    textAlign: "center",
+    padding: "20px",
   },
 };
 

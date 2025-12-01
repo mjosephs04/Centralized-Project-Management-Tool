@@ -150,7 +150,7 @@ def create_project():
         try:
             status = ProjectStatus(payload["status"].lower())
         except ValueError:
-            return jsonify({"error": "Invalid status. Must be planning, in_progress, on_hold, completed, or cancelled"}), 400
+            return jsonify({"error": "Invalid status. Must be planning, initiated, regulatory_scoping, design_procurement, construction_prep, in_construction, commissioning, energized, closeout, on_hold, cancelled, or archived"}), 400
     
     # Validate priority if provided
     priority = payload.get("priority", "medium")
@@ -423,7 +423,7 @@ def update_project(project_id):
                 create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "status", original_values["status"], new_status.value, session_id, project_id)
                 project.status = new_status
         except ValueError:
-            return jsonify({"error": "Invalid status. Must be planning, in_progress, on_hold, completed, or cancelled"}), 400
+            return jsonify({"error": "Invalid status. Must be planning, initiated, regulatory_scoping, design_procurement, construction_prep, in_construction, commissioning, energized, closeout, on_hold, cancelled, or archived"}), 400
     
     # Update crew members if provided
     if "crewMembers" in payload:

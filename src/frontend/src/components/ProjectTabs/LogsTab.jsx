@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { FaUser, FaCalendarAlt, FaDollarSign, FaMapMarkerAlt, FaFlag, FaCog, FaBox } from "react-icons/fa";
 import { projectsAPI } from "../../services/api";
 
-const LogsTab = ({ project, refreshTrigger }) => {
+const LogsTab = ({ project, refreshTrigger, onNavigateToTab }) => {
     const [auditLogs, setAuditLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -118,16 +118,30 @@ const LogsTab = ({ project, refreshTrigger }) => {
         // Format status values
         if (field === 'status') {
             const statusMap = {
+                // Work order statuses
                 'pending': 'Pending',
                 'in_progress': 'In Progress',
                 'on_hold': 'On Hold',
                 'completed': 'Completed',
                 'cancelled': 'Cancelled',
+                // Project statuses
                 'planning': 'Planning',
+                'initiated': 'Initiated',
+                'regulatory_scoping': 'Regulatory & Scoping',
+                'design_procurement': 'Design & Procurement',
+                'construction_prep': 'Construction Prep',
+                'in_construction': 'In Construction',
+                'commissioning': 'Commissioning',
+                'energized': 'Energized',
+                'closeout': 'Closeout',
+                'archived': 'Archived',
+                // Supply statuses
                 'approved': 'Approved',
                 'rejected': 'Rejected',
             };
-            return statusMap[value.toLowerCase()] || value;
+            // Handle both lowercase and uppercase values from database
+            const normalizedValue = value?.toString().toLowerCase();
+            return statusMap[normalizedValue] || (value ? value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, ' ') : value);
         }
         
         return value;
@@ -315,14 +329,41 @@ const LogsTab = ({ project, refreshTrigger }) => {
         );
     }
 
-    const renderLogSection = (title, logs, icon, color) => {
+    const renderLogSection = (title, logs, icon, color, tabId) => {
         if (logs.length === 0) return null;
+
+        const handleTitleClick = () => {
+            if (onNavigateToTab && tabId) {
+                onNavigateToTab(tabId);
+            }
+        };
 
         return (
             <div style={styles.categorySection}>
                 <div style={styles.categoryHeader}>
                     {icon}
-                    <h3 style={{ ...styles.categoryTitle, color }}>{title}</h3>
+                    <h3 
+                        style={{ 
+                            ...styles.categoryTitle, 
+                            color,
+                            ...(onNavigateToTab && tabId ? styles.categoryTitleLink : {})
+                        }}
+                        onClick={onNavigateToTab && tabId ? handleTitleClick : undefined}
+                        onMouseEnter={(e) => {
+                            if (onNavigateToTab && tabId) {
+                                e.target.style.opacity = '0.7';
+                                e.target.style.textDecoration = 'underline';
+                            }
+                        }}
+                        onMouseLeave={(e) => {
+                            if (onNavigateToTab && tabId) {
+                                e.target.style.opacity = '1';
+                                e.target.style.textDecoration = 'none';
+                            }
+                        }}
+                    >
+                        {title}
+                    </h3>
                     <span style={styles.categoryCount}>({logs.length})</span>
                 </div>
                 <div style={styles.logsContainer}>
@@ -515,25 +556,29 @@ const LogsTab = ({ project, refreshTrigger }) => {
                         'Project',
                         categorizedLogs.project,
                         <FaCog style={styles.categoryIcon} />,
-                        '#3b82f6'
+                        '#3b82f6',
+                        'overview'
                     )}
                     {renderLogSection(
                         'Work Orders',
                         categorizedLogs.workOrder,
                         <FaCalendarAlt style={styles.categoryIcon} />,
-                        '#10b981'
+                        '#10b981',
+                        'workorders'
                     )}
                     {renderLogSection(
                         'Team',
                         categorizedLogs.team,
                         <FaUser style={styles.categoryIcon} />,
-                        '#8b5cf6'
+                        '#8b5cf6',
+                        'team'
                     )}
                     {renderLogSection(
                         'Supplies',
                         categorizedLogs.supply,
                         <FaBox style={styles.categoryIcon} />,
-                        '#f59e0b'
+                        '#f59e0b',
+                        'supplies'
                     )}
                 </div>
             )}
@@ -632,6 +677,11 @@ const styles = {
         fontSize: '1.2rem',
         fontWeight: '700',
         margin: 0,
+    },
+    categoryTitleLink: {
+        cursor: 'pointer',
+        textDecoration: 'none',
+        transition: 'opacity 0.2s, text-decoration 0.2s',
     },
     categoryCount: {
         fontSize: '0.85rem',

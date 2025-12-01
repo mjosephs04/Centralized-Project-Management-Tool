@@ -99,7 +99,7 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
       setTeamMembers([]);
       setInvitations([]);
     }
-  }, [project?.id, userRole]);
+  }, [project?.id, userRole, project?.crewMembers]);
 
   // Helpers
   const getName = (u) => [u?.firstName, u?.lastName].filter(Boolean).join(" ").trim();
@@ -107,6 +107,26 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
   const getPhone = (u) => u?.phoneNumber ?? u?.phone ?? "";
 
   const workerDisplayName = (u) => getName(u) || getEmail(u) || "Unnamed";
+
+  // Format role and worker type to title case
+  const formatRole = (role) => {
+    if (!role) return "—";
+    const roleMap = {
+      'worker': 'Worker',
+      'project_manager': 'Project Manager',
+      'admin': 'Admin'
+    };
+    return roleMap[role.toLowerCase()] || role.charAt(0).toUpperCase() + role.slice(1).replace(/_/g, ' ');
+  };
+
+  const formatWorkerType = (workerType) => {
+    if (!workerType) return "—";
+    const typeMap = {
+      'crew_member': 'Crew Member',
+      'contractor': 'Contractor'
+    };
+    return typeMap[workerType.toLowerCase()] || workerType.charAt(0).toUpperCase() + workerType.slice(1).replace(/_/g, ' ');
+  };
   
   // Enhanced search function that searches across name, email, and phone
   const searchWorkers = (workers, searchTerm) => {
@@ -253,6 +273,16 @@ const projectManagerInfo = useMemo(() => {
       await onUpdate?.({ crewMembers: payload });
       setIsEditing(false);
       showSnackbar("Team changes saved successfully!", "success");
+      
+      // Refresh team members list to show updated crew immediately
+      if (userRole && userRole !== "worker" && project?.id) {
+        try {
+          const members = await projectsAPI.getProjectMembers(project.id);
+          setTeamMembers(members || []);
+        } catch (e) {
+          console.error("Failed to refresh team members", e);
+        }
+      }
     } catch (e) {
       console.error("Failed to save crew", e);
       showSnackbar("Failed to save team changes", "error");
@@ -494,8 +524,8 @@ const projectManagerInfo = useMemo(() => {
       )}
       
 
-      {/* Invite User Section - Only for Project Managers/Admins */}
-      {canEdit && (
+      {/* Invite User Section - Only for Project Managers/Admins when editing */}
+      {isEditing && canEdit && (
         <div style={styles.inviteSection}>
           <h3 style={styles.inviteTitle}>Invite New User</h3>
           <p style={styles.inviteDescription}>
@@ -578,8 +608,8 @@ const projectManagerInfo = useMemo(() => {
       {/* Prefer backend-provided team list for PM/Admin; fallback to local crew */}
       {teamMembers.length > 0 ? (
         <>
-          <div style={{ marginBottom: "1.5rem" }}>
-            <h3 style={{ margin: 0, color: "#374151" }}>Project Managers</h3>
+          <div style={{ marginTop: "2rem", marginBottom: "2.5rem" }}>
+            <h3 style={{ margin: "0 0 1rem 0", color: "#374151", fontSize: "1.3rem", fontWeight: "600" }}>Project Managers</h3>
             <div style={styles.grid}>
               {teamMembers.filter((m) => m.role === "project_manager").map((m, idx) => (
                 <div key={`pm-${idx}`} style={styles.card}>
@@ -631,8 +661,8 @@ const projectManagerInfo = useMemo(() => {
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.5rem" }}>
-            <h3 style={{ margin: 0, color: "#374151" }}>Team Members</h3>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: "2.5rem", marginBottom: "1rem" }}>
+            <h3 style={{ margin: 0, color: "#374151", fontSize: "1.3rem", fontWeight: "600" }}>Team Members</h3>
             {loadingTeam && <span style={{ color: "#6b7280", fontStyle: "italic" }}>(loading)</span>}
           </div>
           {teamMembers.filter((m) => m.role !== "project_manager").length === 0 ? (
@@ -830,9 +860,9 @@ const projectManagerInfo = useMemo(() => {
 
       {/* Pending Invitations (PM/Admin only) - moved to bottom */}
       {userRole !== "worker" && (
-        <div style={{ marginTop: "2rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.5rem" }}>
-            <h3 style={{ margin: 0, color: "#374151" }}>Pending Invitations</h3>
+        <div style={{ marginTop: "3rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1rem" }}>
+            <h3 style={{ margin: 0, color: "#374151", fontSize: "1.3rem", fontWeight: "600" }}>Pending Invitations</h3>
             {loadingInvites && <span style={{ color: "#6b7280", fontStyle: "italic" }}>(loading)</span>}
           </div>
           {invitations.filter((i) => i.status === "pending").length === 0 ? (
@@ -851,12 +881,12 @@ const projectManagerInfo = useMemo(() => {
                       <div style={styles.contactInfo}>
                         <div style={styles.contactItem}>
                           <span style={styles.label}>Role:</span>
-                          <span style={styles.value}>{inv.role || "—"}</span>
+                          <span style={styles.value}>{formatRole(inv.role)}</span>
                         </div>
                         {inv.workerType && (
                           <div style={styles.contactItem}>
                             <span style={styles.label}>Worker Type:</span>
-                            <span style={styles.value}>{inv.workerType}</span>
+                            <span style={styles.value}>{formatWorkerType(inv.workerType)}</span>
                           </div>
                         )}
                         <div style={styles.contactItem}>

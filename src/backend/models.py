@@ -29,10 +29,17 @@ class WorkerType(enum.Enum):
 
 class ProjectStatus(enum.Enum):
     PLANNING = "planning"
-    IN_PROGRESS = "in_progress"
+    INITIATED = "initiated"
+    REGULATORY_SCOPING = "regulatory_scoping"
+    DESIGN_PROCUREMENT = "design_procurement"
+    CONSTRUCTION_PREP = "construction_prep"
+    IN_CONSTRUCTION = "in_construction"
+    COMMISSIONING = "commissioning"
+    ENERGIZED = "energized"
+    CLOSEOUT = "closeout"
     ON_HOLD = "on_hold"
-    COMPLETED = "completed"
     CANCELLED = "cancelled"
+    ARCHIVED = "archived"
 
 
 class WorkOrderStatus(enum.Enum):

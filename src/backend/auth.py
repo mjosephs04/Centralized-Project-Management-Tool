@@ -219,13 +219,13 @@ def accept_invitation_existing_user():
 @jwt_required()
 def get_all_workers():
     """
-    Return all users with role=worker.
+    Return all active users with role=worker.
     Example request: GET /api/auth/workers
     Requires Authorization header with Bearer token.
     """
     try:
-        # Query all users who are workers
-        workers = User.query.filter_by(role=UserRole.WORKER).all()
+        # Query all active users who are workers
+        workers = User.query.filter_by(role=UserRole.WORKER, isActive=True).all()
 
         # Serialize users (exclude password hash in to_dict)
         worker_data = [w.to_dict() for w in workers]

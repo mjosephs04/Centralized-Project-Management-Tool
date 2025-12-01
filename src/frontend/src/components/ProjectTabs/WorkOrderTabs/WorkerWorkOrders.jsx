@@ -379,8 +379,8 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
                 <label style={styles.label}>Description</label>
                 <textarea
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  style={{ ...styles.input, ...styles.textArea }}
+                  readOnly
+                  style={{ ...styles.input, ...styles.textArea, ...styles.readOnlyInput }}
                   placeholder="Add a detailed description"
                 />
               </div>
@@ -391,8 +391,8 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
                   <input
                     type="text"
                     value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    style={styles.input}
+                    readOnly
+                    style={{ ...styles.input, ...styles.readOnlyInput }}
                     placeholder="Work location"
                   />
                 </div>
@@ -400,8 +400,8 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
                   <label style={styles.label}>Priority</label>
                   <select
                     value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) })}
-                    style={styles.select}
+                    disabled
+                    style={{ ...styles.select, ...styles.readOnlyInput }}
                   >
                     <option value="1">Very Low</option>
                     <option value="2">Low</option>
@@ -418,8 +418,8 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
                   <input
                     type="date"
                     value={formData.startDate}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    style={styles.input}
+                    readOnly
+                    style={{ ...styles.input, ...styles.readOnlyInput }}
                   />
                   {formErrors.startDate && <div style={styles.error}>{formErrors.startDate}</div>}
                 </div>
@@ -428,8 +428,8 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
                   <input
                     type="date"
                     value={formData.endDate}
-                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                    style={styles.input}
+                    readOnly
+                    style={{ ...styles.input, ...styles.readOnlyInput }}
                   />
                   {formErrors.endDate && <div style={styles.error}>{formErrors.endDate}</div>}
                   {formErrors.dateOrder && <div style={styles.error}>{formErrors.dateOrder}</div>}
@@ -474,7 +474,7 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
                 {onNavigateToSupplies && selectedWorkOrder && (
                   <button 
                     type="button" 
-                    style={{...styles.submitBtn, backgroundColor: "#10b981", marginRight: "0.5rem"}}
+                    style={{...styles.submitBtn, backgroundColor: "#5692bc", marginRight: "0.5rem"}}
                     onClick={() => {
                       onNavigateToSupplies(selectedWorkOrder.id);
                       setShowUpdate(false);
@@ -485,7 +485,7 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
                 )}
                 <button
                   type="submit"
-                  style={styles.submitBtn}
+                  style={{...styles.submitBtn, backgroundColor: "#10b981"}}
                 >
                   Update Work Order
                 </button>
@@ -623,6 +623,13 @@ const styles = {
     fontFamily: "inherit",
     cursor: "pointer",
     boxSizing: "border-box"
+  },
+  readOnlyInput: {
+    backgroundColor: "#f9fafb",
+    color: "#6b7280",
+    cursor: "not-allowed",
+    borderColor: "#e5e7eb",
+    opacity: 0.8
   },
   textArea: { 
     minHeight: "120px", 
