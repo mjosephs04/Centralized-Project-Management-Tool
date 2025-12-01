@@ -18,6 +18,8 @@ const MessagesPage = () => {
   const [currentUserId, setCurrentUserId] = useState(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const selectedConversationIdRef = useRef(null);
+  const isMarkingReadRef = useRef(false);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -25,10 +27,10 @@ const MessagesPage = () => {
     fetchUnreadCount();
     // Refresh conversations every 30 seconds
     const interval = setInterval(() => {
-      fetchConversations();
+      fetchConversations(false); // Pass false to prevent updating selectedConversation
       fetchUnreadCount();
-      if (selectedConversation) {
-        fetchMessages(selectedConversation.id);
+      if (selectedConversationIdRef.current) {
+        fetchMessages(selectedConversationIdRef.current);
       }
     }, 30000);
     return () => clearInterval(interval);
@@ -56,24 +58,36 @@ const MessagesPage = () => {
 
   useEffect(() => {
     if (selectedConversation) {
-      fetchMessages(selectedConversation.id);
-      markConversationRead(selectedConversation.id);
+      const conversationId = selectedConversation.id;
+      // Only mark as read if this is a new conversation selection
+      if (selectedConversationIdRef.current !== conversationId) {
+        selectedConversationIdRef.current = conversationId;
+        fetchMessages(conversationId);
+        markConversationRead(conversationId);
+      }
+    } else {
+      selectedConversationIdRef.current = null;
     }
-  }, [selectedConversation]);
+  }, [selectedConversation?.id]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const fetchConversations = async () => {
+  const fetchConversations = async (updateSelected = true) => {
     try {
       const data = await messagesAPI.getConversations();
       setConversations(data || []);
-      // If we have a selected conversation, update it
-      if (selectedConversation) {
+      // If we have a selected conversation, update it only if updateSelected is true
+      // This prevents infinite loops when called from markConversationRead
+      if (updateSelected && selectedConversation) {
         const updated = data.find(c => c.id === selectedConversation.id);
         if (updated) {
-          setSelectedConversation(updated);
+          // Only update if something actually changed to prevent unnecessary re-renders
+          const hasChanged = JSON.stringify(updated) !== JSON.stringify(selectedConversation);
+          if (hasChanged) {
+            setSelectedConversation(updated);
+          }
         }
       }
     } catch (error) {
@@ -105,12 +119,21 @@ const MessagesPage = () => {
   };
 
   const markConversationRead = async (conversationId) => {
+    // Prevent multiple simultaneous calls for the same conversation
+    if (isMarkingReadRef.current) {
+      return;
+    }
+    
     try {
+      isMarkingReadRef.current = true;
       await messagesAPI.markConversationRead(conversationId);
-      fetchConversations();
+      // Don't update selectedConversation to prevent infinite loop
+      fetchConversations(false);
       fetchUnreadCount();
     } catch (error) {
       console.error("Error marking conversation as read:", error);
+    } finally {
+      isMarkingReadRef.current = false;
     }
   };
 

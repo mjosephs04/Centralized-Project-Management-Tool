@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FaEnvelope, FaUserCircle, FaSignOutAlt } from "react-icons/fa";
 import { FaShareFromSquare } from "react-icons/fa6";
 import logo from '../imgs/LSGSLogo.png';
-import { authAPI } from '../services/api';
+import { authAPI, messagesAPI } from '../services/api';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import Notifications from './Notifications';
 
@@ -134,6 +134,25 @@ const styles = {
         border: '2px solid white',
     },
 
+    messageBadge: {
+        position: 'absolute',
+        top: '6px',
+        right: '6px',
+        minWidth: '18px',
+        height: '18px',
+        padding: '0 4px',
+        background: '#ef4444',
+        color: 'white',
+        borderRadius: '9px',
+        fontSize: '11px',
+        fontWeight: '600',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: '2px solid white',
+        lineHeight: '1',
+    },
+
     tooltip: {
         position: 'absolute',
         bottom: '-35px',
@@ -201,9 +220,15 @@ const UserNavbar = () => {
         logout: false,
     });
     const [userRole, setUserRole] = useState(null);
+    const [unreadConversationsCount, setUnreadConversationsCount] = useState(0);
 
     useEffect(() => {
         fetchUserRole();
+        fetchUnreadConversationsCount();
+        
+        // Refresh unread conversations count every 30 seconds
+        const interval = setInterval(fetchUnreadConversationsCount, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     const fetchUserRole = async () => {
@@ -212,6 +237,18 @@ const UserNavbar = () => {
             setUserRole(user?.role || null);
         } catch (error) {
             console.error('Error fetching user role:', error);
+        }
+    };
+
+    const fetchUnreadConversationsCount = async () => {
+        try {
+            const conversations = await messagesAPI.getConversations();
+            // Count conversations with unread messages
+            const unreadCount = conversations.filter(conv => conv.unreadCount > 0).length;
+            setUnreadConversationsCount(unreadCount);
+        } catch (error) {
+            console.error('Error fetching unread conversations count:', error);
+            // Don't show error to user for background refresh
         }
     };
 
@@ -297,6 +334,11 @@ const UserNavbar = () => {
                                 ...(isHovered.mail ? styles.iconHover : {})
                             }}
                         />
+                        {unreadConversationsCount > 0 && (
+                            <span style={styles.messageBadge}>
+                                {unreadConversationsCount > 99 ? '99+' : unreadConversationsCount}
+                            </span>
+                        )}
                         
                         <div style={{
                             ...styles.tooltip,
