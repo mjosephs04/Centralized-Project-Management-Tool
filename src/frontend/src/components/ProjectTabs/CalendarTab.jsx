@@ -30,6 +30,12 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
         });
     const events =[];
 
+    // Check if project is in a terminal/frozen status
+    const isProjectFrozen = () => {
+        const terminalStatuses = ['archived', 'cancelled'];
+        return terminalStatuses.includes(project.status);
+    };
+
     const handleCloseSnackbar = (event, reason) => {
         if (reason === 'clickaway') {
             return;
@@ -38,6 +44,9 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
 
     // Check if user has permission to create work orders
     const canCreateWorkOrders = () => {
+        // Can't create if project is frozen
+        if (isProjectFrozen()) return false;
+        // Must be project manager
         return userRole === 'project_manager';
     };
 
@@ -59,6 +68,13 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
 
     const handleCreateWorkOrder = async (e) => {
             e.preventDefault();
+            
+            // Double-check frozen status
+            if (isProjectFrozen()) {
+                showSnackbar('Cannot create work orders on archived or cancelled projects', 'error');
+                return;
+            }
+            
             try {
                 const workOrderData = {
                     name: formData.name,
@@ -281,6 +297,19 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
 
     return (
         <div style={styles.container}>
+            {/* Frozen Project Banner */}
+            {isProjectFrozen() && (
+                <div style={styles.frozenBanner}>
+                    <span style={styles.frozenIcon}>🔒</span>
+                    <div style={styles.frozenText}>
+                        <strong>Project {project.status === 'archived' ? 'Archived' : 'Cancelled'}</strong>
+                        <p style={styles.frozenSubtext}>
+                            Work orders are view-only. No new work orders can be created.
+                        </p>
+                    </div>
+                </div>
+            )}
+            
             <div style={styles.header}>
                 <h2 style={styles.title}>Project Calendar</h2>
                 {canCreateWorkOrders() && (
@@ -443,7 +472,6 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                                         placeholder="Work location"
                                     />
                                 </div>
-
                                 <div style={styles.formGroup}>
                                     <label style={styles.label}>Priority *</label>
                                     <select
@@ -611,7 +639,7 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                 </div>
             )}
 
-            {/* Date Details Modal */}
+            {/* Date Details Modal - UPDATED: Remove "Create Work Order" button if frozen */}
             {showDateDetails && selectedDate && (
                 <div style={styles.creatorOverlay} onClick={() => setShowDateDetails(false)}>
                     <div style={styles.creator} onClick={(e) => e.stopPropagation()}>
@@ -632,6 +660,7 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                             {dateEvents.length === 0 ? (
                                 <div style={styles.noEventsMessage}>
                                     <p style={styles.noEventsText}>No events scheduled for this date</p>
+                                    {/* Only show button if can create work orders (not frozen) */}
                                     {canCreateWorkOrders() && (
                                         <button 
                                             style={styles.createWorkOrderButtonSmall}
@@ -656,6 +685,7 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                                         <span style={styles.dateEventsCount}>
                                             {dateEvents.length} {dateEvents.length === 1 ? 'Event' : 'Events'}
                                         </span>
+                                        {/* Only show button if can create work orders (not frozen) */}
                                         {canCreateWorkOrders() && (
                                             <button 
                                                 style={styles.createWorkOrderButtonSmall}
@@ -750,6 +780,27 @@ const styles = {
     container: {
         maxWidth: '1800px',
         margin: '0 auto',
+    },
+    frozenBanner: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+        padding: '0.875rem 1.25rem',
+        backgroundColor: '#fef3c7',
+        border: '2px solid #f59e0b',
+        borderRadius: '8px',
+        marginBottom: '1.5rem',
+    },
+    frozenIcon: {
+        fontSize: '1.5rem',
+    },
+    frozenText: {
+        flex: 1,
+    },
+    frozenSubtext: {
+        margin: '0.25rem 0 0 0',
+        fontSize: '0.875rem',
+        color: '#92400e',
     },
     header: {
         display: 'flex',

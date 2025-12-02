@@ -12,7 +12,7 @@ import ProfilePage from "./pages/ProfilePage"
 import RouteProtector from "./components/RouteProtector";
 import LoginDistributionPage from "./pages/LoginDistribution";
 import RoleProtector from "./components/RoleProtector";
-import { SnackbarProvider } from "./contexts/SnackbarContext";
+import { SnackbarProvider } from ".//contexts/SnackbarContext";
 import { BrowserRouter } from "react-router-dom";
 
 const App = () => {

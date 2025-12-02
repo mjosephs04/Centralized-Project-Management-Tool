@@ -1,7 +1,8 @@
-import React, {useState, useEffect} from "react";
+import React, {useState, useEffect, useRef} from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import UserNavbar from "../components/UserNavbar";
 import { FaArrowLeft, FaEdit, FaSave, FaTimes } from "react-icons/fa";
+import html2pdf from 'html2pdf.js';
 import OverviewTab from '../components/ProjectTabs/OverviewTab'
 import { projectsAPI, authAPI } from "../services/api";
 import TeamTab from "../components/ProjectTabs/TeamTab";
@@ -12,6 +13,8 @@ import LogsTab from "../components/ProjectTabs/LogsTab";
 import SuppliesTab from "../components/ProjectTabs/SuppliesTab";
 import { useSnackbar } from "../contexts/SnackbarContext";
 import MetricsTab from "../components/ProjectTabs/MetricsTab";
+import ReportButton from '../components/Reports/ReportButton';
+import ProjectReport from '../components/Reports/ProjectReport';
 
 const styleSheet = document.styleSheets[0];
 if (!document.querySelector('#tabAnimation')) {
@@ -46,6 +49,7 @@ const SingleProjectPage = ({ projects }) => {
     const { projectId } = useParams();
     const navigate = useNavigate();
     const { showSnackbar } = useSnackbar();
+    const reportRef = useRef();
     const [activeTab, setActiveTab] = useState('overview');
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -55,6 +59,7 @@ const SingleProjectPage = ({ projects }) => {
     const [highlightedWorkOrderId, setHighlightedWorkOrderId] = useState(null);
     const [isEditingDescription, setIsEditingDescription] = useState(false);
     const [editedDescription, setEditedDescription] = useState('');
+    const [reportData, setReportData] = useState(null);
 
     useEffect(() => {
         fetchInitialData();
@@ -171,6 +176,54 @@ const SingleProjectPage = ({ projects }) => {
         }, 3000);
     };
 
+    // NEW: Handle report generation
+    const handleGenerateReport = async () => {
+        try {
+            showSnackbar('Fetching project data...', 'info');
+            
+            // Fetch report data from backend
+            const data = await projectsAPI.getReportData(projectId);
+            setReportData(data);
+            
+            // Wait for React to render the report
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Generate PDF
+            showSnackbar('Generating PDF...', 'info');
+            
+            const opt = {
+                margin: [0.5, 0.5, 0.5, 0.5],
+                filename: `Project_${project.name.replace(/[^a-z0-9]/gi, '_')}_Report_${new Date().toISOString().split('T')[0]}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { 
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    letterRendering: true
+                },
+                jsPDF: { 
+                    unit: 'in', 
+                    format: 'letter', 
+                    orientation: 'portrait' 
+                },
+                pagebreak: { 
+                    mode: ['avoid-all', 'css', 'legacy'] 
+                }
+            };
+            
+            await html2pdf().set(opt).from(reportRef.current).save();
+            
+            showSnackbar('Report downloaded successfully!', 'success');
+            
+            // Clear report data after generation
+            setTimeout(() => setReportData(null), 500);
+            
+        } catch (error) {
+            console.error('Error generating report:', error);
+            showSnackbar('Failed to generate report. Please try again.', 'error');
+        }
+    };
+
     if (loading) {
         return (
             <>
@@ -252,6 +305,14 @@ const SingleProjectPage = ({ projects }) => {
                         <h1 style={styles.projectTitle}>{project.name}</h1>
                         <p style={styles.location}>{project.location}</p>
                     </div>
+                    {/* NEW: Report Button - Only visible to PMs */}
+                    <div style={styles.headerRight}>
+                        <ReportButton 
+                            project={project}
+                            userRole={userRole}
+                            onGenerateReport={handleGenerateReport}
+                        />
+                    </div>
                 </div>
             </div>
             <div style={styles.contentContainer}>
@@ -320,6 +381,13 @@ const SingleProjectPage = ({ projects }) => {
                     {renderTabContent()}
                 </div>
             </div>
+
+            {/* NEW: Hidden Report Component - Only rendered during PDF generation */}
+            {reportData && (
+                <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+                    <ProjectReport ref={reportRef} reportData={reportData} />
+                </div>
+            )}
         </>
     )
 };
@@ -336,6 +404,7 @@ const styles = {
         justifyContent: 'space-between',
         marginBottom: '0.2rem',
         minHeight: '80px',
+        position: 'relative',
     },
     backButton: {
         background: '#ffffff',
@@ -354,7 +423,7 @@ const styles = {
         whiteSpace: 'nonwrap',
         position: 'absolute',
         zIndex: 1,
-        left: '2.5rem',
+        left: 0,
     },
     titleSection: {
         width: '100%',
@@ -363,6 +432,11 @@ const styles = {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    headerRight: {
+        position: 'absolute',
+        right: 0,
+        zIndex: 1,
     },
     spacer: {
         width: '200px',

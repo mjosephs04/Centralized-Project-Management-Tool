@@ -29,10 +29,17 @@ class WorkerType(enum.Enum):
 
 class ProjectStatus(enum.Enum):
     PLANNING = "planning"
-    IN_PROGRESS = "in_progress"
+    INITIATED = "initiated"
+    REGULATORY_SCOPING = "regulatory_scoping"
+    DESIGN_PROCUREMENT = "design_procurement"
+    CONSTRUCTION_PREP = "construction_prep"
+    IN_CONSTRUCTION = "in_construction"
+    COMMISSIONING = "commissioning"
+    ENERGIZED = "energized"
+    CLOSEOUT = "closeout"
     ON_HOLD = "on_hold"
-    COMPLETED = "completed"
     CANCELLED = "cancelled"
+    ARCHIVED = "archived"
 
 
 class WorkOrderStatus(enum.Enum):
@@ -95,6 +102,12 @@ class Project(db.Model):
     endDate = db.Column(db.Date, nullable=False)
     actualStartDate = db.Column(db.Date, nullable=True)
     actualEndDate = db.Column(db.Date, nullable=True)
+
+    completedAt = db.Column(db.DateTime, nullable=True)
+    archivedAt = db.Column(db.DateTime, nullable=True)
+    suppliesCost = db.Column(DECIMAL(15, 2), default=0.00, nullable=True)
+    equipmentCost = db.Column(DECIMAL(15, 2), default=0.00, nullable=True)
+    otherExpenses = db.Column(DECIMAL(15, 2), default=0.00, nullable=True)
     
     # Project status and priority
     status = db.Column(db.Enum(ProjectStatus), default=ProjectStatus.PLANNING, nullable=False)
@@ -159,6 +172,11 @@ class Project(db.Model):
             "priority": self.priority,
             "estimatedBudget": float(self.estimatedBudget) if self.estimatedBudget else None,
             "actualCost": float(self.actualCost) if self.actualCost else None,
+            "completedAt": self.completedAt.isoformat() if self.completedAt else None,
+            "archivedAt": self.archivedAt.isoformat() if self.archivedAt else None,
+            "suppliesCost": float(self.suppliesCost) if self.suppliesCost else 0.00,
+            "equipmentCost": float(self.equipmentCost) if self.equipmentCost else 0.00,
+            "otherExpenses": float(self.otherExpenses) if self.otherExpenses else 0.00,
             "projectManagerId": self.projectManagerId,
             "projectManager": self.projectManager.to_dict() if self.projectManager else None,
             "crewMembers": self.get_crew_members(),

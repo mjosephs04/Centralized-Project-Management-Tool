@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation } from 'react-router-dom';
 import { FaChevronLeft, FaChevronRight, FaPlus, FaFilter, FaSortAmountDown, FaSearch } from "react-icons/fa";
 import { Snackbar, Alert } from '@mui/material';
 import UserNavbar from "../components/UserNavbar";
 import ProjectCard from "../components/ProjectCard";
 import { projectsAPI, authAPI } from "../services/api";
+import { getActiveStatuses, getAllStatuses, STATUS_SORT_ORDER } from "../utils/projectStatusConfig";
 
 const ProjectsPage = () => {
     const [projects, setProjects] = useState([]);
+    const [currentUser, setCurrentUser] = useState(null);
     const [userRole, setUserRole] = useState(null);
     const [filteredProjects, setFilteredProjects] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -25,6 +27,7 @@ const ProjectsPage = () => {
         maxBudget: '',
         startDate: '',
         endDate: '',
+        status: '', // New status filter
     });
 
     const [sortBy, setSortBy] = useState('name');
@@ -66,6 +69,13 @@ const ProjectsPage = () => {
     const applyFilters = () => {
         let filtered = [...projects];
 
+        // ALWAYS filter out Cancelled and Archived unless explicitly selected
+        if (!filters.status || (filters.status !== 'cancelled' && filters.status !== 'archived')) {
+            filtered = filtered.filter(project => 
+                project.status !== 'cancelled' && project.status !== 'archived'
+            );
+        }
+
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
             filtered =filtered.filter(project => {
@@ -94,6 +104,11 @@ const ProjectsPage = () => {
             filtered = filtered.filter(project => new Date(project.endDate) <= new Date(filters.endDate));
         }
 
+        // Filter by status - use database status directly
+        if (filters.status) {
+            filtered = filtered.filter(project => project.status === filters.status);
+        }
+
         filtered = sortProjects(filtered);
         setFilteredProjects(filtered);
     };
@@ -120,6 +135,12 @@ const ProjectsPage = () => {
                 case 'location':
                     compareValue = (a.location || '').localeCompare(b.location || '');
                     break;
+                case 'status':
+                    // Use STATUS_SORT_ORDER from config
+                    const orderA = STATUS_SORT_ORDER[a.status] || 999;
+                    const orderB = STATUS_SORT_ORDER[b.status] || 999;
+                    compareValue = orderA - orderB;
+                    break;
                 default:
                     compareValue = 0;
             }
@@ -141,6 +162,7 @@ const ProjectsPage = () => {
             maxBudget: '',
             startDate: '',
             endDate: '',
+            status: '',
         });
     };
 
@@ -155,7 +177,7 @@ const ProjectsPage = () => {
     }
 
     const hasActiveFilters = () => {
-        return filters.minBudget || filters.maxBudget || filters.startDate || filters.endDate;
+        return filters.minBudget || filters.maxBudget || filters.startDate || filters.endDate || filters.status;
     };
 
     const hasActiveSort = () => {
@@ -201,6 +223,7 @@ const ProjectsPage = () => {
         try {
             setLoading(true);
             const me = await authAPI.me();
+            setCurrentUser(me);
             setUserRole(me?.role || null);
             const data = await projectsAPI.getProjects();
             setProjects(data);
@@ -285,6 +308,61 @@ const ProjectsPage = () => {
                             )}
                         </div>
 
+                        {/* Status Legend - Moved above project cards */}
+                        <div style={styles.legendContainer}>
+                            <span style={styles.legendTitle}>Status Key:</span>
+                            <div style={styles.legendItems}>
+                                <div style={styles.legendItem}>
+                                    <div style={{ ...styles.legendBar, backgroundColor: '#9333ea' }}></div>
+                                    <span style={styles.legendLabel}>Planning</span>
+                                </div>
+                                <div style={styles.legendItem}>
+                                    <div style={{ ...styles.legendBar, backgroundColor: '#3b82f6' }}></div>
+                                    <span style={styles.legendLabel}>Initiated</span>
+                                </div>
+                                <div style={styles.legendItem}>
+                                    <div style={{ ...styles.legendBar, backgroundColor: '#0891b2' }}></div>
+                                    <span style={styles.legendLabel}>Reg & Scoping</span>
+                                </div>
+                                <div style={styles.legendItem}>
+                                    <div style={{ ...styles.legendBar, backgroundColor: '#059669' }}></div>
+                                    <span style={styles.legendLabel}>Design & Proc</span>
+                                </div>
+                                <div style={styles.legendItem}>
+                                    <div style={{ ...styles.legendBar, backgroundColor: '#84cc16' }}></div>
+                                    <span style={styles.legendLabel}>Construction Prep</span>
+                                </div>
+                                <div style={styles.legendItem}>
+                                    <div style={{ ...styles.legendBar, backgroundColor: '#f59e0b' }}></div>
+                                    <span style={styles.legendLabel}>In Construction</span>
+                                </div>
+                                <div style={styles.legendItem}>
+                                    <div style={{ ...styles.legendBar, backgroundColor: '#f97316' }}></div>
+                                    <span style={styles.legendLabel}>Commissioning</span>
+                                </div>
+                                <div style={styles.legendItem}>
+                                    <div style={{ ...styles.legendBar, backgroundColor: '#10b981' }}></div>
+                                    <span style={styles.legendLabel}>Energized</span>
+                                </div>
+                                <div style={styles.legendItem}>
+                                    <div style={{ ...styles.legendBar, backgroundColor: '#06b6d4' }}></div>
+                                    <span style={styles.legendLabel}>Closeout</span>
+                                </div>
+                                <div style={styles.legendItem}>
+                                    <div style={{ ...styles.legendBar, backgroundColor: '#eab308' }}></div>
+                                    <span style={styles.legendLabel}>On Hold</span>
+                                </div>
+                                <div style={styles.legendItem}>
+                                    <div style={{ ...styles.legendBar, backgroundColor: '#ef4444' }}></div>
+                                    <span style={styles.legendLabel}>Cancelled</span>
+                                </div>
+                                <div style={styles.legendItem}>
+                                    <div style={{ ...styles.legendBar, backgroundColor: '#6b7280' }}></div>
+                                    <span style={styles.legendLabel}>Archived</span>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* Filter & Sort Section */}
                         {showFiltersSort && (
                             <div style={styles.filterSortWrapper}>
@@ -303,6 +381,7 @@ const ProjectsPage = () => {
                                                 style={styles.sortSelect}
                                             >
                                                 <option value="name">Name</option>
+                                                <option value="status">Status</option>
                                                 <option value="budget">Budget</option>
                                                 <option value="startDate">Start Date</option>
                                                 <option value="endDate">End Date</option>
@@ -333,6 +412,35 @@ const ProjectsPage = () => {
                                         Filter Projects
                                     </h3>
                                     <div style={styles.filtersGrid}>
+                                        <div style={styles.filterGroup}>
+                                            <label style={styles.filterLabel}>Project Status</label>
+                                            <select
+                                                value={filters.status}
+                                                onChange={(e) => handleFilterChange('status', e.target.value)}
+                                                style={{
+                                                    ...styles.filterInput,
+                                                    paddingRight: '2.5rem',
+                                                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%232373f3' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+                                                    backgroundRepeat: 'no-repeat',
+                                                    backgroundPosition: 'right 1rem center',
+                                                    backgroundSize: '12px',
+                                                }}
+                                            >
+                                                <option value="">All Active Statuses</option>
+                                                <option value="planning">Planning</option>
+                                                <option value="initiated">Initiated</option>
+                                                <option value="regulatory_scoping">Regulatory & Scoping</option>
+                                                <option value="design_procurement">Design & Procurement</option>
+                                                <option value="construction_prep">Construction Prep</option>
+                                                <option value="in_construction">In Construction</option>
+                                                <option value="commissioning">Commissioning</option>
+                                                <option value="energized">Energized</option>
+                                                <option value="closeout">Closeout</option>
+                                                <option value="on_hold">On Hold</option>
+                                                <option value="cancelled">Cancelled</option>
+                                                <option value="archived">Archived</option>
+                                            </select>
+                                        </div>
                                         <div style={styles.filterGroup}>
                                             <label style={styles.filterLabel}>Min Budget ($)</label>
                                             <input
@@ -417,7 +525,11 @@ const ProjectsPage = () => {
                                     >
                                         {filteredProjects.map((project) => (
                                             <div key={project.id} style={styles.projectCardWrapper}>
-                                                <ProjectCard project={project} />
+                                                <ProjectCard 
+                                                    project={project}
+                                                    userRole={userRole}
+                                                    currentUserId={currentUser?.id}
+                                                />
                                             </div>
                                         ))}
                                     </div>
@@ -432,7 +544,6 @@ const ProjectsPage = () => {
                                         </button>
                                     )}
                                 </div>
-
                                 <div style={styles.projectCount}>
                                     Showing {filteredProjects.length} of {projects.length} project{projects.length !== 1 ? 's' : ''}
                                 </div>
@@ -732,6 +843,10 @@ const styles = {
         outline: 'none',
         backgroundColor: 'white',
         boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+        cursor: 'pointer',
+        appearance: 'none',
+        WebkitAppearance: 'none',
+        MozAppearance: 'none',
     },
     filterButton: {
         display: 'flex',
@@ -818,6 +933,47 @@ const styles = {
         fontSize: '0.95rem',
         color: '#4a5568',
         fontWeight: '600',
+    },
+    legendContainer: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        gap: '0.75rem',
+        marginTop: '1rem',
+        marginBottom: '0.5rem',
+        padding: '1rem 1.5rem',
+        backgroundColor: '#f8f9fa',
+        borderRadius: '10px',
+        flexWrap: 'wrap',
+    },
+    legendTitle: {
+        fontSize: '0.875rem',
+        fontWeight: '600',
+        color: '#374151',
+        marginRight: '0.5rem',
+        whiteSpace: 'nowrap',
+    },
+    legendItems: {
+        display: 'flex',
+        gap: '0.875rem',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+    },
+    legendItem: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.375rem',
+    },
+    legendBar: {
+        width: '20px',
+        height: '4px',
+        borderRadius: '2px',
+    },
+    legendLabel: {
+        fontSize: '0.75rem',
+        color: '#6b7280',
+        fontWeight: '500',
+        whiteSpace: 'nowrap',
     },
 };
 

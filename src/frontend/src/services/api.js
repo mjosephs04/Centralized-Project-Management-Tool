@@ -1,7 +1,8 @@
 import axios from "axios";
 
 const LOCAL_API_URL = "http://localhost:8080/api";
-const PROD_API_URL = "https://centralized-project-management-tool-backend-710408068302.us-south1.run.app/api"
+const PROD_API_URL =
+  "https://centralized-project-management-tool-backend-710408068302.us-south1.run.app/api";
 
 const getAuthToken = () => {
   return localStorage.getItem("accessToken");
@@ -39,7 +40,7 @@ export const projectsAPI = {
   },
 
   createProject: async (projectData) => {
-    console.log("isProd: " + process.env.REACT_APP_ISPROD)
+    console.log("isProd: " + process.env.REACT_APP_ISPROD);
     const response = await apiClient.post("/projects/", projectData);
     return response.data.project;
   },
@@ -50,7 +51,10 @@ export const projectsAPI = {
   },
 
   workerUpdateProject: async (projectId, updates) => {
-    const response = await apiClient.patch(`/projects/${projectId}/worker-update`, updates);
+    const response = await apiClient.patch(
+      `/projects/${projectId}/worker-update`,
+      updates
+    );
     return response.data.project;
   },
 
@@ -65,56 +69,134 @@ export const projectsAPI = {
   },
 
   postSupplies: async (projectId, payload) => {
-    const response = await apiClient.post(`/projects/${projectId}/supplies`, payload);
+    const response = await apiClient.post(
+      `/projects/${projectId}/supplies`,
+      payload
+    );
     return response;
   },
-  getSupplies:  async (projectId) => {
+  getSupplies: async (projectId) => {
     const response = await apiClient.get(`/projects/${projectId}/supplies`);
     return response;
   },
   patchSupplies: async (projectId, supplyID, payload) => {
-    const response = await apiClient.patch(`/projects/${projectId}/supplies/${supplyID}/status`, payload);
+    const response = await apiClient.patch(
+      `/projects/${projectId}/supplies/${supplyID}/status`,
+      payload
+    );
     return response;
   },
-  deleteSupplies:  async (projectId, supplyID) => {
-    const response = await apiClient.delete(`/projects/${projectId}/supplies/${supplyID}`);
+  deleteSupplies: async (projectId, supplyID) => {
+    const response = await apiClient.delete(
+      `/projects/${projectId}/supplies/${supplyID}`
+    );
     return response;
   },
 
   inviteUser: async (projectId, invitationData) => {
-    const response = await apiClient.post(`/projects/${projectId}/invite`, invitationData);
+    const response = await apiClient.post(
+      `/projects/${projectId}/invite`,
+      invitationData
+    );
     return response.data;
   },
 
   validateInvitationToken: async (token) => {
-    const response = await apiClient.get(`/projects/invitations/validate/${token}`);
+    const response = await apiClient.get(
+      `/projects/invitations/validate/${token}`
+    );
+    return response.data;
+  },
+
+  // NEW: Get report data for PDF generation
+  getReportData: async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/report-data`);
     return response.data;
   },
 
   getMetrics: {
     all: async (projectId) => {
-      const response = await apiClient.get(`/projects/${projectId}/metrics/all`);
+      const response = await apiClient.get(
+        `/projects/${projectId}/metrics/all`
+      );
       return response.data;
     },
     schedule: async (projectId) => {
-      const response = await apiClient.get(`/projects/${projectId}/metrics/schedule`);
+      const response = await apiClient.get(
+        `/projects/${projectId}/metrics/schedule`
+      );
       return response.data;
     },
     cost: async (projectId) => {
-      const response = await apiClient.get(`/projects/${projectId}/metrics/cost`);
+      const response = await apiClient.get(
+        `/projects/${projectId}/metrics/cost`
+      );
       return response.data;
     },
     workforce: async (projectId) => {
-      const response = await apiClient.get(`/projects/${projectId}/metrics/workforce`);
+      const response = await apiClient.get(
+        `/projects/${projectId}/metrics/workforce`
+      );
       return response.data;
     },
     quality: async (projectId) => {
-      const response = await apiClient.get(`/projects/${projectId}/metrics/quality`);
+      const response = await apiClient.get(
+        `/projects/${projectId}/metrics/quality`
+      );
       return response.data;
     },
     health: async (projectId) => {
-      const response = await apiClient.get(`/projects/${projectId}/metrics/health`);
+      const response = await apiClient.get(
+        `/projects/${projectId}/metrics/health`
+      );
       return response.data;
+    },
+    // NEW: Lightweight summary for project cards - fetches only essential metrics
+    cardSummary: async (projectId) => {
+      try {
+        // Fetch in parallel for performance
+        const [health, workforce, allMetrics] = await Promise.allSettled([
+          apiClient.get(`/projects/${projectId}/metrics/health`),
+          apiClient.get(`/projects/${projectId}/metrics/workforce`),
+          apiClient.get(`/projects/${projectId}/metrics/all`),
+        ]);
+
+        // Extract progress from allMetrics if successful
+        const progress =
+          allMetrics.status === "fulfilled"
+            ? allMetrics.value.data.progress
+            : null;
+
+        return {
+          healthScore:
+            health.status === "fulfilled" ? health.value.data.healthScore : 0,
+          teamSize:
+            workforce.status === "fulfilled"
+              ? workforce.value.data.teamSize
+              : 0,
+          statusDistribution:
+            workforce.status === "fulfilled"
+              ? workforce.value.data.statusDistribution
+              : {},
+          SPI: progress?.SPI || 1,
+          CPI: progress?.CPI || 1,
+          workOrderCompletion: progress?.workOrderCompletion || 0,
+        };
+      } catch (error) {
+        console.error(
+          `Error fetching card summary for project ${projectId}:`,
+          error
+        );
+        // Return default values on error to prevent card from breaking
+        return {
+          healthScore: 0,
+          teamSize: 0,
+          statusDistribution: {},
+          SPI: 1,
+          CPI: 1,
+          workOrderCompletion: 0,
+        };
+      }
     },
   },
 };
@@ -136,7 +218,10 @@ export const workOrdersAPI = {
   },
 
   workerUpdate: async (workOrderId, updates) => {
-    const response = await apiClient.patch(`/workorders/${workOrderId}/worker-update`, updates);
+    const response = await apiClient.patch(
+      `/workorders/${workOrderId}/worker-update`,
+      updates
+    );
     return response.data.workorder;
   },
 
@@ -146,17 +231,26 @@ export const workOrdersAPI = {
   },
 
   assignWorker: async (workOrderId, userId) => {
-    const response = await apiClient.post(`/workorders/${workOrderId}/assign-worker`, { userId });
+    const response = await apiClient.post(
+      `/workorders/${workOrderId}/assign-worker`,
+      { userId }
+    );
     return response.data.workorder;
   },
 
   removeWorker: async (workOrderId, userId) => {
-    const response = await apiClient.post(`/workorders/${workOrderId}/remove-worker`, { userId });
+    const response = await apiClient.post(
+      `/workorders/${workOrderId}/remove-worker`,
+      { userId }
+    );
     return response.data.workorder;
   },
 
   assignWorkers: async (workOrderId, workerIds) => {
-    const response = await apiClient.put(`/workorders/${workOrderId}/assign-workers`, { workerIds });
+    const response = await apiClient.put(
+      `/workorders/${workOrderId}/assign-workers`,
+      { workerIds }
+    );
     return response.data.workorder;
   },
 };
@@ -174,25 +268,30 @@ export const authAPI = {
     return response.data.user;
   },
   register: async (payload) => {
-    const response = await apiClient.post("/auth/register", payload)
+    const response = await apiClient.post("/auth/register", payload);
     return response.status;
   },
   login: async (payload) => {
-    const response = await apiClient.post("/auth/login", payload)
+    const response = await apiClient.post("/auth/login", payload);
     return response;
   },
   forgotPassword: async (payload) => {
-    const response = await apiClient.post("/auth/forgot-password", payload)
+    const response = await apiClient.post("/auth/forgot-password", payload);
     return response;
   },
-  
+
   validateInvitationToken: async (token) => {
-    const response = await apiClient.get(`/projects/invitations/validate/${token}`);
+    const response = await apiClient.get(
+      `/projects/invitations/validate/${token}`
+    );
     return response.data;
   },
-  
+
   registerWithInvitation: async (payload) => {
-    const response = await apiClient.post("/auth/register-with-invitation", payload);
+    const response = await apiClient.post(
+      "/auth/register-with-invitation",
+      payload
+    );
     return response.data;
   },
 
@@ -203,5 +302,5 @@ export const authAPI = {
   updateProfile: async (updates) => {
     const response = await apiClient.put("/auth/me", updates);
     return response.data.user;
-  }
+  },
 };

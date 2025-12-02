@@ -22,6 +22,23 @@ from .email_service import create_project_invitation, send_invitation_email, val
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/api/projects")
 
+def is_project_frozen(project):
+    terminal_statuses = [ProjectStatus.ARCHIVED, ProjectStatus.CANCELLED]
+    return project.status in terminal_statuses
+
+def can_edit_frozen_project(user, data):
+    if user.role != UserRole.PROJECT_MANAGER:
+        return False, "Only project managers can modify archived or cancelled projects"
+    
+    allowed_fields = {'status'}
+    provided_fields = set(data.keys())
+    
+    if not provided_fields.issubset(allowed_fields):
+        disallowed = provided_fields - allowed_fields
+        return False, f"Cannot modify {', '.join(disallowed)} on archived/cancelled projects."
+    
+    return True, None
+
 
 def create_audit_log(entity_type: AuditEntityType, entity_id: int, user_id: int, field: str, old_value: str, new_value: str, session_id: str = None, project_id: int = None):
     """Helper function to create an audit log entry"""
@@ -111,7 +128,8 @@ def create_project():
         try:
             status = ProjectStatus(payload["status"].lower())
         except ValueError:
-            return jsonify({"error": "Invalid status. Must be planning, in_progress, on_hold, completed, or cancelled"}), 400
+            valid_statuses = [s.value for s in ProjectStatus]
+            return jsonify({"error": f"Invalid status. Must be one of: {', '.join(valid_statuses)}"}), 400
     
     # Validate priority if provided
     priority = payload.get("priority", "medium")
@@ -252,6 +270,12 @@ def update_project(project_id):
         "actualEndDate": project.actualEndDate.isoformat() if project.actualEndDate else None,
         "crewMembers": json.dumps(project.get_crew_members()) if project.get_crew_members() else "[]",
     }
+
+    # Check if project is frozen
+    if is_project_frozen(project):
+        can_edit, error_message = can_edit_frozen_project(user, payload)
+        if not can_edit:
+            return jsonify({"error": error_message}), 403
     
     # Update basic fields with audit logging
     if "name" in payload and payload["name"] != original_values["name"]:
@@ -273,14 +297,57 @@ def update_project(project_id):
             create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "priority", original_values["priority"], payload["priority"], session_id, project_id)
             project.priority = payload["priority"]
     
+    # NEW: Set timestamps when status changes
     if "status" in payload:
         try:
+            old_status = project.status  # Store old status
             new_status = ProjectStatus(payload["status"].lower())
             if new_status.value != original_values["status"]:
                 create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "status", original_values["status"], new_status.value, session_id, project_id)
                 project.status = new_status
+                
+                # NEW: Set completedAt when status changes to closeout
+                if new_status == ProjectStatus.CLOSEOUT and old_status != ProjectStatus.CLOSEOUT:
+                    if not project.completedAt:
+                        project.completedAt = datetime.utcnow()
+                
+                # NEW: Set archivedAt when status changes to archived
+                if new_status == ProjectStatus.ARCHIVED and old_status != ProjectStatus.ARCHIVED:
+                    if not project.archivedAt:
+                        project.archivedAt = datetime.utcnow()
         except ValueError:
-            return jsonify({"error": "Invalid status. Must be planning, in_progress, on_hold, completed, or cancelled"}), 400
+            valid_statuses = [s.value for s in ProjectStatus]
+            return jsonify({"error": f"Invalid status. Must be one of: {', '.join(valid_statuses)}"}), 400
+
+
+    # NEW: Handle new cost fields (add this after the actualCost section, around line 420)
+    if "suppliesCost" in payload:
+        try:
+            cost = float(payload["suppliesCost"]) if payload["suppliesCost"] else 0.00
+            if cost < 0:
+                return jsonify({"error": "Supplies cost must be positive"}), 400
+            project.suppliesCost = cost
+        except ValueError:
+            return jsonify({"error": "Invalid supplies cost format"}), 400
+
+    if "equipmentCost" in payload:
+        try:
+            cost = float(payload["equipmentCost"]) if payload["equipmentCost"] else 0.00
+            if cost < 0:
+                return jsonify({"error": "Equipment cost must be positive"}), 400
+            project.equipmentCost = cost
+        except ValueError:
+            return jsonify({"error": "Invalid equipment cost format"}), 400
+
+    if "otherExpenses" in payload:
+        try:
+            cost = float(payload["otherExpenses"]) if payload["otherExpenses"] else 0.00
+            if cost < 0:
+                return jsonify({"error": "Other expenses must be positive"}), 400
+            project.otherExpenses = cost
+        except ValueError:
+            return jsonify({"error": "Invalid other expenses format"}), 400
+
     
     # Update crew members if provided
     if "crewMembers" in payload:
@@ -432,6 +499,10 @@ def worker_update_project(project_id):
         "actualStartDate": project.actualStartDate.isoformat() if project.actualStartDate else None,
         "actualEndDate": project.actualEndDate.isoformat() if project.actualEndDate else None,
     }
+
+    # Workers cannot edit frozen projects at all
+    if is_project_frozen(project):
+        return jsonify({"error": "This project is archived or cancelled and cannot be edited"}), 403
     
     # Update fields with audit logging (limited fields for workers)
     if "description" in payload and payload["description"] != original_values["description"]:
@@ -473,7 +544,8 @@ def worker_update_project(project_id):
                 create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "status", original_values["status"], new_status.value, session_id, project_id)
                 project.status = new_status
         except ValueError:
-            return jsonify({"error": "Invalid status. Must be planning, in_progress, on_hold, completed, or cancelled"}), 400
+            valid_statuses = [s.value for s in ProjectStatus]
+            return jsonify({"error": f"Invalid status. Must be one of: {', '.join(valid_statuses)}"}), 400
     
     if "actualCost" in payload:
         if payload["actualCost"]:
@@ -1381,3 +1453,96 @@ def get_all_metrics(project_id: int):
         print(f"Error in get_all_metrics: {str(e)}")
         print(traceback.format_exc())
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+    
+@projects_bp.get("/<int:project_id>/report-data")
+@jwt_required()
+def get_project_report_data(project_id: int):
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        # Get project
+        project = Project.query.filter_by(id=project_id, isActive=True).first()
+        if not project:
+            return jsonify({"error": "Project not found"}), 404
+        
+        # Check access
+        has_access = False
+        if user.role == UserRole.ADMIN:
+            has_access = True
+        elif user.role == UserRole.PROJECT_MANAGER:
+            has_access = True
+        elif user.role == UserRole.WORKER:
+            crew_members = project.get_crew_members()
+            if int(user_id) in crew_members:
+                has_access = True
+        
+        if not has_access:
+            return jsonify({"error": "Access denied"}), 403
+        
+        # Get all work orders for this project
+        work_orders = WorkOrder.query.filter_by(projectId=project_id, isActive=True).all()
+        
+        # Calculate work order statistics
+        wo_stats = {
+            'total': len(work_orders),
+            'pending': sum(1 for wo in work_orders if wo.status == WorkOrderStatus.PENDING),
+            'in_progress': sum(1 for wo in work_orders if wo.status == WorkOrderStatus.IN_PROGRESS),
+            'on_hold': sum(1 for wo in work_orders if wo.status == WorkOrderStatus.ON_HOLD),
+            'completed': sum(1 for wo in work_orders if wo.status == WorkOrderStatus.COMPLETED),
+            'cancelled': sum(1 for wo in work_orders if wo.status == WorkOrderStatus.CANCELLED),
+        }
+        
+        # Calculate completion rate (excluding cancelled)
+        completable = wo_stats['total'] - wo_stats['cancelled']
+        wo_stats['completion_rate'] = (wo_stats['completed'] / completable * 100) if completable > 0 else 0
+        
+        # Calculate cost totals
+        wo_estimated_total = sum(float(wo.estimatedBudget or 0) for wo in work_orders)
+        wo_actual_total = sum(float(wo.actualCost or 0) for wo in work_orders)
+        
+        supplies_total = float(project.suppliesCost or 0) + float(project.equipmentCost or 0) + float(project.otherExpenses or 0)
+        total_actual = wo_actual_total + supplies_total
+        
+        # Calculate timeline metrics
+        timeline_metrics = {}
+        if project.startDate and project.endDate:
+            scheduled_duration = (project.endDate - project.startDate).days
+            timeline_metrics['scheduled_duration_days'] = scheduled_duration
+            
+            completion_date = project.completedAt or project.archivedAt
+            if completion_date:
+                actual_duration = (completion_date.date() - project.startDate).days
+                timeline_metrics['actual_duration_days'] = actual_duration
+                timeline_metrics['variance_days'] = actual_duration - scheduled_duration
+                timeline_metrics['status'] = 'on_time' if actual_duration <= scheduled_duration else 'delayed'
+            else:
+                timeline_metrics['status'] = 'in_progress'
+        
+        # Build response
+        return jsonify({
+            'project': project.to_dict(),
+            'workOrders': [wo.to_dict() for wo in work_orders],
+            'metrics': {
+                'workOrders': wo_stats,
+                'costs': {
+                    'allocatedBudget': float(project.estimatedBudget) if project.estimatedBudget else 0,
+                    'workOrdersEstimated': wo_estimated_total,
+                    'workOrdersActual': wo_actual_total,
+                    'suppliesCost': float(project.suppliesCost or 0),
+                    'equipmentCost': float(project.equipmentCost or 0),
+                    'otherExpenses': float(project.otherExpenses or 0),
+                    'totalActual': total_actual,
+                    'variance': float(project.estimatedBudget or 0) - total_actual,
+                    'utilizationRate': (total_actual / float(project.estimatedBudget) * 100) if project.estimatedBudget else 0
+                },
+                'timeline': timeline_metrics
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error in get_project_report_data: {str(e)}")
+        return jsonify({"error": f"Failed to generate report data: {str(e)}"}), 500

@@ -38,6 +38,12 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
     selectedWorkers: [],
   });
 
+  // Check if project is in a terminal/frozen status
+  const isProjectFrozen = () => {
+    const terminalStatuses = ['archived', 'cancelled'];
+    return terminalStatuses.includes(project.status);
+  };
+
   useEffect(() => {
     fetchWorkOrders();
     fetchWorkers();
@@ -83,6 +89,12 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
   };
 
   const openCreate = () => {
+    // Check if project is frozen
+    if (isProjectFrozen()) {
+      showSnackbar('Cannot create work orders on archived or cancelled projects', 'error');
+      return;
+    }
+    
     setFormData({
       name: "",
       description: "",
@@ -104,6 +116,12 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
   };
 
   const openUpdate = (wo) => {
+    // Check if project is frozen
+    if (isProjectFrozen()) {
+      showSnackbar('Cannot update work orders on archived or cancelled projects', 'error');
+      return;
+    }
+    
     setSelectedWorkOrder(wo);
     setFormData({
       name: wo.name || "",
@@ -134,6 +152,13 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
 
   const createWorkOrder = async (ev) => {
     ev.preventDefault();
+    
+    // Double-check frozen status
+    if (isProjectFrozen()) {
+      showSnackbar('Cannot create work orders on archived or cancelled projects', 'error');
+      return;
+    }
+    
     if (!validateForm()) return;
     try {
       const payload = {
@@ -182,6 +207,12 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
   };
 
   const updateWorkOrder = async () => {
+    // Double-check frozen status
+    if (isProjectFrozen()) {
+      showSnackbar('Cannot update work orders on archived or cancelled projects', 'error');
+      return;
+    }
+    
     if (!validateForm()) return;
     try {
       // PMs: can update est. budget (not actual cost)
@@ -252,6 +283,12 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
   };
 
   const deleteWorkOrder = async (woId) => {
+    // Check if project is frozen
+    if (isProjectFrozen()) {
+      showSnackbar('Cannot delete work orders on archived or cancelled projects', 'error');
+      return;
+    }
+    
     if (!window.confirm("Delete this work order?")) {
       showSnackbar('Work order deletion cancelled', 'warning');
       return;
@@ -293,9 +330,27 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
 
   return (
     <div style={styles.container}>
+      {/* Frozen Project Banner */}
+      {isProjectFrozen() && (
+        <div style={styles.frozenBanner}>
+          <span style={styles.frozenIcon}>🔒</span>
+          <div style={styles.frozenText}>
+            <strong>Project {project.status === 'archived' ? 'Archived' : 'Cancelled'}</strong>
+            <p style={styles.frozenSubtext}>
+              Work orders are view-only. No work orders can be created, updated, or deleted.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div style={styles.header}>
         <h2 style={styles.title}>Work Orders</h2>
-        <button style={styles.createButton} onClick={openCreate}><FaPlus /> Create Work Order</button>
+        {/* Only show Create button if project is not frozen */}
+        {!isProjectFrozen() && (
+          <button style={styles.createButton} onClick={openCreate}>
+            <FaPlus /> Create Work Order
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -369,6 +424,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
                               <td style={styles.td}>{wo.actualCost != null ? `$${wo.actualCost.toLocaleString()}` : "-"}</td>
                               <td style={styles.td}>
                                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                                  {/* View button always visible */}
                                   <button
                                     style={{ ...styles.cardBtn, background: "#5692bc", color: 'white' }}
                                     onClick={() => openView(wo)}
@@ -376,20 +432,25 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
                                   >
                                     View
                                   </button>
-                                  <button
-                                    style={{...styles.cardBtn, background: '#b356bc', color: 'white'}}
-                                    onClick={() => openUpdate(wo)}
-                                    title="Update"
-                                  >
-                                    Update
-                                  </button>
-                                  <button
-                                    style={{ ...styles.cardBtn, background: "#FF6961", color: "#fff" }}
-                                    onClick={() => deleteWorkOrder(wo.id)}
-                                    title="Delete"
-                                  >
-                                    Delete
-                                  </button>
+                                  {/* Update and Delete buttons only shown if project is not frozen */}
+                                  {!isProjectFrozen() && (
+                                    <>
+                                      <button
+                                        style={{...styles.cardBtn, background: '#b356bc', color: 'white'}}
+                                        onClick={() => openUpdate(wo)}
+                                        title="Update"
+                                      >
+                                        Update
+                                      </button>
+                                      <button
+                                        style={{ ...styles.cardBtn, background: "#FF6961", color: "#fff" }}
+                                        onClick={() => deleteWorkOrder(wo.id)}
+                                        title="Delete"
+                                      >
+                                        Delete
+                                      </button>
+                                    </>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -761,6 +822,27 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate }) => {
 
 const styles = {
   container: { maxWidth: "1400px", margin: "0 auto" },
+  frozenBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    padding: '0.875rem 1.25rem',
+    backgroundColor: '#fef3c7',
+    border: '2px solid #f59e0b',
+    borderRadius: '8px',
+    marginBottom: '1.5rem',
+  },
+  frozenIcon: {
+    fontSize: '1.5rem',
+  },
+  frozenText: {
+    flex: 1,
+  },
+  frozenSubtext: {
+    margin: '0.25rem 0 0 0',
+    fontSize: '0.875rem',
+    color: '#92400e',
+  },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" },
   title: { fontSize: "1.8rem", fontWeight: "600", color: "#2c3e50", margin: 0 },
   createButton: {

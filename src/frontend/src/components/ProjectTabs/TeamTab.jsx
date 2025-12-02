@@ -8,6 +8,12 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
   const { showSnackbar } = useSnackbar();
   const [isEditing, setIsEditing] = useState(false);
 
+  // Check if project is in a terminal/frozen status
+  const isProjectFrozen = () => {
+    const terminalStatuses = ['archived', 'cancelled'];
+    return terminalStatuses.includes(project.status);
+  };
+
   // Normalize incoming crew members to objects { id?, name? } in local state
   // project.crewMembers might be an array of strings or IDs; we'll store objects internally.
   const [crew, setCrew] = useState([]);
@@ -210,6 +216,12 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
   const handleInviteUser = async () => {
     if (!inviteEmail.trim()) return;
     
+    // Check if project is frozen
+    if (isProjectFrozen()) {
+      showSnackbar('Cannot invite users to archived or cancelled projects', 'error');
+      return;
+    }
+    
     // Validate contractor expiration date if needed
     if (inviteRole === "worker" && inviteWorkerType === "contractor" && !inviteContractorExpiration.trim()) {
       setInviteMessage("❌ Contractor expiration date is required for contractor invitations");
@@ -254,22 +266,37 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
     }
   };
 
-  const canEdit = userRole !== "worker"; // Only PM/Admin edit; adjust as needed
+  // Can edit only if: (1) user is PM/Admin AND (2) project is not frozen
+  const canEdit = userRole !== "worker" && !isProjectFrozen();
 
   return (
     <div style={styles.container}>
+      {/* Frozen Project Banner */}
+      {isProjectFrozen() && (
+        <div style={styles.frozenBanner}>
+          <span style={styles.frozenIcon}>🔒</span>
+          <div style={styles.frozenText}>
+            <strong>Project {project.status === 'archived' ? 'Archived' : 'Cancelled'}</strong>
+            <p style={styles.frozenSubtext}>
+              Team roster is view-only. No members can be added or removed.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div style={styles.header}>
         <h2 style={styles.title}>Team Members</h2>
 
         {!isEditing ? (
-          <button
-            style={{ ...styles.editButton, ...(canEdit ? {} : styles.btnDisabled) }}
-            onClick={() => canEdit && setIsEditing(true)}
-            disabled={!canEdit}
-            title={canEdit ? "Edit Team" : "Workers cannot edit team"}
-          >
-            <FaEdit /> Edit Team
-          </button>
+          canEdit && (
+            <button
+              style={styles.editButton}
+              onClick={() => setIsEditing(true)}
+              title="Edit Team"
+            >
+              <FaEdit /> Edit Team
+            </button>
+          )
         ) : (
           <div style={styles.editActions}>
             <button style={styles.saveButton} onClick={handleSave}>
@@ -282,7 +309,8 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
         )}
       </div>
 
-      {isEditing && (
+      {/* Add Member Section - Only shown when editing and not frozen */}
+      {isEditing && !isProjectFrozen() && (
         <div style={styles.addMemberSection}>
           <div style={styles.unifiedSearchContainer}>
             <div style={styles.searchInputContainer}>
@@ -381,8 +409,8 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
         </div>
       )}
 
-      {/* Invite User Section - Only for Project Managers/Admins */}
-      {canEdit && (
+      {/* Invite User Section - Only for Project Managers/Admins on active projects */}
+      {canEdit && !isProjectFrozen() && (
         <div style={styles.inviteSection}>
           <h3 style={styles.inviteTitle}>Invite New User</h3>
           <p style={styles.inviteDescription}>
@@ -476,7 +504,7 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
         <div style={styles.grid}>
           {crewResolved.map((member, index) => (
             <div key={index} style={styles.card}>
-              {isEditing && (
+              {isEditing && !isProjectFrozen() && (
                 <button
                   style={styles.removeButton}
                   onClick={() => handleRemoveMember(index)}
@@ -525,6 +553,27 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
 
 const styles = {
     container: { maxWidth: "1400px", margin: "0 auto" },
+    frozenBanner: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+        padding: '0.875rem 1.25rem',
+        backgroundColor: '#fef3c7',
+        border: '2px solid #f59e0b',
+        borderRadius: '8px',
+        marginBottom: '1.5rem',
+    },
+    frozenIcon: {
+        fontSize: '1.5rem',
+    },
+    frozenText: {
+        flex: 1,
+    },
+    frozenSubtext: {
+        margin: '0.25rem 0 0 0',
+        fontSize: '0.875rem',
+        color: '#92400e',
+    },
     header: {
         display: "flex",
         justifyContent: "space-between",

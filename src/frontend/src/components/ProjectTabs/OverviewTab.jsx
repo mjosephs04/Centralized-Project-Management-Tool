@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { FaEdit, FaSave, FaTimes, FaMapMarkerAlt, FaCalendarAlt, FaDollarSign, FaFlag, FaChartLine, FaTrashAlt} from "react-icons/fa";
 import { projectsAPI } from "../../services/api";
 import { useSnackbar } from '../../contexts/SnackbarContext';
+import { PROJECT_STATUS_CONFIG } from "../../utils/projectStatusConfig";
 
 const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
     const { showSnackbar } = useSnackbar();
@@ -9,6 +10,24 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [password, setPassword] = useState('');
     const [deleteError, setDeleteError] = useState('');
+
+    // Check if project is in a terminal/frozen status
+    const isProjectFrozen = () => {
+        const terminalStatuses = ['archived', 'cancelled'];
+        return terminalStatuses.includes(project.status);
+    };
+
+    // Check if user can edit status (only PMs can change status of frozen projects)
+    const canEditStatus = () => {
+        const isManager = userRole === 'project_manager' || userRole === 'manager';
+        return isManager; // PMs can always edit status, even on frozen projects
+    };
+
+    // Check if user can edit other fields (frozen projects can't be edited except status)
+    const canEditFields = () => {
+        if (isProjectFrozen()) return false; // No one can edit frozen project fields
+        return true; // Normal projects are editable
+    };
 
     // Helper functions defined before use
     const parseLocation = (locationString) => {
@@ -48,34 +67,52 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
         return priority.charAt(0).toUpperCase() + priority.slice(1);
     };
 
+    // Get status display config
+    const getStatusDisplayConfig = (statusValue) => {
+        const config = Object.values(PROJECT_STATUS_CONFIG).find(s => s.value === statusValue);
+        return config || PROJECT_STATUS_CONFIG.PLANNING;
+    };
+
     const [editedData, setEditedData] = useState({
         ...parseLocation(project.location),
         actualStartDate: project.actualStartDate || '',
         endDate: project.endDate || '',
         priority: capitalizePriority(project.priority),
+        status: project.status || 'planning',
         estimatedBudget: project.estimatedBudget || ''
     });
 
     const handleSave = async () => {
         try {
             if (onUpdate) {
-                const location = formatLocation(
-                    editedData.address,
-                    editedData.address2,
-                    editedData.city,
-                    editedData.state,
-                    editedData.zipCode
-                );
-    
-                const processedData = {
-                    location: location,
-                    priority: editedData.priority.toLowerCase(),
-                    estimatedBudget: editedData.estimatedBudget ? parseFloat(editedData.estimatedBudget) : null,
-                    actualStartDate: editedData.actualStartDate || null,
-                    endDate: editedData.endDate || null
-                };
-                await onUpdate(processedData);
-                showSnackbar('Project details updated successfully!', 'success');
+                // If project is frozen, only save status change
+                if (isProjectFrozen()) {
+                    const processedData = {
+                        status: editedData.status,
+                    };
+                    await onUpdate(processedData);
+                    showSnackbar('Project status updated successfully!', 'success');
+                } else {
+                    // Normal save - all fields
+                    const location = formatLocation(
+                        editedData.address,
+                        editedData.address2,
+                        editedData.city,
+                        editedData.state,
+                        editedData.zipCode
+                    );
+        
+                    const processedData = {
+                        location: location,
+                        priority: editedData.priority.toLowerCase(),
+                        status: editedData.status,
+                        estimatedBudget: editedData.estimatedBudget ? parseFloat(editedData.estimatedBudget) : null,
+                        actualStartDate: editedData.actualStartDate || null,
+                        endDate: editedData.endDate || null
+                    };
+                    await onUpdate(processedData);
+                    showSnackbar('Project details updated successfully!', 'success');
+                }
             }
             setIsEditing(false);
         } catch (error) {
@@ -89,6 +126,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
             actualStartDate: project.actualStartDate || '',
             endDate: project.endDate || '',
             priority: capitalizePriority(project.priority),
+            status: project.status || 'planning',
             estimatedBudget: project.estimatedBudget || ''
         });
         setIsEditing(false);
@@ -130,19 +168,6 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
         }
     }
 
-    const getStatusColor = (status) => {
-        switch(status?.toLowerCase()) {
-            case 'behind':
-                return { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5'};
-            case 'on track':
-                return { bg: '#d1fae5', text: '#065f46', border: '#6ee7b7'};
-            case 'ahead':
-                return { bg: '#d1fae5', text: '#047857', border: '#34d399'};
-            default:
-                return { bg: '#e5e7eb', text: '#374151', border: '#d1d5db'};
-        }
-    };
-
     const getPriorityStyle = (priority) => {
         switch(priority?.toLowerCase()) {
             case 'high':
@@ -156,22 +181,47 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
         }
     };
 
-    const statusColors = getStatusColor(project.status);
+    const currentStatusConfig = getStatusDisplayConfig(project.status);
     const priorityStyle = getPriorityStyle(isEditing ? editedData.priority : project.priority);
 
     return (
         <div style={styles.container}>
             <div style={styles.header}>
                 <h2 style={styles.title}>Project Information</h2>
-                {!isEditing ?(
-                    <button style={styles.editButton} onClick={() => setIsEditing(true)}>
-                        <FaEdit /> Edit Details
-                    </button>
+                {isProjectFrozen() && !isEditing && (
+                    <div style={styles.frozenBanner}>
+                        <span style={styles.frozenIcon}>🔒</span>
+                        <div style={styles.frozenText}>
+                            <strong>Project {project.status === 'archived' ? 'Archived' : 'Cancelled'}</strong>
+                            <p style={styles.frozenSubtext}>
+                                {canEditStatus() 
+                                    ? 'Only status can be changed to reactivate this project' 
+                                    : 'This project is locked and cannot be edited'}
+                            </p>
+                        </div>
+                    </div>
+                )}
+                {!isEditing ? (
+                    canEditStatus() ? (
+                        <button style={styles.editButton} onClick={() => setIsEditing(true)}>
+                            <FaEdit /> {isProjectFrozen() ? 'Change Status' : 'Edit Details'}
+                        </button>
+                    ) : isProjectFrozen() ? (
+                        <button style={styles.disabledButton} disabled>
+                            <FaEdit /> Project Locked
+                        </button>
+                    ) : (
+                        <button style={styles.editButton} onClick={() => setIsEditing(true)}>
+                            <FaEdit /> Edit Details
+                        </button>
+                    )
                 ) : (
                     <div style={styles.editActions}>
-                        <button style={styles.deleteButton} onClick={handleDeleteClick}>
-                            <FaTrashAlt /> Delete Project
-                        </button>
+                        {!isProjectFrozen() && (
+                            <button style={styles.deleteButton} onClick={handleDeleteClick}>
+                                <FaTrashAlt /> Delete Project
+                            </button>
+                        )}
                         <button style={styles.saveButton} onClick={handleSave}>
                             <FaSave /> Save
                         </button>
@@ -184,22 +234,61 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
             {isEditing ? (
                 // Edit Mode - Clean Form Layout
                 <div style={styles.editForm}>
-                    {/* Location Section */}
+                    {/* Status Section - NEW */}
                     <div style={styles.formSection}>
                         <h3 style={styles.sectionTitle}>
-                            <FaMapMarkerAlt style={styles.sectionIcon} />
-                            Location
+                            <FaChartLine style={styles.sectionIcon} />
+                            Project Status
                         </h3>
                         <div style={styles.formGrid}>
                             <div style={{ gridColumn: '1 / -1' }}>
-                                <label style={styles.inputLabel}>Street Address *</label>
-                                <input
-                                    type='text'
-                                    value={editedData.address}
-                                    onChange={(e) => setEditedData({...editedData, address: e.target.value})}
-                                    style={styles.formInput}
-                                    placeholder="123 Main Street"
-                                />
+                                <label style={styles.inputLabel}>Current Status *</label>
+                                <select
+                                    value={editedData.status}
+                                    onChange={(e) => setEditedData({...editedData, status: e.target.value})}
+                                    style={{
+                                        ...styles.formSelect,
+                                        color: getStatusDisplayConfig(editedData.status).color,
+                                        fontWeight: '600'
+                                    }}
+                                >
+                                    <option value="planning">Planning</option>
+                                    <option value="initiated">Initiated</option>
+                                    <option value="regulatory_scoping">Regulatory & Scoping</option>
+                                    <option value="design_procurement">Design & Procurement</option>
+                                    <option value="construction_prep">Construction Prep</option>
+                                    <option value="in_construction">In Construction</option>
+                                    <option value="commissioning">Commissioning</option>
+                                    <option value="energized">Energized</option>
+                                    <option value="closeout">Closeout</option>
+                                    <option value="on_hold">On Hold</option>
+                                    <option value="cancelled">Cancelled</option>
+                                    <option value="archived">Archived</option>
+                                </select>
+                                <p style={styles.helperText}>
+                                    {getStatusDisplayConfig(editedData.status).description}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Location Section */}
+                    {!isProjectFrozen() && (
+                        <div style={styles.formSection}>
+                            <h3 style={styles.sectionTitle}>
+                                <FaMapMarkerAlt style={styles.sectionIcon} />
+                                Location
+                            </h3>
+                            <div style={styles.formGrid}>
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <label style={styles.inputLabel}>Street Address *</label>
+                                    <input
+                                        type='text'
+                                        value={editedData.address}
+                                        onChange={(e) => setEditedData({...editedData, address: e.target.value})}
+                                        style={styles.formInput}
+                                        placeholder="123 Main Street"
+                                    />
                             </div>
                             <div style={{ gridColumn: '1 / -1' }}>
                                 <label style={styles.inputLabel}>Unit/Suite/Apt (Optional)</label>
@@ -243,8 +332,10 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                             </div>
                         </div>
                     </div>
+                    )}
 
                     {/* Dates Section */}
+                    {!isProjectFrozen() && (
                     <div style={styles.formSection}>
                         <h3 style={styles.sectionTitle}>
                             <FaCalendarAlt style={styles.sectionIcon} />
@@ -271,8 +362,10 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                             </div>
                         </div>
                     </div>
+                    )}
 
                     {/* Budget & Priority Section */}
+                    {!isProjectFrozen() && (
                     <div style={styles.formSection}>
                         <h3 style={styles.sectionTitle}>
                             <FaDollarSign style={styles.sectionIcon} />
@@ -305,6 +398,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                             </div>
                         </div>
                     </div>
+                    )}
                 </div>
             ) : (
                 // View Mode - Original Card Grid
@@ -410,11 +504,11 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                         </div>
                         <div style={{
                             ...styles.statusBadge,
-                            background: statusColors.bg,
-                            color: statusColors.text,
-                            border: `2px solid ${statusColors.border}`
+                            background: currentStatusConfig.bgColor,
+                            color: currentStatusConfig.color,
+                            border: `2px solid ${currentStatusConfig.color}`
                         }}>
-                            {project.status || 'Not Set'}
+                            {currentStatusConfig.label}
                         </div>
                     </div>
                 </div>
@@ -465,322 +559,317 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
 
 const styles = {
     container: {
-        maxWidth: '1800px',
-        margin: '0 auto',
+        padding: '1rem 0',
     },
     header: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '2rem',
+        marginBottom: '1.5rem',
     },
     title: {
-        fontSize: '1.8rem',
-        fontWeight: '600',
-        color: '#2c3e50',
+        fontSize: '1.75rem',
+        fontWeight: 'bold',
         margin: 0,
     },
     editButton: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.5rem',
-        padding: '0.6rem 1.2rem',
-        background: '#5692bc',
+        padding: '0.75rem 1.5rem',
+        backgroundColor: '#5692bc',
         color: 'white',
         border: 'none',
         borderRadius: '8px',
-        fontSize: '0.9rem',
-        fontWeight: '600',
         cursor: 'pointer',
-        transition: 'background-color 0.2s',
+        fontSize: '1rem',
+        fontWeight: '600',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        transition: 'all 0.3s',
+    },
+    disabledButton: {
+        padding: '0.75rem 1.5rem',
+        backgroundColor: '#9ca3af',
+        color: '#d1d5db',
+        border: 'none',
+        borderRadius: '8px',
+        cursor: 'not-allowed',
+        fontSize: '1rem',
+        fontWeight: '600',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+    },
+    frozenBanner: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+        padding: '0.875rem 1.25rem',
+        backgroundColor: '#fef3c7',
+        border: '2px solid #f59e0b',
+        borderRadius: '8px',
+        marginBottom: '1rem',
+    },
+    frozenIcon: {
+        fontSize: '1.5rem',
+    },
+    frozenText: {
+        flex: 1,
+    },
+    frozenSubtext: {
+        margin: '0.25rem 0 0 0',
+        fontSize: '0.875rem',
+        color: '#92400e',
     },
     editActions: {
         display: 'flex',
         gap: '0.75rem',
     },
     saveButton: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.5rem',
-        padding: '0.6rem 1.2rem',
-        backgroundColor: '#77DD77',
+        padding: '0.75rem 1.5rem',
+        backgroundColor: '#10b981',
         color: 'white',
         border: 'none',
         borderRadius: '8px',
-        fontSize: '0.9rem',
-        fontWeight: '600',
         cursor: 'pointer',
-        transition: 'background-color 0.2s',
-    },
-    cancelButton: {
+        fontSize: '1rem',
+        fontWeight: '600',
         display: 'flex',
         alignItems: 'center',
         gap: '0.5rem',
-        padding: '0.6rem 1.2rem',
-        backgroundColor: 'white',
-        color: '#bc8056',
-        border: '2px solid #bc8056',
-        borderRadius: '8px',
-        fontSize: '0.9rem',
-        fontWeight: '600',
-        cursor: 'pointer',
-        transition: 'background-color 0.2s',
     },
-    // View Mode Styles
+    cancelButton: {
+        padding: '0.75rem 1.5rem',
+        backgroundColor: '#6b7280',
+        color: 'white',
+        border: 'none',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        fontSize: '1rem',
+        fontWeight: '600',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+    },
+    deleteButton: {
+        padding: '0.75rem 1.5rem',
+        backgroundColor: '#ef4444',
+        color: 'white',
+        border: 'none',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        fontSize: '1rem',
+        fontWeight: '600',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+    },
     grid: {
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '1rem',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gap: '1.5rem',
     },
     card: {
         backgroundColor: 'white',
-        padding: '1rem',
-        borderRadius: '10px',
-        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
-        transition: 'transform 0.2s, box-shadow 0.2s',
-        minHeight: '100px',
-        display: 'flex',
-        flexDirection: 'column',
-    },
-    textarea: {
-        resize: 'vertical',
-        minHeight: '80px',
-        fontFamily: 'inherit',
-        marginTop: 'auto',
+        borderRadius: '12px',
+        padding: '1.5rem',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
     },
     cardHeader: {
         display: 'flex',
         alignItems: 'center',
-        gap: '0.4rem',
-        marginBottom: '0.5rem',
+        gap: '0.5rem',
+        marginBottom: '0.75rem',
     },
     icon: {
-        color: '#b356bc',
-        fontSize: '1rem',
+        fontSize: '1.25rem',
+        color: '#5692bc',
     },
     label: {
-        fontSize: '0.75rem',
+        fontSize: '0.875rem',
         fontWeight: '600',
         color: '#6b7280',
         textTransform: 'uppercase',
         letterSpacing: '0.5px',
     },
     value: {
-        fontSize: '1.3rem',
+        fontSize: '1.25rem',
         fontWeight: '600',
-        color: '#2c3e50',
+        color: '#1a202c',
         margin: 0,
-        wordBreak: 'break-word'
     },
     statusBadge: {
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '0.4rem 1rem',
-        borderRadius: '16px',
-        fontSize: '1.3rem',
+        padding: '0.5rem 1rem',
+        borderRadius: '20px',
+        fontSize: '1rem',
         fontWeight: '700',
-        textTransform: 'capitalize',
-        height: '40px',
-        width: '100px',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        display: 'inline-block',
     },
     priorityBadge: {
+        padding: '0.5rem 1rem',
+        borderRadius: '20px',
+        fontSize: '1rem',
+        fontWeight: '700',
         display: 'inline-flex',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: '0.4rem',
-        padding: '0.4rem 1rem',
-        borderRadius: '8px',
-        fontSize: '1.3rem',
-        fontWeight: '700',
-        textTransform: 'capitalize',
-        height: '40px',
-        width: '100px',
+        gap: '0.5rem',
     },
     priorityIcon: {
-        display: 'flex',
-        fontSize: '1.2rem',
+        fontSize: '1.25rem',
     },
-    deleteButton: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.5rem',
-        padding: '0.6rem 1.2rem',
-        backgroundColor: '#FF6961',
-        color: 'white',
-        border: 'none',
-        borderRadius: '8px',
-        fontSize: '0.9rem',
-        fontWeight: '600',
-        cursor: 'pointer',
-        transition: 'background-color 0.2s',
-    },
-    // Edit Mode Styles
     editForm: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '2rem',
+        gap: '1.25rem',
     },
     formSection: {
         backgroundColor: 'white',
-        padding: '2rem',
         borderRadius: '12px',
+        padding: '1.25rem',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+        boxSizing: 'border-box',
+        overflow: 'visible',
     },
     sectionTitle: {
+        fontSize: '1.125rem',
+        fontWeight: '600',
+        marginBottom: '0.875rem',
         display: 'flex',
         alignItems: 'center',
-        gap: '0.75rem',
-        fontSize: '1.2rem',
-        fontWeight: '600',
-        color: '#2c3e50',
-        marginBottom: '1.5rem',
-        paddingBottom: '0.75rem',
-        borderBottom: '2px solid #f0f0f0',
+        gap: '0.5rem',
+        color: '#1a202c',
     },
     sectionIcon: {
-        color: '#b356bc',
-        fontSize: '1.1rem',
+        fontSize: '1.25rem',
+        color: '#5692bc',
     },
     formGrid: {
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '1.5rem',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+        gap: '1rem',
     },
     inputLabel: {
         display: 'block',
-        fontSize: '0.9rem',
+        fontSize: '0.875rem',
         fontWeight: '600',
-        color: '#4a5568',
-        marginBottom: '0.5rem',
+        color: '#374151',
+        marginBottom: '0.375rem',
     },
     formInput: {
         width: '100%',
-        padding: '0.75rem',
-        fontSize: '1rem',
-        border: '2px solid #e5e7eb',
+        padding: '0.625rem 0.75rem',
         borderRadius: '8px',
-        fontWeight: '500',
-        color: '#2c3e50',
-        transition: 'all 0.2s',
+        border: '2px solid #e5e7eb',
+        fontSize: '1rem',
         outline: 'none',
+        transition: 'border-color 0.3s',
         boxSizing: 'border-box',
     },
     formSelect: {
         width: '100%',
-        padding: '0.75rem',
-        fontSize: '1rem',
-        border: '2px solid #e5e7eb',
+        padding: '0.625rem 0.75rem',
         borderRadius: '8px',
-        fontWeight: '500',
-        color: '#2c3e50',
-        backgroundColor: 'white',
-        cursor: 'pointer',
+        border: '2px solid #e5e7eb',
+        fontSize: '1rem',
         outline: 'none',
+        transition: 'border-color 0.3s',
+        cursor: 'pointer',
+        backgroundColor: 'white',
         boxSizing: 'border-box',
-        transition: 'all 0.2s',
     },
-    // Modal Styles
+    helperText: {
+        fontSize: '0.8125rem',
+        color: '#6b7280',
+        marginTop: '0.5rem',
+        fontStyle: 'italic',
+    },
     modalOverlay: {
         position: 'fixed',
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
         display: 'flex',
-        alignItems: 'center',
         justifyContent: 'center',
+        alignItems: 'center',
         zIndex: 1000,
     },
     modal: {
         backgroundColor: 'white',
         borderRadius: '12px',
-        width: '90%',
+        padding: '2rem',
         maxWidth: '500px',
-        boxShadow:'0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+        width: '90%',
     },
     modalHeader: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '1.5rem',
-        borderBottom: '1px solid #e5e7eb',
+        marginBottom: '1.5rem',
     },
     modalTitle: {
-        fontSize: '1.25rem',
-        fontWeight: '600',
-        color: '#2c3e50',
+        fontSize: '1.5rem',
+        fontWeight: '700',
         margin: 0,
     },
     closeButton: {
         background: 'none',
         border: 'none',
         fontSize: '1.5rem',
-        color: '#6b7280',
         cursor: 'pointer',
-        padding: '0.25rem',
+        color: '#6b7280',
     },
     modalContent: {
-        padding: '1.25rem',
+        marginBottom: '1.5rem',
     },
     warningText: {
-        color: '#dc2626',
-        fontSize: '0.95rem',
+        fontSize: '1rem',
+        color: '#ef4444',
         marginBottom: '1rem',
-        padding: '0.75rem',
-        backgroundColor: '#fee2e2',
-        borderRadius: '6px',
-        border: '1px solid #fca5a5',
     },
     confirmText: {
-        fontSize: '0.95rem',
+        fontSize: '1rem',
         color: '#374151',
         marginBottom: '1rem',
     },
     passwordInput: {
         width: '100%',
         padding: '0.75rem',
+        borderRadius: '8px',
         border: '2px solid #e5e7eb',
-        borderRadius: '6px',
         fontSize: '1rem',
-        outline: 'none',
-        transition: 'border-color 0.2s',
-        boxSizing: 'border-box',
     },
     errorText: {
-        color: '#dc2626',
         fontSize: '0.875rem',
+        color: '#ef4444',
         marginTop: '0.5rem',
-        marginBottom: 0,
     },
     modalActions: {
         display: 'flex',
-        gap: '0.75rem',
         justifyContent: 'flex-end',
-        padding: '1.5rem',
-        borderTop: '1px solid #e5e7eb',
+        gap: '1rem',
     },
     modalCancelButton: {
         padding: '0.75rem 1.5rem',
-        backgroundColor: '#e5e7eb',
-        color: '#374151',
-        border: 'none',
-        borderRadius: '8px',
-        fontSize: '0.95rem',
-        fontWeight: '600',
-        cursor: 'pointer',
-    },
-    modalDeleteButton: {
-        padding: '0.75rem 1.5rem',
-        backgroundColor: '#dc2626',
+        backgroundColor: '#6b7280',
         color: 'white',
         border: 'none',
         borderRadius: '8px',
-        fontSize: '0.95rem',
-        fontWeight: '600',
         cursor: 'pointer',
-        transition: 'background-color 0.2s',
+        fontSize: '1rem',
+        fontWeight: '600',
+    },
+    modalDeleteButton: {
+        padding: '0.75rem 1.5rem',
+        backgroundColor: '#ef4444',
+        color: 'white',
+        border: 'none',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        fontSize: '1rem',
+        fontWeight: '600',
     },
 };
 
