@@ -1,3 +1,4 @@
+import os
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -14,7 +15,19 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    CORS(app)
+    # Configure CORS - allow all origins for now
+    # TODO: Restrict to specific origins in production for security
+    # Note: Using "*" requires supports_credentials=False
+    CORS(
+        app,
+        resources={r"/api/*": {
+            "origins": "*",  # Allow all origins
+            "allow_headers": ["Content-Type", "Authorization"],
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            "expose_headers": ["Authorization"],
+        }},
+        supports_credentials=False,  # Must be False when using "*" for origins
+    )
 
     db.init_app(app)
     jwt = JWTManager(app)
@@ -42,13 +55,13 @@ def create_app() -> Flask:
     app.register_blueprint(projects_bp)
     app.register_blueprint(workorders_bp)
 
-    @app.get("/api/health")
-    def health():
-        return jsonify({"status": "ok"})
-
-    # Initialize database tables at startup
+    env = os.getenv("ENV", "development")
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+        except Exception as e:
+            # Log error but don't crash the app
+            app.logger.warning(f"Could not create database tables: {e}")
 
     return app
 

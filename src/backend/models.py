@@ -179,6 +179,9 @@ class Project(db.Model):
             "otherExpenses": float(self.otherExpenses) if self.otherExpenses else 0.00,
             "projectManagerId": self.projectManagerId,
             "projectManager": self.projectManager.to_dict() if self.projectManager else None,
+            # New multi-manager fields (backwards compatible)
+            "projectManagerIds": [m.userId for m in getattr(self, 'managers', [])],
+            "projectManagers": [m.user.to_dict() for m in getattr(self, 'managers', [])],
             "crewMembers": self.get_crew_members(),
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
@@ -278,6 +281,71 @@ class WorkOrderWorker(db.Model):
         }
 
 
+class WorkOrderBuildingSupply(db.Model):
+    __tablename__ = "work_order_building_supplies"
+
+    id = db.Column(db.Integer, primary_key=True)
+    workOrderId = db.Column(db.Integer, db.ForeignKey('work_orders.id'), nullable=False)
+    buildingSupplyId = db.Column(db.Integer, db.ForeignKey('building_supplies.id'), nullable=False)
+
+    # Metadata
+    assignedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    isActive = db.Column(db.Boolean, default=True, nullable=False)
+
+    # Relationships
+    workOrder = db.relationship('WorkOrder', backref=db.backref('building_supply_assignments', lazy=True))
+    buildingSupply = db.relationship('BuildingSupply', backref=db.backref('work_order_assignments', lazy=True))
+
+    # Ensure unique workorder-supply combinations
+    __table_args__ = (db.UniqueConstraint('workOrderId', 'buildingSupplyId', name='unique_workorder_buildingsupply'),)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "workOrderId": self.workOrderId,
+            "buildingSupplyId": self.buildingSupplyId,
+            "workOrder": self.workOrder.to_dict() if self.workOrder else None,
+            "buildingSupply": self.buildingSupply.to_dict() if self.buildingSupply else None,
+            "assignedAt": self.assignedAt.isoformat() if self.assignedAt else None,
+            "isActive": self.isActive,
+        }
+
+
+class WorkOrderElectricalSupply(db.Model):
+    __tablename__ = "work_order_electrical_supplies"
+
+    id = db.Column(db.Integer, primary_key=True)
+    workOrderId = db.Column(db.Integer, db.ForeignKey('work_orders.id'), nullable=False)
+    electricalSupplyId = db.Column(db.Integer, db.ForeignKey('electrical_supplies.id'), nullable=False)
+
+    # Metadata
+    assignedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    isActive = db.Column(db.Boolean, default=True, nullable=False)
+
+    # Relationships
+    workOrder = db.relationship('WorkOrder', backref=db.backref('electrical_supply_assignments', lazy=True))
+    electricalSupply = db.relationship('ElectricalSupply', backref=db.backref('work_order_assignments', lazy=True))
+
+    # Ensure unique workorder-supply combinations
+    __table_args__ = (db.UniqueConstraint('workOrderId', 'electricalSupplyId', name='unique_workorder_electricalsupply'),)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "workOrderId": self.workOrderId,
+            "electricalSupplyId": self.electricalSupplyId,
+            "workOrder": self.workOrder.to_dict() if self.workOrder else None,
+            "electricalSupply": self.electricalSupply.to_dict() if self.electricalSupply else None,
+            "assignedAt": self.assignedAt.isoformat() if self.assignedAt else None,
+            "isActive": self.isActive,
+        }
+
+
+# DEPRECATED: WorkOrderSupply removed - use WorkOrderBuildingSupply or WorkOrderElectricalSupply instead
+# This model has been removed. If you need to drop the table, run:
+# DROP TABLE IF EXISTS work_order_supplies;
+
+
 class ProjectMember(db.Model):
     __tablename__ = "project_members"
 
@@ -303,6 +371,35 @@ class ProjectMember(db.Model):
             "userId": self.userId,
             "user": self.user.to_dict() if self.user else None,
             "joinedAt": self.joinedAt.isoformat() if self.joinedAt else None,
+            "isActive": self.isActive,
+        }
+
+
+class ProjectManager(db.Model):
+    __tablename__ = "project_managers"
+
+    id = db.Column(db.Integer, primary_key=True)
+    projectId = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    # Metadata
+    addedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    isActive = db.Column(db.Boolean, default=True, nullable=False)
+
+    # Relationships
+    project = db.relationship('Project', backref=db.backref('managers', lazy=True))
+    user = db.relationship('User', backref=db.backref('project_managements', lazy=True))
+
+    # Ensure unique user-project combinations
+    __table_args__ = (db.UniqueConstraint('projectId', 'userId', name='unique_project_manager_user'),)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "projectId": self.projectId,
+            "userId": self.userId,
+            "user": self.user.to_dict() if self.user else None,
+            "addedAt": self.addedAt.isoformat() if self.addedAt else None,
             "isActive": self.isActive,
         }
 
@@ -399,38 +496,149 @@ class Audit(db.Model):
                 result["workOrderName"] = work_order.name
         return result
 
-class Supply(db.Model):
-    __tablename__ = "supplies"
+class BuildingSupply(db.Model):
+    __tablename__ = "building_supplies"
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
-    vendor = db.Column(db.String(200), nullable=False)
+    vendor = db.Column(db.String(200), nullable=True)
+    
+    # Excel file columns
+    referenceCode = db.Column(db.String(100), nullable=True)
+    supplyCategory = db.Column(db.String(200), nullable=True)
+    supplyType = db.Column(db.String(200), nullable=True)
+    supplySubtype = db.Column(db.String(200), nullable=True)
+    unitOfMeasure = db.Column(db.String(50), nullable=True)
+    
     budget = db.Column(DECIMAL(15, 2), nullable=False, default=0.00)
 
-    # New fields
+    # Workflow fields
     status = db.Column(db.Enum(SupplyStatus), default=SupplyStatus.PENDING, nullable=False)
     requestedById = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     approvedById = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
 
-    requestedBy = db.relationship("User", foreign_keys=[requestedById], backref="supply_requests")
-    approvedBy = db.relationship("User", foreign_keys=[approvedById], backref="approved_supplies")
-
-    projectId = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
-    project = db.relationship("Project", backref=db.backref("supplies", lazy=True, cascade="all, delete-orphan"))
+    projectId = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=True)  # Nullable for master catalog
+    workOrderId = db.Column(db.Integer, db.ForeignKey("work_orders.id"), nullable=True)  # Deprecated: use WorkOrderSupply instead
 
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    requestedBy = db.relationship("User", foreign_keys=[requestedById], backref="building_supply_requests")
+    approvedBy = db.relationship("User", foreign_keys=[approvedById], backref="approved_building_supplies")
+    project = db.relationship("Project", backref=db.backref("building_supplies", lazy=True))
+    workOrder = db.relationship("WorkOrder", foreign_keys=[workOrderId], backref=db.backref("legacy_building_supplies", lazy=True))
+
+    def get_work_orders(self) -> list:
+        """Get work orders as a list of work order IDs from WorkOrderSupply relationships"""
+        try:
+            return [assignment.workOrderId for assignment in self.work_order_assignments if assignment.isActive]
+        except Exception:
+            return []
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "name": self.name,
             "vendor": self.vendor,
+            "referenceCode": self.referenceCode,
+            "supplyCategory": self.supplyCategory,
+            "supplyType": self.supplyType,
+            "supplySubtype": self.supplySubtype,
+            "unitOfMeasure": self.unitOfMeasure,
             "budget": float(self.budget) if self.budget else 0.0,
             "status": self.status.value,
             "projectId": self.projectId,
+            "workOrderId": self.workOrderId,
+            "workOrderIds": self.get_work_orders(),
             "requestedBy": self.requestedBy.to_dict() if self.requestedBy else None,
             "approvedBy": self.approvedBy.to_dict() if self.approvedBy else None,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+        }
+
+
+class ElectricalSupply(db.Model):
+    __tablename__ = "electrical_supplies"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    vendor = db.Column(db.String(200), nullable=True)
+    
+    # Excel file columns
+    referenceCode = db.Column(db.String(100), nullable=True)
+    supplyCategory = db.Column(db.String(200), nullable=True)
+    supplyType = db.Column(db.String(200), nullable=True)
+    supplySubtype = db.Column(db.String(200), nullable=True)
+    unitOfMeasure = db.Column(db.String(50), nullable=True)
+    
+    budget = db.Column(DECIMAL(15, 2), nullable=False, default=0.00)
+
+    # Workflow fields
+    status = db.Column(db.Enum(SupplyStatus), default=SupplyStatus.PENDING, nullable=False)
+    requestedById = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    approvedById = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+
+    projectId = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=True)  # Nullable for master catalog
+    workOrderId = db.Column(db.Integer, db.ForeignKey("work_orders.id"), nullable=True)  # Deprecated: use WorkOrderSupply instead
+
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    requestedBy = db.relationship("User", foreign_keys=[requestedById], backref="electrical_supply_requests")
+    approvedBy = db.relationship("User", foreign_keys=[approvedById], backref="approved_electrical_supplies")
+    project = db.relationship("Project", backref=db.backref("electrical_supplies", lazy=True))
+    workOrder = db.relationship("WorkOrder", foreign_keys=[workOrderId], backref=db.backref("legacy_electrical_supplies", lazy=True))
+
+    def get_work_orders(self) -> list:
+        """Get work orders as a list of work order IDs from WorkOrderSupply relationships"""
+        try:
+            return [assignment.workOrderId for assignment in self.work_order_assignments if assignment.isActive]
+        except Exception:
+            return []
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "vendor": self.vendor,
+            "referenceCode": self.referenceCode,
+            "supplyCategory": self.supplyCategory,
+            "supplyType": self.supplyType,
+            "supplySubtype": self.supplySubtype,
+            "unitOfMeasure": self.unitOfMeasure,
+            "budget": float(self.budget) if self.budget else 0.0,
+            "status": self.status.value,
+            "projectId": self.projectId,
+            "workOrderId": self.workOrderId,
+            "workOrderIds": self.get_work_orders(),
+            "requestedBy": self.requestedBy.to_dict() if self.requestedBy else None,
+            "approvedBy": self.approvedBy.to_dict() if self.approvedBy else None,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+            "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+        }
+
+
+class PasswordReset(db.Model):
+    __tablename__ = "password_resets"
+
+    id = db.Column(db.Integer, primary_key=True)
+    userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    token = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    expiresAt = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False, nullable=False)
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('password_resets', lazy=True))
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "userId": self.userId,
+            "token": self.token,
+            "expiresAt": self.expiresAt.isoformat() if self.expiresAt else None,
+            "used": self.used,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
         }

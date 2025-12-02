@@ -228,7 +228,19 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                         <button style={styles.cancelButton} onClick={handleCancel}>
                             <FaTimes /> Cancel
                         </button>
-                    </div>
+                    ) : (
+                        <div style={styles.editActions}>
+                            <button style={styles.deleteButton} onClick={handleDeleteClick}>
+                                <FaTrashAlt /> Delete Project
+                            </button>
+                            <button style={styles.editButton} onClick={handleSave}>
+                                <FaSave /> Save
+                            </button>
+                            <button style={styles.cancelButton} onClick={handleCancel}>
+                                <FaTimes /> Cancel
+                            </button>
+                        </div>
+                    )
                 )}
             </div>
             {isEditing ? (

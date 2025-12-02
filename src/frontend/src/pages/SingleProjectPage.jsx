@@ -60,6 +60,7 @@ const SingleProjectPage = ({ projects }) => {
     const [isEditingDescription, setIsEditingDescription] = useState(false);
     const [editedDescription, setEditedDescription] = useState('');
     const [reportData, setReportData] = useState(null);
+    const [selectedWorkOrderForSupplies, setSelectedWorkOrderForSupplies] = useState(null);
 
     useEffect(() => {
         fetchInitialData();
@@ -180,44 +181,44 @@ const SingleProjectPage = ({ projects }) => {
     const handleGenerateReport = async () => {
         try {
             showSnackbar('Fetching project data...', 'info');
-            
+
             // Fetch report data from backend
             const data = await projectsAPI.getReportData(projectId);
             setReportData(data);
-            
+
             // Wait for React to render the report
             await new Promise(resolve => setTimeout(resolve, 100));
-            
+
             // Generate PDF
             showSnackbar('Generating PDF...', 'info');
-            
+
             const opt = {
                 margin: [0.5, 0.5, 0.5, 0.5],
                 filename: `Project_${project.name.replace(/[^a-z0-9]/gi, '_')}_Report_${new Date().toISOString().split('T')[0]}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { 
+                html2canvas: {
                     scale: 2,
                     useCORS: true,
                     logging: false,
                     letterRendering: true
                 },
-                jsPDF: { 
-                    unit: 'in', 
-                    format: 'letter', 
-                    orientation: 'portrait' 
+                jsPDF: {
+                    unit: 'in',
+                    format: 'letter',
+                    orientation: 'portrait'
                 },
-                pagebreak: { 
-                    mode: ['avoid-all', 'css', 'legacy'] 
+                pagebreak: {
+                    mode: ['avoid-all', 'css', 'legacy']
                 }
             };
-            
+
             await html2pdf().set(opt).from(reportRef.current).save();
-            
+
             showSnackbar('Report downloaded successfully!', 'success');
-            
+
             // Clear report data after generation
             setTimeout(() => setReportData(null), 500);
-            
+
         } catch (error) {
             console.error('Error generating report:', error);
             showSnackbar('Failed to generate report. Please try again.', 'error');
@@ -282,11 +283,14 @@ const SingleProjectPage = ({ projects }) => {
             case 'calendar':
                 return <CalendarTab project={project} onNavigateToWorkOrder={handleNavigateToWorkOrder} userRole={userRole} />
             case 'workorders':
-                return <WorkOrdersTab project={project} userRole={userRole} onWorkOrderUpdate={triggerRefresh} highlightedWorkOrderId={highlightedWorkOrderId} />
+                return <WorkOrdersTab project={project} userRole={userRole} onWorkOrderUpdate={triggerRefresh} highlightedWorkOrderId={highlightedWorkOrderId} onNavigateToSupplies={(workOrderId) => {
+                    setSelectedWorkOrderForSupplies(workOrderId);
+                    setActiveTab('supplies');
+                }} />
             case 'logs':
                 return <LogsTab project={project} refreshTrigger={refreshTrigger} />
             case 'supplies':
-                return <SuppliesTab project={project} userRole={userRole}/>
+                return <SuppliesTab project={project} userRole={userRole} selectedWorkOrderId={selectedWorkOrderForSupplies} onWorkOrderChange={setSelectedWorkOrderForSupplies}/>
             default:
                 return <p>Nothing to show here...</p>
         }
@@ -307,7 +311,7 @@ const SingleProjectPage = ({ projects }) => {
                     </div>
                     {/* NEW: Report Button - Only visible to PMs */}
                     <div style={styles.headerRight}>
-                        <ReportButton 
+                        <ReportButton
                             project={project}
                             userRole={userRole}
                             onGenerateReport={handleGenerateReport}

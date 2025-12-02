@@ -218,6 +218,7 @@ const UserNavbar = () => {
         if (!role) return '';
         if (role === 'project_manager') return 'Project Manager';
         if (role === 'worker') return 'Crew Member';
+        if (role === 'admin') return 'Admin';
         return role.replace(/_/g, ' ');
     };
 
