@@ -4,7 +4,7 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { workOrdersAPI } from "../../services/api";
-import { FaPlus, FaTimes, FaArrowRight } from "react-icons/fa";
+import { FaPlus, FaTimes, FaArrowRight, FaMapMarkerAlt } from "react-icons/fa";
 import { useSnackbar } from '../../contexts/SnackbarContext';
 
 const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
@@ -18,17 +18,55 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [selectedDate, setSelectedDate] = useState(null);
     const [dateEvents, setDateEvents] = useState([]);
-        const [formData, setFormData] = useState({
-            name: '',
-            description: '',
-            location: '',
-            startDate: '',
-            endDate: '',
-            priority: 3,
-            estimatedBudget: '',
-            status: 'pending',
-        });
+    const [formData, setFormData] = useState({
+        name: '',
+        description: '',
+        address: '',
+        address2: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        startDate: '',
+        endDate: '',
+        priority: 3,
+        estimatedBudget: '',
+        status: 'pending',
+    });
     const events =[];
+
+    // Helper function to format location from address components
+    const formatLocation = (address, address2, city, state, zipCode) => {
+        const parts = [address, address2, city, state, zipCode].filter(part => part && part.trim());
+        return parts.join(', ');
+    };
+
+    // Helper function to parse location string into components
+    const parseLocation = (locationString) => {
+        if (!locationString) return { address: '', address2: '', city: '', state: '', zipCode: '' };
+        
+        const parts = locationString.split(',').map(part => part.trim());
+        
+        // Expected format: "123 Main St, Unit 4B, City, State, 12345" or "123 Main St, City, State, 12345"
+        if (parts.length >= 5) {
+            return {
+                address: parts[0] || '',
+                address2: parts[1] || '',
+                city: parts[2] || '',
+                state: parts[3] || '',
+                zipCode: parts[4] || ''
+            };
+        } else if (parts.length >= 4) {
+            return {
+                address: parts[0] || '',
+                address2: '',
+                city: parts[1] || '',
+                state: parts[2] || '',
+                zipCode: parts[3] || ''
+            };
+        }
+        
+        return { address: '', address2: '', city: '', state: '', zipCode: '' };
+    };
 
     // Check if project is in a terminal/frozen status
     const isProjectFrozen = () => {
@@ -67,65 +105,82 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
     };
 
     const handleCreateWorkOrder = async (e) => {
-            e.preventDefault();
-            
-            // Double-check frozen status
-            if (isProjectFrozen()) {
-                showSnackbar('Cannot create work orders on archived or cancelled projects', 'error');
-                return;
-            }
-            
-            try {
-                const workOrderData = {
-                    name: formData.name,
-                    startDate: formData.startDate,
-                    endDate: formData.endDate,
-                    priority: parseInt(formData.priority),
-                    status: formData.status,
-                    projectId: project.id,
-                };
-    
-                if (formData.description && formData.description.trim() !== '') {
-                    workOrderData.description = formData.description;
-                }
+        e.preventDefault();
         
-                if (formData.location && formData.location.trim() !== '') {
-                    workOrderData.location = formData.location;
-                }
+        // Double-check frozen status
+        if (isProjectFrozen()) {
+            showSnackbar('Cannot create work orders on archived or cancelled projects', 'error');
+            return;
+        }
         
-                if (formData.estimatedBudget && formData.estimatedBudget !== '') {
-                    workOrderData.estimatedBudget = parseFloat(formData.estimatedBudget);
-                }
-    
-                console.log('Sending work order data:', workOrderData); // Debug log
-    
-                await workOrdersAPI.createWorkOrder(workOrderData);
-    
-                await fetchWorkOrders();
-                setShowCreate(false);
-                setFormData({
-                    name: '',
-                    description: '',
-                    location: '',
-                    startDate: '',
-                    endDate: '',
-                    priority: 3,
-                    estimatedBudget: '',
-                    status: 'pending',
-                });
-                showSnackbar('Work order created successfully!', 'success');
-            } catch (err) {
-                console.error('Error creating work order:', err);
-                showSnackbar(`Failed to create work order: ${err.message}`, 'error');
+        try {
+            // Format location from address components
+            const location = formatLocation(
+                formData.address,
+                formData.address2,
+                formData.city,
+                formData.state,
+                formData.zipCode
+            );
+
+            const workOrderData = {
+                name: formData.name,
+                startDate: formData.startDate,
+                endDate: formData.endDate,
+                priority: parseInt(formData.priority),
+                status: formData.status,
+                projectId: project.id,
+            };
+
+            if (formData.description && formData.description.trim() !== '') {
+                workOrderData.description = formData.description;
             }
-        };
+    
+            if (location && location.trim() !== '') {
+                workOrderData.location = location;
+            }
+    
+            if (formData.estimatedBudget && formData.estimatedBudget !== '') {
+                workOrderData.estimatedBudget = parseFloat(formData.estimatedBudget);
+            }
+
+            console.log('Sending work order data:', workOrderData);
+
+            await workOrdersAPI.createWorkOrder(workOrderData);
+
+            await fetchWorkOrders();
+            setShowCreate(false);
+            setFormData({
+                name: '',
+                description: '',
+                address: '',
+                address2: '',
+                city: '',
+                state: '',
+                zipCode: '',
+                startDate: '',
+                endDate: '',
+                priority: 3,
+                estimatedBudget: '',
+                status: 'pending',
+            });
+            showSnackbar('Work order created successfully!', 'success');
+        } catch (err) {
+            console.error('Error creating work order:', err);
+            showSnackbar(`Failed to create work order: ${err.message}`, 'error');
+        }
+    };
 
     const handleCancelCreate = () => {
         setShowCreate(false);
         setFormData({
             name: '',
             description: '',
-            location: '',
+            address: '',
+            address2: '',
+            city: '',
+            state: '',
+            zipCode: '',
             startDate: '',
             endDate: '',
             priority: 3,
@@ -277,7 +332,7 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
         };
 
         events.push({
-            id: String(wo.id), // Add ID so we can identify clicked events
+            id: String(wo.id),
             title: wo.name,
             start: wo.startDate,
             end: wo.endDate,
@@ -388,7 +443,7 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                             <div style={styles.milestoneItem}>
                                 <div style={{...styles.milestoneMarker, backgroundColor: '#ef4444'}}></div>
                                 <div style={styles.milestoneContent}>
-                                    <div style={styles.milestoneName}>Project Schedueled End Date</div>
+                                    <div style={styles.milestoneName}>Project Scheduled End Date</div>
                                     <div style={styles.milestoneDate}>{project.endDate}</div>
                                 </div>
                             </div>
@@ -429,6 +484,8 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                     </div>
                 </div>
             </div>
+
+            {/* Create Work Order Modal - UPDATED WITH ADDRESS FIELDS */}
             {showCreate && (
                 <div style={styles.creatorOverlay} onClick={handleCancelCreate}>
                     <div style={styles.creator} onClick={(e) => e.stopPropagation()}>
@@ -439,95 +496,161 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                             </button>
                         </div>
                         <form onSubmit={handleCreateWorkOrder} style={styles.form}>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>Name *</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                                    style={styles.input}
-                                    placeholder="Enter work order name"
-                                />
-                            </div>
-
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>Description</label>
-                                <textarea
-                                    value={formData.description}
-                                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                                    style={{...styles.input, ...styles.textArea}}
-                                    placeholder="Add a detailed description"
-                                />
-                            </div>
-
-                            <div style={styles.formRow}>
+                            {/* Basic Information Section */}
+                            <div style={styles.formSection}>
+                                <h4 style={styles.sectionTitle}>Basic Information</h4>
+                                
                                 <div style={styles.formGroup}>
-                                    <label style={styles.label}>Location</label>
+                                    <label style={styles.label}>Name *</label>
                                     <input
                                         type="text"
-                                        value={formData.location}
-                                        onChange={(e) => setFormData({...formData, location: e.target.value})}
+                                        required
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({...formData, name: e.target.value})}
                                         style={styles.input}
-                                        placeholder="Work location"
+                                        placeholder="Enter work order name"
                                     />
                                 </div>
-                                <div style={styles.formGroup}>
-                                    <label style={styles.label}>Priority *</label>
-                                    <select
-                                        required
-                                        value={formData.priority}
-                                        onChange={(e) => setFormData({...formData, priority: parseInt(e.target.value)})}
-                                        style={styles.select}
-                                    >
-                                        <option value="1">Very Low</option>
-                                        <option value="2">Low</option>
-                                        <option value="3">Medium</option>
-                                        <option value="4">High</option>
-                                        <option value="5">Critical</option>
-                                    </select>
-                                </div>
-                            </div>
 
-                            <div style={styles.formRow}>
                                 <div style={styles.formGroup}>
-                                    <label style={styles.label}>Start Date *</label>
-                                    <input
-                                        type="date"
-                                        required
-                                        value={formData.startDate}
-                                        onChange={(e) => setFormData({...formData, startDate: e.target.value})}
-                                        style={styles.input}
-                                    />
-                                </div>
-                                <div style={styles.formGroup}>
-                                    <label style={styles.label}>End Date *</label>
-                                    <input
-                                        type="date"
-                                        required
-                                        value={formData.endDate}
-                                        onChange={(e) => setFormData({...formData, endDate: e.target.value})}
-                                        style={styles.input}
+                                    <label style={styles.label}>Description</label>
+                                    <textarea
+                                        value={formData.description}
+                                        onChange={(e) => setFormData({...formData, description: e.target.value})}
+                                        style={{...styles.input, ...styles.textArea}}
+                                        placeholder="Add a detailed description"
                                     />
                                 </div>
                             </div>
 
-                            <div style={styles.formRow}>
+                            {/* Location Section */}
+                            <div style={styles.formSection}>
+                                <h4 style={styles.sectionTitle}>
+                                    <FaMapMarkerAlt style={styles.sectionIcon} />
+                                    Location
+                                </h4>
+                                
                                 <div style={styles.formGroup}>
-                                    <label style={styles.label}>Status *</label>
-                                    <select
-                                        required
-                                        value={formData.status}
-                                        onChange={(e) => setFormData({...formData, status: e.target.value})}
-                                        style={styles.select}
-                                    >
-                                        <option value="pending">Pending</option>
-                                        <option value="in_progress">In Progress</option>
-                                        <option value="on_hold">On Hold</option>
-                                        <option value="completed">Completed</option>
-                                        <option value="cancelled">Cancelled</option>
-                                    </select>
+                                    <label style={styles.label}>Street Address</label>
+                                    <input
+                                        type="text"
+                                        value={formData.address}
+                                        onChange={(e) => setFormData({...formData, address: e.target.value})}
+                                        style={styles.input}
+                                        placeholder="123 Main Street"
+                                    />
                                 </div>
+
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Unit/Suite/Apt (Optional)</label>
+                                    <input
+                                        type="text"
+                                        value={formData.address2}
+                                        onChange={(e) => setFormData({...formData, address2: e.target.value})}
+                                        style={styles.input}
+                                        placeholder="Unit 4B, Suite 200, Apt 5, etc."
+                                    />
+                                </div>
+
+                                <div style={styles.formRow}>
+                                    <div style={styles.formGroup}>
+                                        <label style={styles.label}>City</label>
+                                        <input
+                                            type="text"
+                                            value={formData.city}
+                                            onChange={(e) => setFormData({...formData, city: e.target.value})}
+                                            style={styles.input}
+                                            placeholder="Austin"
+                                        />
+                                    </div>
+                                    <div style={styles.formGroup}>
+                                        <label style={styles.label}>State</label>
+                                        <input
+                                            type="text"
+                                            value={formData.state}
+                                            onChange={(e) => setFormData({...formData, state: e.target.value})}
+                                            style={styles.input}
+                                            placeholder="TX"
+                                        />
+                                    </div>
+                                    <div style={styles.formGroup}>
+                                        <label style={styles.label}>ZIP Code</label>
+                                        <input
+                                            type="text"
+                                            value={formData.zipCode}
+                                            onChange={(e) => setFormData({...formData, zipCode: e.target.value})}
+                                            style={styles.input}
+                                            placeholder="78701"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Schedule & Priority Section */}
+                            <div style={styles.formSection}>
+                                <h4 style={styles.sectionTitle}>Schedule & Priority</h4>
+                                
+                                <div style={styles.formRow}>
+                                    <div style={styles.formGroup}>
+                                        <label style={styles.label}>Start Date *</label>
+                                        <input
+                                            type="date"
+                                            required
+                                            value={formData.startDate}
+                                            onChange={(e) => setFormData({...formData, startDate: e.target.value})}
+                                            style={styles.input}
+                                        />
+                                    </div>
+                                    <div style={styles.formGroup}>
+                                        <label style={styles.label}>End Date *</label>
+                                        <input
+                                            type="date"
+                                            required
+                                            value={formData.endDate}
+                                            onChange={(e) => setFormData({...formData, endDate: e.target.value})}
+                                            style={styles.input}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div style={styles.formRow}>
+                                    <div style={styles.formGroup}>
+                                        <label style={styles.label}>Priority *</label>
+                                        <select
+                                            required
+                                            value={formData.priority}
+                                            onChange={(e) => setFormData({...formData, priority: parseInt(e.target.value)})}
+                                            style={styles.select}
+                                        >
+                                            <option value="1">Very Low</option>
+                                            <option value="2">Low</option>
+                                            <option value="3">Medium</option>
+                                            <option value="4">High</option>
+                                            <option value="5">Critical</option>
+                                        </select>
+                                    </div>
+                                    <div style={styles.formGroup}>
+                                        <label style={styles.label}>Status *</label>
+                                        <select
+                                            required
+                                            value={formData.status}
+                                            onChange={(e) => setFormData({...formData, status: e.target.value})}
+                                            style={styles.select}
+                                        >
+                                            <option value="pending">Pending</option>
+                                            <option value="in_progress">In Progress</option>
+                                            <option value="on_hold">On Hold</option>
+                                            <option value="completed">Completed</option>
+                                            <option value="cancelled">Cancelled</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Budget Section */}
+                            <div style={styles.formSection}>
+                                <h4 style={styles.sectionTitle}>Budget</h4>
+                                
                                 <div style={styles.formGroup}>
                                     <label style={styles.label}>Estimated Budget</label>
                                     <div style={styles.inputWrapper}>
@@ -639,7 +762,7 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                 </div>
             )}
 
-            {/* Date Details Modal - UPDATED: Remove "Create Work Order" button if frozen */}
+            {/* Date Details Modal */}
             {showDateDetails && selectedDate && (
                 <div style={styles.creatorOverlay} onClick={() => setShowDateDetails(false)}>
                     <div style={styles.creator} onClick={(e) => e.stopPropagation()}>
@@ -660,7 +783,6 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                             {dateEvents.length === 0 ? (
                                 <div style={styles.noEventsMessage}>
                                     <p style={styles.noEventsText}>No events scheduled for this date</p>
-                                    {/* Only show button if can create work orders (not frozen) */}
                                     {canCreateWorkOrders() && (
                                         <button 
                                             style={styles.createWorkOrderButtonSmall}
@@ -685,7 +807,6 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                                         <span style={styles.dateEventsCount}>
                                             {dateEvents.length} {dateEvents.length === 1 ? 'Event' : 'Events'}
                                         </span>
-                                        {/* Only show button if can create work orders (not frozen) */}
                                         {canCreateWorkOrders() && (
                                             <button 
                                                 style={styles.createWorkOrderButtonSmall}
@@ -937,7 +1058,7 @@ const styles = {
         backgroundColor: 'white',
         borderRadius: '16px',
         width: '90%',
-        maxWidth: '650px',
+        maxWidth: '700px',
         maxHeight: '90vh',
         overflow: 'hidden',
         boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
@@ -972,23 +1093,38 @@ const styles = {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        ':hover': {
-            backgroundColor: '#f3f4f6',
-            color: '#374151',
-        }
     },
     form: {
         padding: '2rem',
         overflowY: 'auto',
         flex: 1,
     },
+    formSection: {
+        marginBottom: '2rem',
+        paddingBottom: '1.5rem',
+        borderBottom: '1px solid #f3f4f6',
+    },
+    sectionTitle: {
+        fontSize: '1rem',
+        fontWeight: '600',
+        color: '#374151',
+        marginBottom: '1rem',
+        marginTop: 0,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+    },
+    sectionIcon: {
+        fontSize: '1rem',
+        color: '#5692bc',
+    },
     formGroup: {
-        marginBottom: '1.5rem',
+        marginBottom: '1.25rem',
         flex: 1,
     },
     formRow: {
         display: 'flex',
-        gap: '1.25rem',
+        gap: '1rem',
         marginBottom: '0',
     },
     label: {
@@ -1001,7 +1137,7 @@ const styles = {
     },
     input: {
         width: '100%',
-        padding: '0.875rem 1rem',
+        padding: '0.75rem 1rem',
         border: '1.5px solid #e5e7eb',
         borderRadius: '8px',
         fontSize: '0.95rem',
@@ -1014,7 +1150,7 @@ const styles = {
     },
     select: {
         width: '100%',
-        padding: '0.875rem 1rem',
+        padding: '0.75rem 1rem',
         border: '1.5px solid #e5e7eb',
         borderRadius: '8px',
         fontSize: '0.95rem',
@@ -1027,7 +1163,7 @@ const styles = {
         boxSizing: 'border-box',
     },
     textArea: {
-        minHeight: '120px',
+        minHeight: '100px',
         resize: 'vertical',
         lineHeight: '1.5',
         fontFamily: 'inherit',
@@ -1048,7 +1184,7 @@ const styles = {
     },
     inputWithPrefix: {
         width: '100%',
-        padding: '0.875rem 1rem 0.875rem 2rem',
+        padding: '0.75rem 1rem 0.75rem 2rem',
         border: '1.5px solid #e5e7eb',
         borderRadius: '8px',
         fontSize: '0.95rem',
@@ -1063,7 +1199,7 @@ const styles = {
         display: 'flex',
         gap: '1rem',
         justifyContent: 'flex-end',
-        marginTop: '2rem',
+        marginTop: '1.5rem',
         paddingTop: '1.5rem',
         borderTop: '1px solid #f3f4f6',
     },

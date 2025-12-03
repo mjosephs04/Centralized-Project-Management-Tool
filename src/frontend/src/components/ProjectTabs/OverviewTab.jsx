@@ -55,17 +55,33 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
         }).format(parseFloat(value));
     };
 
-    // Helper function to format date as YYYY-MM-DD
+    // Helper function to format date as "Month DDth, YYYY"
     const formatDate = (dateString) => {
         if (!dateString) return 'Not specified';
         try {
             const date = new Date(dateString);
+
+            // Check if date is valid
+            if (isNaN(date.getTime())) return 'Not specified';
+
+            const month = date.toLocaleString('en-US', { month: 'long' });
+            const day = date.getDate();
             const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
+
+            // Add ordinal suffix (st, nd, rd, th)
+            const getOrdinalSuffix = (day) => {
+                if (day > 3 && day < 21) return 'th'; // 11th-20th
+                switch (day % 10) {
+                    case 1: return 'st';
+                    case 2: return 'nd';
+                    case 3: return 'rd';
+                    default: return 'th';
+                }
+            };
+
+            return `${month} ${day}${getOrdinalSuffix(day)}, ${year}`;
         } catch {
-            return dateString;
+            return 'Not specified';
         }
     };
 
@@ -489,7 +505,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                             <FaCalendarAlt style={styles.icon} />
                             <span style={styles.label}>Actual Start Date</span>
                         </div>
-                        <p style={styles.value}>{project.startDate || 'Not specified'}</p>
+                        <p style={styles.value}>{formatDate(project.startDate)}</p>
                     </div>
 
                     <div style={styles.card}>
@@ -497,7 +513,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                             <FaCalendarAlt style={styles.icon} />
                             <span style={styles.label}>Scheduled End Date</span>
                         </div>
-                        <p style={styles.value}>{project.endDate || 'Not specified'}</p>
+                        <p style={styles.value}>{formatDate(project.endDate)}</p>
                     </div>
 
                     <div style={styles.card}>
@@ -731,14 +747,20 @@ const styles = {
     },
     grid: {
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gridTemplateColumns: 'repeat(3, 1fr)',
         gap: '1.5rem',
+        maxWidth: '1400px',
+        margin: '0 auto',
+        padding: '0 1rem',
     },
     card: {
         backgroundColor: 'white',
         borderRadius: '12px',
         padding: '1.5rem',
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+        minHeight: '100px',
+        display: 'flex',
+        flexDirection: 'column',
     },
     cardHeader: {
         display: 'flex',
