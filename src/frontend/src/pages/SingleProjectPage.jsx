@@ -76,6 +76,12 @@ const SingleProjectPage = ({ projects }) => {
     const [reportData, setReportData] = useState(null);
     const [selectedWorkOrderForSupplies, setSelectedWorkOrderForSupplies] = useState(null);
 
+    // Check if project is in a terminal/frozen status
+    const isProjectFrozen = () => {
+        const terminalStatuses = ['archived', 'cancelled'];
+        return terminalStatuses.includes(project?.status);
+    };
+
     useEffect(() => {
         fetchInitialData();
         // Update active tab when projectId changes
@@ -333,7 +339,7 @@ const SingleProjectPage = ({ projects }) => {
                         <h1 style={styles.projectTitle}>{project.name}</h1>
                         <p style={styles.location}>{project.location}</p>
                     </div>
-                    {/* NEW: Report Button - Only visible to PMs */}
+                    {/* Report Button - Only visible to PMs */}
                     <div style={styles.headerRight}>
                         <ReportButton
                             project={project}
@@ -349,9 +355,10 @@ const SingleProjectPage = ({ projects }) => {
                         <h2 style={styles.sectionTitle}>Project Description</h2>
                         {userRole !== 'worker' && !isEditingDescription && (
                             <button 
-                                style={styles.editIconButton}
-                                onClick={handleEditDescription}
-                                title="Edit description"
+                                style={isProjectFrozen() ? styles.editIconButtonDisabled : styles.editIconButton}
+                                onClick={isProjectFrozen() ? null : handleEditDescription}
+                                title={isProjectFrozen() ? "Cannot edit archived/cancelled project" : "Edit description"}
+                                disabled={isProjectFrozen()}
                             >
                                 <FaEdit />
                             </button>
@@ -414,7 +421,7 @@ const SingleProjectPage = ({ projects }) => {
                 </div>
             </div>
 
-            {/* NEW: Hidden Report Component - Only rendered during PDF generation */}
+            {/* Hidden Report Component - Only rendered during PDF generation */}
             {reportData && (
                 <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
                     <ProjectReport ref={reportRef} reportData={reportData} />
@@ -529,6 +536,19 @@ const styles = {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    editIconButtonDisabled: {
+        background: 'none',
+        border: '2px solid #d1d5db',
+        cursor: 'not-allowed',
+        padding: '0.5rem 0.5rem 0.5rem 0.6rem',
+        color: '#9ca3af',
+        fontSize: '1.1rem',
+        borderRadius: '6px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: 0.5,
     },
     saveIconButton: {
         background: '#77DD77',
