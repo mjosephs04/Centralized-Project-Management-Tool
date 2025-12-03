@@ -207,13 +207,23 @@ const SingleProjectPage = ({ projects }) => {
         }, 3000);
     };
 
-    // NEW: Handle report generation
+
     const handleGenerateReport = async () => {
         try {
             showSnackbar('Fetching project data...', 'info');
 
-            // Fetch report data from backend
-            const data = await projectsAPI.getReportData(projectId);
+            // Fetch project and metrics data - same as MetricsTab uses
+            const [projectData, metricsData] = await Promise.all([
+                projectsAPI.getProject(projectId),
+                projectsAPI.getMetrics.all(projectId)
+            ]);
+
+            const data = {
+                project: projectData,
+                metrics: metricsData
+            };
+
+            console.log('Report Data:', data); // Debug log
             setReportData(data);
 
             // Wait for React to render the report

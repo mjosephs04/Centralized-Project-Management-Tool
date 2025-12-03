@@ -869,4 +869,3 @@ const styles = {
 };
 
 export default MetricsTab;
-

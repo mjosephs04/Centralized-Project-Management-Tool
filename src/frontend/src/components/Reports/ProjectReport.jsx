@@ -1,6 +1,7 @@
 import React from 'react';
 import ReportHeader from './ReportHeader';
 import ReportTimeline from './ReportTimeline';
+import ReportMetrics from './ReportMetrics';  // ← ADD THIS LINE
 import ReportFinancial from './ReportFinancial';
 import ReportWorkOrders from './ReportWorkOrders';
 import ReportDetails from './ReportDetails';
@@ -16,6 +17,7 @@ const ProjectReport = React.forwardRef(({ reportData }, ref) => {
             <div className="report-content">
                 <ReportHeader project={project} />
                 <ReportTimeline project={project} metrics={metrics} />
+                <ReportMetrics metrics={metrics} />  {/* ← AND USE IT HERE */}
                 <ReportFinancial project={project} metrics={metrics} />
                 <ReportWorkOrders metrics={metrics} />
                 <ReportDetails project={project} />
