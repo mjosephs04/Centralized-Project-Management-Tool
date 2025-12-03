@@ -36,6 +36,12 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
     actualCost: "",
   });
 
+  // Check if project is in a terminal/frozen status
+  const isProjectFrozen = () => {
+    const terminalStatuses = ['archived', 'cancelled'];
+    return terminalStatuses.includes(project.status);
+  };
+
   const columns = useMemo(() => {
     const byCol = Object.fromEntries(COLUMNS.map((c) => [c.key, []]));
     for (const wo of workOrders) {
@@ -84,6 +90,12 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
   };
 
   const openUpdateModal = (wo) => {
+    // Check if project is frozen
+    if (isProjectFrozen()) {
+      showSnackbar('Cannot update work orders on archived or cancelled projects', 'error');
+      return;
+    }
+
     setSelectedWorkOrder(wo);
     setFormData({
       name: wo.name || "",
@@ -126,8 +138,14 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
     setFormErrors({});
   };
 
-  // Drag & Drop: workers can move cards to change status
+  // Drag & Drop: workers can move cards to change status (disabled when frozen)
   const onDragEnd = async (result) => {
+    // Check if project is frozen
+    if (isProjectFrozen()) {
+      showSnackbar('Cannot move work orders on archived or cancelled projects', 'error');
+      return;
+    }
+
     const { destination, source } = result;
     if (!destination) return;
     const fromCol = source.droppableId;
@@ -155,6 +173,12 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
   };
 
   const handleUpdate = async () => {
+    // Double-check frozen status
+    if (isProjectFrozen()) {
+      showSnackbar('Cannot update work orders on archived or cancelled projects', 'error');
+      return;
+    }
+
     if (!validateForm()) return;
     try {
       await workOrdersAPI.workerUpdate(selectedWorkOrder.id, {
@@ -204,6 +228,19 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
 
   return (
     <div style={styles.container}>
+      {/* Frozen Project Banner */}
+      {isProjectFrozen() && (
+        <div style={styles.frozenBanner}>
+          <span style={styles.frozenIcon}>🔒</span>
+          <div style={styles.frozenText}>
+            <strong>Project {project.status === 'archived' ? 'Archived' : 'Cancelled'}</strong>
+            <p style={styles.frozenSubtext}>
+              Work orders are view-only. Cards cannot be moved or updated.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div style={styles.header}>
         <h2 style={styles.title}>Work Orders</h2>
         {/* Workers have no Create/Delete; view & update only */}
@@ -222,7 +259,7 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
                     <span style={styles.columnTitle}>{col.label}</span>
                     <span style={styles.columnCount}>{items.length}</span>
                   </div>
-                  <Droppable droppableId={col.key}>
+                  <Droppable droppableId={col.key} isDropDisabled={isProjectFrozen()}>
                     {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
@@ -233,12 +270,19 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
                         }}
                       >
                         {items.length === 0 ? (
-                          <div style={styles.emptyLane}>Drop items here</div>
+                          <div style={styles.emptyLane}>
+                            {isProjectFrozen() ? "No items" : "Drop items here"}
+                          </div>
                         ) : (
                           items.map((wo, index) => {
                             const statusStyle = getStatusColor(wo.status);
                             return (
-                              <Draggable key={String(wo.id)} draggableId={String(wo.id)} index={index}>
+                              <Draggable 
+                                key={String(wo.id)} 
+                                draggableId={String(wo.id)} 
+                                index={index}
+                                isDragDisabled={isProjectFrozen()}
+                              >
                                 {(dragProvided, dragSnapshot) => (
                                   <div
                                     ref={dragProvided.innerRef}
@@ -247,6 +291,7 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
                                     style={{
                                       ...styles.card,
                                       ...(dragSnapshot.isDragging ? styles.cardDragging : {}),
+                                      ...(isProjectFrozen() ? styles.cardFrozen : {}),
                                       ...dragProvided.draggableProps.style,
                                     }}
                                   >
@@ -287,6 +332,7 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
                                     )}
 
                                     <div style={styles.cardFooter}>
+                                      {/* View button always visible */}
                                       <button
                                         style={{ ...styles.cardBtn, background: "#5692bc", color: 'white' }}
                                         onClick={() => openViewModal(wo)}
@@ -294,9 +340,15 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
                                       >
                                         <FaEye style={{ marginRight: 6 }} /> View
                                       </button>
-                                      <button style={{...styles.cardBtn, background: '#b356bc', color: 'white'}} onClick={() => openUpdateModal(wo)}>
-                                        Update
-                                      </button>
+                                      {/* Update button only shown if project is not frozen */}
+                                      {!isProjectFrozen() && (
+                                        <button 
+                                          style={{...styles.cardBtn, background: '#b356bc', color: 'white'}} 
+                                          onClick={() => openUpdateModal(wo)}
+                                        >
+                                          Update
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 )}
@@ -501,6 +553,27 @@ const WorkerWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, hi
 // Styles (updated to match PMWorkOrders and CalendarTab)
 const styles = {
   container: { maxWidth: "1400px", margin: "0 auto" },
+  frozenBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    padding: '0.875rem 1.25rem',
+    backgroundColor: '#fef3c7',
+    border: '2px solid #f59e0b',
+    borderRadius: '8px',
+    marginBottom: '1.5rem',
+  },
+  frozenIcon: {
+    fontSize: '1.5rem',
+  },
+  frozenText: {
+    flex: 1,
+  },
+  frozenSubtext: {
+    margin: '0.25rem 0 0 0',
+    fontSize: '0.875rem',
+    color: '#92400e',
+  },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" },
   title: { fontSize: "1.8rem", fontWeight: "600", color: "#2c3e50", margin: 0 },
   board: { display: "grid", gridTemplateColumns: "repeat(5, minmax(240px, 1fr))", gap: "1rem", alignItems: "start", minHeight: "320px" },
@@ -512,6 +585,10 @@ const styles = {
   emptyLane: { border: "2px dashed #cbd5e1", borderRadius: "10px", padding: "1rem", textAlign: "center", color: "#94a3b8", fontWeight: 600 },
   card: { background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "0.75rem", marginBottom: "0.75rem", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" },
   cardDragging: { boxShadow: "0 8px 20px rgba(0,0,0,0.15)", transform: "rotate(1deg)" },
+  cardFrozen: { 
+    cursor: 'not-allowed',
+    opacity: 0.9,
+  },
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" },
   cardTitle: { color: "#111827" },
   cardDesc: { color: "#6b7280", fontSize: "0.9rem", margin: "0.25rem 0 0.5rem" },
@@ -522,6 +599,32 @@ const styles = {
   smallLabel: { color: "#6b7280", fontWeight: 600 },
   statusBadge: { display: "inline-block", padding: "0.2rem 0.6rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: "700", textTransform: "capitalize", textAlign: "center" },
   cardBtn: { padding: "0.35rem 0.6rem", background: "#dbeafe", color: "#111827", border: "none", borderRadius: "8px", fontSize: "0.85rem", fontWeight: "700", cursor: "pointer" },
+  cardAssignedWorkers: {
+    marginTop: "0.5rem",
+    paddingTop: "0.5rem",
+    borderTop: "1px solid #e5e7eb",
+  },
+  assignedLabel: {
+    fontSize: "0.75rem",
+    fontWeight: "600",
+    color: "#6b7280",
+    display: "block",
+    marginBottom: "0.25rem",
+  },
+  workerBadgesContainer: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.25rem",
+  },
+  workerBadge: {
+    display: "inline-block",
+    padding: "0.2rem 0.5rem",
+    backgroundColor: "#dbeafe",
+    color: "#1e40af",
+    borderRadius: "9999px",
+    fontSize: "0.7rem",
+    fontWeight: "600",
+  },
   
   // Modals - Enhanced styling to match PMWorkOrders
   overlay: { 

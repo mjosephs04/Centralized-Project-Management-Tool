@@ -27,6 +27,23 @@ from .notification_service import notify_project_managers_of_change
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/api/projects")
 
+def is_project_frozen(project):
+    terminal_statuses = [ProjectStatus.ARCHIVED, ProjectStatus.CANCELLED]
+    return project.status in terminal_statuses
+
+def can_edit_frozen_project(user, data):
+    if user.role != UserRole.PROJECT_MANAGER:
+        return False, "Only project managers can modify archived or cancelled projects"
+
+    allowed_fields = {'status'}
+    provided_fields = set(data.keys())
+
+    if not provided_fields.issubset(allowed_fields):
+        disallowed = provided_fields - allowed_fields
+        return False, f"Cannot modify {', '.join(disallowed)} on archived/cancelled projects."
+
+    return True, None
+
 
 def create_audit_log(entity_type: AuditEntityType, entity_id: int, user_id: int, field: str, old_value: str, new_value: str, session_id: str = None, project_id: int = None):
     """Helper function to create an audit log entry and notify project managers"""
@@ -41,7 +58,7 @@ def create_audit_log(entity_type: AuditEntityType, entity_id: int, user_id: int,
         projectId=project_id
     )
     db.session.add(audit_log)
-    
+
     # Notify project managers of important changes
     # Only notify for project-level changes (not work order changes from this file)
     if entity_type == AuditEntityType.PROJECT and project_id:
@@ -49,7 +66,7 @@ def create_audit_log(entity_type: AuditEntityType, entity_id: int, user_id: int,
             # Get entity name if it's a project
             project = Project.query.get(project_id) if project_id else None
             entity_name = project.name if project else None
-            
+
             notify_project_managers_of_change(
                 entity_type=entity_type,
                 entity_id=entity_id,
@@ -150,7 +167,8 @@ def create_project():
         try:
             status = ProjectStatus(payload["status"].lower())
         except ValueError:
-            return jsonify({"error": "Invalid status. Must be planning, initiated, regulatory_scoping, design_procurement, construction_prep, in_construction, commissioning, energized, closeout, on_hold, cancelled, or archived"}), 400
+            valid_statuses = [s.value for s in ProjectStatus]
+            return jsonify({"error": f"Invalid status. Must be one of: {', '.join(valid_statuses)}"}), 400
     
     # Validate priority if provided
     priority = payload.get("priority", "medium")
@@ -227,10 +245,10 @@ def get_projects():
     - Admins: all projects"""
     user_id = int(get_jwt_identity())
     user = User.query.filter_by(id=user_id, isActive=True).first()
-    
+
     if not user:
         return jsonify({"error": "User not found"}), 404
-    
+
     if user.role == UserRole.PROJECT_MANAGER:
         # Project managers see projects they manage
         projects = Project.query.filter_by(projectManagerId=user_id, isActive=True).all()
@@ -251,7 +269,7 @@ def get_projects():
     else:
         # Unknown role - return empty list
         projects = []
-    
+
     return jsonify({"projects": [project.to_dict() for project in projects]}), 200
 
 
@@ -357,7 +375,7 @@ def get_my_projects():
         for project in projects:
             if project.actualCost is None:
                 db.session.refresh(project)
-    
+
     return jsonify({"projects": [project.to_dict() for project in projects]}), 200
 
 
@@ -395,7 +413,13 @@ def update_project(project_id):
         "actualEndDate": project.actualEndDate.isoformat() if project.actualEndDate else None,
         "crewMembers": json.dumps(project.get_crew_members()) if project.get_crew_members() else "[]",
     }
-    
+
+    # Check if project is frozen
+    if is_project_frozen(project):
+        can_edit, error_message = can_edit_frozen_project(user, payload)
+        if not can_edit:
+            return jsonify({"error": error_message}), 403
+
     # Update basic fields with audit logging
     if "name" in payload and payload["name"] != original_values["name"]:
         create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "name", original_values["name"], payload["name"], session_id, project_id)
@@ -416,14 +440,57 @@ def update_project(project_id):
             create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "priority", original_values["priority"], payload["priority"], session_id, project_id)
             project.priority = payload["priority"]
     
+    # NEW: Set timestamps when status changes
     if "status" in payload:
         try:
+            old_status = project.status  # Store old status
             new_status = ProjectStatus(payload["status"].lower())
             if new_status.value != original_values["status"]:
                 create_audit_log(AuditEntityType.PROJECT, project_id, user_id, "status", original_values["status"], new_status.value, session_id, project_id)
                 project.status = new_status
+
+                # NEW: Set completedAt when status changes to closeout
+                if new_status == ProjectStatus.CLOSEOUT and old_status != ProjectStatus.CLOSEOUT:
+                    if not project.completedAt:
+                        project.completedAt = datetime.utcnow()
+
+                # NEW: Set archivedAt when status changes to archived
+                if new_status == ProjectStatus.ARCHIVED and old_status != ProjectStatus.ARCHIVED:
+                    if not project.archivedAt:
+                        project.archivedAt = datetime.utcnow()
         except ValueError:
-            return jsonify({"error": "Invalid status. Must be planning, initiated, regulatory_scoping, design_procurement, construction_prep, in_construction, commissioning, energized, closeout, on_hold, cancelled, or archived"}), 400
+            valid_statuses = [s.value for s in ProjectStatus]
+            return jsonify({"error": f"Invalid status. Must be one of: {', '.join(valid_statuses)}"}), 400
+
+
+    # NEW: Handle new cost fields (add this after the actualCost section, around line 420)
+    if "suppliesCost" in payload:
+        try:
+            cost = float(payload["suppliesCost"]) if payload["suppliesCost"] else 0.00
+            if cost < 0:
+                return jsonify({"error": "Supplies cost must be positive"}), 400
+            project.suppliesCost = cost
+        except ValueError:
+            return jsonify({"error": "Invalid supplies cost format"}), 400
+
+    if "equipmentCost" in payload:
+        try:
+            cost = float(payload["equipmentCost"]) if payload["equipmentCost"] else 0.00
+            if cost < 0:
+                return jsonify({"error": "Equipment cost must be positive"}), 400
+            project.equipmentCost = cost
+        except ValueError:
+            return jsonify({"error": "Invalid equipment cost format"}), 400
+
+    if "otherExpenses" in payload:
+        try:
+            cost = float(payload["otherExpenses"]) if payload["otherExpenses"] else 0.00
+            if cost < 0:
+                return jsonify({"error": "Other expenses must be positive"}), 400
+            project.otherExpenses = cost
+        except ValueError:
+            return jsonify({"error": "Invalid other expenses format"}), 400
+
     
     # Update crew members if provided
     if "crewMembers" in payload:
@@ -562,14 +629,14 @@ def get_project_audit_logs(project_id):
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
-        
+
         if not user:
             return jsonify({"error": "User not found"}), 404
-        
+
         project = Project.query.get(project_id)
         if not project:
             return jsonify({"error": "Project not found"}), 404
-        
+
         # Check if user has access to this project
         has_access = False
         if user.role == UserRole.ADMIN:
@@ -580,10 +647,10 @@ def get_project_audit_logs(project_id):
             crew_members = project.get_crew_members()
             if int(user_id) in crew_members:
                 has_access = True
-        
+
         if not has_access:
             return jsonify({"error": "Access denied"}), 403
-        
+
         # Get audit logs for this project (project, work order, and supply logs)
         # Use eager loading to avoid N+1 queries for user relationships
         project_audit_logs = Audit.query.options(
@@ -592,7 +659,7 @@ def get_project_audit_logs(project_id):
             entityType=AuditEntityType.PROJECT,
             entityId=project_id
         ).all()
-        
+
         # Get work order audit logs for work orders in this project
         work_order_audit_logs = Audit.query.options(
             joinedload(Audit.user)
@@ -600,7 +667,7 @@ def get_project_audit_logs(project_id):
             Audit.entityType == AuditEntityType.WORK_ORDER,
             Audit.projectId == project_id
         ).all()
-        
+
         # Get supply audit logs for supplies in this project
         supply_audit_logs = Audit.query.options(
             joinedload(Audit.user)
@@ -608,15 +675,15 @@ def get_project_audit_logs(project_id):
             Audit.entityType == AuditEntityType.SUPPLY,
             Audit.projectId == project_id
         ).all()
-        
+
         # Combine and sort all audit logs by creation date
         all_audit_logs = project_audit_logs + work_order_audit_logs + supply_audit_logs
         all_audit_logs.sort(key=lambda log: log.createdAt if log.createdAt else datetime.min, reverse=True)
-        
+
         # Batch load work orders and supplies to avoid N+1 queries
         work_order_ids = {log.entityId for log in all_audit_logs if log.entityType == AuditEntityType.WORK_ORDER}
         supply_ids = {log.entityId for log in all_audit_logs if log.entityType == AuditEntityType.SUPPLY}
-        
+
         work_orders = {}
         if work_order_ids:
             work_orders_list = WorkOrder.query.filter(
@@ -624,13 +691,13 @@ def get_project_audit_logs(project_id):
                 WorkOrder.isActive == True
             ).all()
             work_orders = {wo.id: wo for wo in work_orders_list}
-        
+
         supplies = {}
         if supply_ids:
             building_supplies = BuildingSupply.query.filter(BuildingSupply.id.in_(supply_ids)).all()
             electrical_supplies = ElectricalSupply.query.filter(ElectricalSupply.id.in_(supply_ids)).all()
             supplies = {s.id: s for s in building_supplies + electrical_supplies}
-        
+
         # Serialize audit logs with pre-loaded data
         audit_logs_dict = []
         for log in all_audit_logs:
@@ -656,9 +723,9 @@ def get_project_audit_logs(project_id):
                     "createdAt": log.createdAt.isoformat() if log.createdAt else None,
                     "error": "Failed to load full details"
                 })
-        
+
         return jsonify({"auditLogs": audit_logs_dict}), 200
-    
+
     except Exception as e:
         import traceback
         print(f"Error in get_project_audit_logs: {str(e)}")
@@ -672,10 +739,10 @@ def get_notifications():
     """Get recent notifications for project managers (important changes to their projects)"""
     user_id = int(get_jwt_identity())
     user = User.query.filter_by(id=user_id, isActive=True).first()
-    
+
     if not user:
         return jsonify({"error": "User not found"}), 404
-    
+
     # Only project managers can get notifications
     if user.role != UserRole.PROJECT_MANAGER:
         return jsonify({"error": "Only project managers can view notifications"}), 403
@@ -684,45 +751,45 @@ def get_notifications():
     manager_proj_ids = [pm.projectId for pm in ProjectManager.query.filter_by(userId=user_id, isActive=True).all()]
     legacy_manager_ids = [p.id for p in Project.query.filter_by(projectManagerId=user_id, isActive=True).all()]
     project_ids = list(set(manager_proj_ids) | set(legacy_manager_ids))
-    
+
     if not project_ids:
         return jsonify({"notifications": [], "unreadCount": 0}), 200
-    
+
     # Get query parameters
     limit = request.args.get("limit", type=int) or 50
     only_unread = request.args.get("only_unread", "false").lower() == "true"
-    
+
     # Fields that trigger notifications (matching notification_service.py logic)
     important_fields = [
         "status", "priority", "estimatedBudget", "actualCost",
         "startDate", "endDate", "actualStartDate", "actualEndDate",
         "teamMembers", "work_order_created"
     ]
-    
+
     # Get user's notification preferences
     preferences = NotificationPreference.query.filter_by(userId=user_id).first()
-    
+
     # Get dismissed notification IDs for this user
     dismissed_audit_ids = {
-        dismissal.auditLogId 
+        dismissal.auditLogId
         for dismissal in NotificationDismissal.query.filter_by(userId=user_id).all()
     }
-    
+
     # Get recent audit logs from managed projects
     query = Audit.query.filter(
         Audit.projectId.in_(project_ids),
         Audit.field.in_(important_fields),
         Audit.userId != user_id  # Exclude changes made by the manager themselves
     )
-    
+
     # Exclude dismissed notifications if any exist
     if dismissed_audit_ids:
         query = query.filter(~Audit.id.in_(dismissed_audit_ids))
-    
+
     query = query.order_by(Audit.createdAt.desc()).limit(limit * 2)  # Get more to filter by preferences
-    
+
     audit_logs = query.all()
-    
+
     # Format notifications and filter by preferences
     notifications = []
     for log in audit_logs:
@@ -730,19 +797,19 @@ def get_notifications():
         from .notification_service import get_user_preference_key, should_send_notification
         preference_key = get_user_preference_key(log.entityType, log.field, log.newValue)
         should_in_app, _ = should_send_notification(user_id, preference_key)
-        
+
         # Skip if user doesn't want in-app notifications for this type
         if not should_in_app:
             continue
         # Get project name
         project = Project.query.get(log.projectId) if log.projectId else None
         project_name = project.name if project else f"Project #{log.projectId}"
-        
+
         # Format change description
         field_display = log.field.replace("_", " ").title()
         old_display = log.oldValue if log.oldValue and log.oldValue != "None" else "Not set"
         new_display = log.newValue if log.newValue and log.newValue != "None" else "Not set"
-        
+
         # Special formatting
         if log.field == "work_order_created":
             change_desc = f"New work order created: {new_display}"
@@ -761,19 +828,19 @@ def get_notifications():
             change_desc = f"{field_display}: {old_display} → {new_display}"
         else:
             change_desc = f"{field_display}: {old_display} → {new_display}"
-        
+
         # Get work order name if applicable
         work_order_name = None
         if log.entityType == AuditEntityType.WORK_ORDER and log.entityId:
             work_order = WorkOrder.query.filter_by(id=log.entityId, isActive=True).first()
             if work_order:
                 work_order_name = work_order.name
-        
+
         # Get user who made the change
         changed_by = None
         if log.user:
             changed_by = f"{log.user.firstName} {log.user.lastName}"
-        
+
         notification = {
             "id": log.id,
             "projectId": log.projectId,
@@ -789,15 +856,15 @@ def get_notifications():
             "isRead": False  # Legacy field, kept for compatibility
         }
         notifications.append(notification)
-        
+
         # Stop if we've reached the limit
         if len(notifications) >= limit:
             break
-    
+
     # For now, all notifications are considered unread
     # In the future, you could add a NotificationRead model to track read status
     unread_count = len(notifications) if only_unread else len(notifications)
-    
+
     return jsonify({
         "notifications": notifications,
         "unreadCount": unread_count
@@ -810,14 +877,14 @@ def get_notification_preferences():
     """Get notification preferences for the current user (project managers only)"""
     user_id = int(get_jwt_identity())
     user = User.query.filter_by(id=user_id, isActive=True).first()
-    
+
     if not user:
         return jsonify({"error": "User not found"}), 404
-    
+
     # Only project managers can have notification preferences
     if user.role != UserRole.PROJECT_MANAGER:
         return jsonify({"error": "Only project managers can have notification preferences"}), 403
-    
+
     # Get or create preferences (defaults to all enabled)
     preferences = NotificationPreference.query.filter_by(userId=user_id).first()
     if not preferences:
@@ -825,7 +892,7 @@ def get_notification_preferences():
         preferences = NotificationPreference(userId=user_id)
         db.session.add(preferences)
         db.session.commit()
-    
+
     return jsonify({"preferences": preferences.to_dict()}), 200
 
 
@@ -835,22 +902,22 @@ def update_notification_preferences():
     """Update notification preferences for the current user (project managers only)"""
     user_id = int(get_jwt_identity())
     user = User.query.filter_by(id=user_id, isActive=True).first()
-    
+
     if not user:
         return jsonify({"error": "User not found"}), 404
-    
+
     # Only project managers can have notification preferences
     if user.role != UserRole.PROJECT_MANAGER:
         return jsonify({"error": "Only project managers can have notification preferences"}), 403
-    
+
     payload = request.get_json(silent=True) or {}
-    
+
     # Get or create preferences
     preferences = NotificationPreference.query.filter_by(userId=user_id).first()
     if not preferences:
         preferences = NotificationPreference(userId=user_id)
         db.session.add(preferences)
-    
+
     # Update preferences from payload
     boolean_fields = [
         "projectStatusChange", "projectStatusChangeEmail",
@@ -865,13 +932,13 @@ def update_notification_preferences():
         "workOrderBudgetChange", "workOrderBudgetChangeEmail",
         "workOrderDateChange", "workOrderDateChangeEmail",
     ]
-    
+
     for field in boolean_fields:
         if field in payload:
             setattr(preferences, field, bool(payload[field]))
-    
+
     db.session.commit()
-    
+
     return jsonify({"preferences": preferences.to_dict()}), 200
 
 
@@ -881,32 +948,32 @@ def dismiss_notification(notification_id):
     """Dismiss a notification (mark it as dismissed for the current user)"""
     user_id = int(get_jwt_identity())
     user = User.query.filter_by(id=user_id, isActive=True).first()
-    
+
     if not user:
         return jsonify({"error": "User not found"}), 404
-    
+
     # Only project managers can dismiss notifications
     if user.role != UserRole.PROJECT_MANAGER:
         return jsonify({"error": "Only project managers can dismiss notifications"}), 403
-    
+
     # Verify the audit log exists and belongs to a project the user manages
     audit_log = Audit.query.filter_by(id=notification_id).first()
     if not audit_log:
         return jsonify({"error": "Notification not found"}), 404
-    
+
     # Check if user manages this project
     if not is_project_manager(user_id, audit_log.projectId):
         return jsonify({"error": "You can only dismiss notifications for projects you manage"}), 403
-    
+
     # Check if already dismissed
     existing_dismissal = NotificationDismissal.query.filter_by(
         userId=user_id,
         auditLogId=notification_id
     ).first()
-    
+
     if existing_dismissal:
         return jsonify({"message": "Notification already dismissed"}), 200
-    
+
     # Create dismissal record
     dismissal = NotificationDismissal(
         userId=user_id,
@@ -914,7 +981,7 @@ def dismiss_notification(notification_id):
     )
     db.session.add(dismissal)
     db.session.commit()
-    
+
     return jsonify({"message": "Notification dismissed successfully"}), 200
 
 
@@ -924,48 +991,48 @@ def dismiss_all_notifications():
     """Dismiss all current notifications for the current user"""
     user_id = int(get_jwt_identity())
     user = User.query.filter_by(id=user_id, isActive=True).first()
-    
+
     if not user:
         return jsonify({"error": "User not found"}), 404
-    
+
     # Only project managers can dismiss notifications
     if user.role != UserRole.PROJECT_MANAGER:
         return jsonify({"error": "Only project managers can dismiss notifications"}), 403
-    
+
     # Get all projects the user manages
     manager_proj_ids = [pm.projectId for pm in ProjectManager.query.filter_by(userId=user_id, isActive=True).all()]
     legacy_manager_ids = [p.id for p in Project.query.filter_by(projectManagerId=user_id, isActive=True).all()]
     project_ids = list(set(manager_proj_ids) | set(legacy_manager_ids))
-    
+
     if not project_ids:
         return jsonify({"message": "No notifications to dismiss", "dismissedCount": 0}), 200
-    
+
     # Get all undismissed audit logs from managed projects
     important_fields = [
         "status", "priority", "estimatedBudget", "actualCost",
         "startDate", "endDate", "actualStartDate", "actualEndDate",
         "teamMembers", "work_order_created"
     ]
-    
+
     # Get already dismissed audit log IDs
     dismissed_audit_ids = {
-        dismissal.auditLogId 
+        dismissal.auditLogId
         for dismissal in NotificationDismissal.query.filter_by(userId=user_id).all()
     }
-    
+
     # Get all relevant audit logs
     query = Audit.query.filter(
         Audit.projectId.in_(project_ids),
         Audit.field.in_(important_fields),
         Audit.userId != user_id
     )
-    
+
     # Exclude already dismissed notifications
     if dismissed_audit_ids:
         query = query.filter(~Audit.id.in_(dismissed_audit_ids))
-    
+
     audit_logs = query.all()
-    
+
     # Create dismissals for all
     dismissed_count = 0
     for log in audit_logs:
@@ -975,9 +1042,9 @@ def dismiss_all_notifications():
         )
         db.session.add(dismissal)
         dismissed_count += 1
-    
+
     db.session.commit()
-    
+
     return jsonify({
         "message": f"Dismissed {dismissed_count} notifications",
         "dismissedCount": dismissed_count
@@ -1002,16 +1069,16 @@ def _update_project_actual_cost_from_work_orders(project_id: int):
     project = Project.query.filter_by(id=project_id, isActive=True).first()
     if not project:
         return
-    
+
     # Get all active work orders for this project
     work_orders = WorkOrder.query.filter_by(projectId=project_id, isActive=True).all()
-    
+
     # Sum all work order actual costs
     total_actual_cost = Decimal("0")
     for wo in work_orders:
         if wo.actualCost is not None:
             total_actual_cost += to_decimal(wo.actualCost)
-    
+
     # Update project's actual cost (set to 0 if no costs, not None)
     # This ensures the value is always set, even if it's 0
     if total_actual_cost == Decimal("0"):
@@ -1022,7 +1089,7 @@ def _update_project_actual_cost_from_work_orders(project_id: int):
 
 def _update_work_order_costs_from_supplies(work_order_ids: List[int]):
     """Recalculate and update work order actualCost based on approved supplies linked to them.
-    
+
     This function sums all approved supply costs for the given work orders and updates
     their actualCost fields. Note: This will overwrite any manually entered actualCost,
     so supplies should be the primary source of cost tracking.
@@ -1030,17 +1097,17 @@ def _update_work_order_costs_from_supplies(work_order_ids: List[int]):
     """
     if not work_order_ids:
         return
-    
+
     updated_project_ids = set()
-    
+
     for wo_id in work_order_ids:
         work_order = WorkOrder.query.get(wo_id)
         if not work_order:
             continue
-        
+
         # Calculate total cost of approved supplies for this work order
         supply_cost_total = Decimal("0")
-        
+
         # Get approved building supplies
         building_links = WorkOrderBuildingSupply.query.filter_by(
             workOrderId=wo_id,
@@ -1068,7 +1135,7 @@ def _update_work_order_costs_from_supplies(work_order_ids: List[int]):
         # Update work order actualCost with total supply costs
         work_order.actualCost = supply_cost_total
         updated_project_ids.add(work_order.projectId)
-    
+
     # Update project actual costs for all affected projects
     for project_id in updated_project_ids:
         _update_project_actual_cost_from_work_orders(project_id)
@@ -1171,10 +1238,10 @@ def get_dashboard_progress():
 
         user_id = int(get_jwt_identity())
         user = User.query.filter_by(id=user_id, isActive=True).first()
-        
+
         if not user:
             return jsonify({"error": "User not found"}), 404
-        
+
         stmt = select(Project)
         if status_str:
             try:
@@ -1265,7 +1332,7 @@ def get_project_progress_detail(project_id: int):
 
         user_id = int(get_jwt_identity())
         user = User.query.filter_by(id=user_id, isActive=True).first()
-        
+
         if not user:
             return jsonify({"error": "User not found"}), 404
 
@@ -1356,14 +1423,14 @@ def get_project_members(project_id: int):
     # Get project managers (all)
     members = []
     managers = ProjectManager.query.filter_by(projectId=project_id, isActive=True).all()
-    
+
     # Add all managers from ProjectManager table
     for pm in managers:
         manager_data = pm.user.to_dict()
         manager_data["role"] = "project_manager"
         manager_data["joinedAt"] = pm.addedAt.isoformat() if pm.addedAt else None
         members.append(manager_data)
-    
+
     # Also include legacy projectManagerId if it exists and is not already in the list
     # This ensures we show all managers even if some are only in the legacy field
     if project.projectManager:
@@ -1811,13 +1878,13 @@ def get_supplies_catalog():
     supply_type = request.args.get("supplyType", "building").strip().lower()  # 'building', 'electrical', or 'all'
     page = int(request.args.get("page", 1))
     page_size = int(request.args.get("pageSize", 100))  # Default 100 items per page
-    
+
     # Validate pagination
     if page < 1:
         page = 1
     if page_size < 1 or page_size > 500:  # Max 500 items per page
         page_size = 100
-    
+
     # Check cache for categories (categories don't change often)
     categories_cache_key = _get_categories_cache_key(supply_type)
     cached_categories = _catalog_cache.get(categories_cache_key)
@@ -1830,12 +1897,12 @@ def get_supplies_catalog():
                 BuildingSupply.projectId.is_(None),
                 BuildingSupply.supplyCategory.isnot(None)
             ).distinct().order_by(BuildingSupply.supplyCategory.asc()).all()
-            
+
             electrical_categories = db.session.query(ElectricalSupply.supplyCategory).filter(
                 ElectricalSupply.projectId.is_(None),
                 ElectricalSupply.supplyCategory.isnot(None)
             ).distinct().order_by(ElectricalSupply.supplyCategory.asc()).all()
-            
+
             categories_data = {
                 "buildingCategories": [cat[0] for cat in building_categories if cat[0]],
                 "electricalCategories": [cat[0] for cat in electrical_categories if cat[0]],
@@ -1849,29 +1916,29 @@ def get_supplies_catalog():
             ).distinct().order_by(SupplyModel.supplyCategory.asc()).all()
             categories_list = [cat[0] for cat in categories if cat[0]]
             categories_data = {"categories": categories_list}
-        
+
         # Cache categories for 15 minutes
         _catalog_cache[categories_cache_key] = {
             "data": categories_data,
             "timestamp": datetime.now()
         }
-    
+
     # Check cache for supplies (only for common queries without search/category)
     cache_key = _get_catalog_cache_key(supply_type, search_term, category, page, page_size)
     cached_data = _catalog_cache.get(cache_key)
-    
+
     # Only use cache if no search term and no category filter (most common case)
     use_cache = not search_term and not category and _is_cache_valid(cached_data)
-    
+
     if use_cache:
         return jsonify(cached_data["data"]), 200
-    
+
     # Query supplies from database
     if supply_type == "all":
         # Query building supplies
         building_query = BuildingSupply.query.filter(BuildingSupply.projectId.is_(None))
         electrical_query = ElectricalSupply.query.filter(ElectricalSupply.projectId.is_(None))
-        
+
         # Apply search filter
         if search_term:
             search_filter = f"%{search_term}%"
@@ -1887,20 +1954,20 @@ def get_supplies_catalog():
                     ElectricalSupply.vendor.ilike(search_filter)
                 )
             )
-        
+
         # Apply category filter
         if category:
             building_query = building_query.filter_by(supplyCategory=category)
             electrical_query = electrical_query.filter_by(supplyCategory=category)
-        
+
         # Get total counts
         building_total = building_query.count()
         electrical_total = electrical_query.count()
-        
+
         # Apply pagination - fetch page_size items from each type
         building_supplies = building_query.order_by(BuildingSupply.name.asc()).limit(page_size).offset((page - 1) * page_size).all()
         electrical_supplies = electrical_query.order_by(ElectricalSupply.name.asc()).limit(page_size).offset((page - 1) * page_size).all()
-        
+
         response_data = {
             "buildingSupplies": [s.to_catalog_dict() for s in building_supplies],
             "electricalSupplies": [s.to_catalog_dict() for s in electrical_supplies],
@@ -1921,7 +1988,7 @@ def get_supplies_catalog():
         # Single type query
         SupplyModel = ElectricalSupply if supply_type == "electrical" else BuildingSupply
         query = SupplyModel.query.filter(SupplyModel.projectId.is_(None))
-        
+
         # Apply search filter
         if search_term:
             search_filter = f"%{search_term}%"
@@ -1931,17 +1998,17 @@ def get_supplies_catalog():
                     SupplyModel.vendor.ilike(search_filter)
                 )
             )
-        
+
         # Apply category filter
         if category:
             query = query.filter_by(supplyCategory=category)
-        
+
         # Get total count
         total = query.count()
-        
+
         # Apply pagination
         supplies = query.order_by(SupplyModel.name.asc()).limit(page_size).offset((page - 1) * page_size).all()
-        
+
         response_data = {
             "supplies": [s.to_catalog_dict() for s in supplies],
             "categories": categories_data.get("categories", []),
@@ -1953,14 +2020,14 @@ def get_supplies_catalog():
                 "totalPages": (total + page_size - 1) // page_size if page_size > 0 else 0,
             }
         }
-    
+
     # Cache the result if it's a common query (no search, no category)
     if not search_term and not category:
         _catalog_cache[cache_key] = {
             "data": response_data,
             "timestamp": datetime.now()
         }
-    
+
     return jsonify(response_data), 200
 
 
@@ -1995,11 +2062,11 @@ def get_project_supplies(project_id):
 
     # Get optional workOrderId from query parameters
     work_order_id = request.args.get("workOrderId", type=int)
-    
+
     # Query both BuildingSupply and ElectricalSupply
     building_query = BuildingSupply.query.filter_by(projectId=project_id)
     electrical_query = ElectricalSupply.query.filter_by(projectId=project_id)
-    
+
     # Filter by work order if provided (using appropriate junction tables)
     if work_order_id:
         # Filter building supplies
@@ -2007,21 +2074,21 @@ def get_project_supplies(project_id):
             WorkOrderBuildingSupply.workOrderId == work_order_id,
             WorkOrderBuildingSupply.isActive == True
         ).distinct()
-        
+
         # Filter electrical supplies
         electrical_query = electrical_query.join(WorkOrderElectricalSupply).filter(
             WorkOrderElectricalSupply.workOrderId == work_order_id,
             WorkOrderElectricalSupply.isActive == True
         ).distinct()
-    
+
     # Get supplies from both tables
     building_supplies = building_query.order_by(BuildingSupply.createdAt.desc()).all()
     electrical_supplies = electrical_query.order_by(ElectricalSupply.createdAt.desc()).all()
-    
+
     # Combine and sort by creation date
     all_supplies = list(building_supplies) + list(electrical_supplies)
     all_supplies.sort(key=lambda s: s.createdAt, reverse=True)
-    
+
     return jsonify({"supplies": [s.to_dict() for s in all_supplies]}), 200
 
 
@@ -2058,7 +2125,7 @@ def add_project_supply(project_id):
             supply_type = str(supply_type_raw).strip().lower()
         else:
             supply_type = "building"
-        
+
         if supply_type not in ["building", "electrical"]:
             # Default to building if invalid value
             supply_type = "building"
@@ -2081,7 +2148,7 @@ def add_project_supply(project_id):
             # Convert single ID to list for consistent handling
             if not isinstance(work_order_ids, list):
                 work_order_ids = [work_order_ids]
-            
+
             # Validate that all work orders exist and belong to this project
             for wo_id in work_order_ids:
                 work_order = WorkOrder.query.filter_by(id=wo_id, projectId=project_id, isActive=True).first()
@@ -2112,7 +2179,7 @@ def add_project_supply(project_id):
 
         db.session.add(supply)
         db.session.flush()  # Get the supply ID
-        
+
         # Get quantity from payload (default to 1 if not provided)
         quantity = payload.get("quantity", 1)
         try:
@@ -2121,7 +2188,7 @@ def add_project_supply(project_id):
                 quantity = 1
         except (ValueError, TypeError):
             quantity = 1
-        
+
         # Link supply to work orders using appropriate junction table
         # Quantity is stored in the junction table (one quantity per work order)
         if work_order_ids:
@@ -2133,7 +2200,7 @@ def add_project_supply(project_id):
                         electricalSupplyId=supply.id,
                         isActive=True
                     ).first()
-                    
+
                     if not existing:
                         work_order_supply = WorkOrderElectricalSupply(
                             workOrderId=wo_id,
@@ -2148,7 +2215,7 @@ def add_project_supply(project_id):
                         buildingSupplyId=supply.id,
                         isActive=True
                     ).first()
-                    
+
                     if not existing:
                         work_order_supply = WorkOrderBuildingSupply(
                             workOrderId=wo_id,
@@ -2156,11 +2223,11 @@ def add_project_supply(project_id):
                             quantity=quantity
                         )
                         db.session.add(work_order_supply)
-        
+
         # Update work order costs if supply is approved and linked to work orders
         if status == SupplyStatus.APPROVED and work_order_ids:
             _update_work_order_costs_from_supplies(work_order_ids)
-        
+
         # Create audit log for supply creation
         session_id = str(uuid.uuid4())
         create_audit_log(
@@ -2173,7 +2240,7 @@ def add_project_supply(project_id):
             session_id=session_id,
             project_id=project_id
         )
-        
+
         db.session.commit()
         return jsonify({"supply": supply.to_dict()}), 201
     except Exception as e:
@@ -2186,7 +2253,7 @@ def update_supply_status(project_id, supply_id):
     """Approve or reject a supply request (Project Manager only)."""
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
-    
+
     if not user:
         return jsonify({"error": "User not found"}), 404
     if user.role not in [UserRole.ADMIN, UserRole.PROJECT_MANAGER]:
@@ -2196,7 +2263,7 @@ def update_supply_status(project_id, supply_id):
     supply = BuildingSupply.query.filter_by(id=supply_id, projectId=project_id).first()
     if not supply:
         supply = ElectricalSupply.query.filter_by(id=supply_id, projectId=project_id).first()
-    
+
     if not supply:
         return jsonify({"error": "Supply not found"}), 404
 
@@ -2208,7 +2275,7 @@ def update_supply_status(project_id, supply_id):
     old_status = supply.status
     supply.status = SupplyStatus.APPROVED if new_status == "approved" else SupplyStatus.REJECTED
     supply.approvedById = user.id
-    
+
     # Get work orders linked to this supply
     work_order_ids = []
     if isinstance(supply, BuildingSupply):
@@ -2223,11 +2290,11 @@ def update_supply_status(project_id, supply_id):
             isActive=True
         ).all()
         work_order_ids = [link.workOrderId for link in links]
-    
+
     # Update work order costs if status changed (approved/rejected)
     if old_status != supply.status and work_order_ids:
         _update_work_order_costs_from_supplies(work_order_ids)
-    
+
     # Create audit log for status change
     if old_status != supply.status:
         session_id = str(uuid.uuid4())
@@ -2241,7 +2308,7 @@ def update_supply_status(project_id, supply_id):
             session_id=session_id,
             project_id=project_id
         )
-    
+
     db.session.commit()
     return jsonify({"supply": supply.to_dict()}), 200
 
@@ -2265,7 +2332,7 @@ def delete_project_supply(project_id, supply_id):
     if not supply:
         supply = ElectricalSupply.query.filter_by(id=supply_id, projectId=project_id).first()
         supply_type = "electrical"
-    
+
     if not supply:
         return jsonify({"error": "Supply not found"}), 404
 
@@ -2309,11 +2376,11 @@ def delete_project_supply(project_id, supply_id):
     )
 
     db.session.delete(supply)
-    
+
     # Update work order costs after deleting supply
     if work_order_ids:
         _update_work_order_costs_from_supplies(work_order_ids)
-    
+
     db.session.commit()
     return jsonify({"message": "Supply deleted successfully"}), 200
 
@@ -2340,12 +2407,12 @@ def update_project_supply(project_id, supply_id):
     if not supply:
         supply = ElectricalSupply.query.filter_by(id=supply_id, projectId=project_id).first()
         supply_type = "electrical"
-    
+
     if not supply:
         return jsonify({"error": "Supply not found"}), 404
 
     payload = request.get_json(silent=True) or {}
-    
+
     # Store original values for audit logging
     original_values = {
         "name": supply.name,
@@ -2357,10 +2424,10 @@ def update_project_supply(project_id, supply_id):
         "unitOfMeasure": supply.unitOfMeasure,
         "budget": f"{supply.budget:.2f}" if supply.budget else None,
     }
-    
+
     # Generate a session ID for this update to group all changes together
     session_id = str(uuid.uuid4())
-    
+
     # Update allowed fields with audit logging
     if "name" in payload and payload["name"].strip() != original_values["name"]:
         create_audit_log(AuditEntityType.SUPPLY, supply_id, user_id, "name", original_values["name"], payload["name"].strip(), session_id, project_id)
@@ -2421,11 +2488,11 @@ def update_project_supply(project_id, supply_id):
             isActive=True
         ).all()
         work_order_ids = [link.workOrderId for link in links]
-    
+
     # Update work order costs if budget changed
     if "budget" in payload and work_order_ids:
         _update_work_order_costs_from_supplies(work_order_ids)
-    
+
     db.session.commit()
     return jsonify({"supply": supply.to_dict()}), 200
 
@@ -2469,7 +2536,7 @@ def get_workorder_supplies(project_id, workorder_id):
     # Combine and sort by creation date
     all_supplies = list(building_supplies) + list(electrical_supplies)
     all_supplies.sort(key=lambda s: s.createdAt, reverse=True)
-    
+
     return jsonify({"supplies": [s.to_dict() for s in all_supplies]}), 200
 
 
@@ -2499,10 +2566,10 @@ def add_supply_to_workorder(project_id, workorder_id, supply_id):
         if not supply:
             supply = ElectricalSupply.query.filter_by(id=supply_id, projectId=project_id).first()
             supply_type = "electrical"
-        
+
         if not supply:
             return jsonify({"error": "Supply not found"}), 404
-        
+
         # Get quantity from payload (default to 1 if not provided)
         payload = request.get_json(silent=True) or {}
         quantity = payload.get("quantity", 1)
@@ -2512,7 +2579,7 @@ def add_supply_to_workorder(project_id, workorder_id, supply_id):
                 quantity = 1
         except (ValueError, TypeError):
             quantity = 1
-        
+
         # Check if relationship already exists
         if supply_type == "electrical":
             existing = WorkOrderElectricalSupply.query.filter_by(
@@ -2520,10 +2587,10 @@ def add_supply_to_workorder(project_id, workorder_id, supply_id):
                 electricalSupplyId=supply_id,
                 isActive=True
             ).first()
-            
+
             if existing:
                 return jsonify({"error": "Supply is already assigned to this work order"}), 400
-            
+
             work_order_supply = WorkOrderElectricalSupply(
                 workOrderId=workorder_id,
                 electricalSupplyId=supply_id,
@@ -2535,22 +2602,22 @@ def add_supply_to_workorder(project_id, workorder_id, supply_id):
                 buildingSupplyId=supply_id,
                 isActive=True
             ).first()
-            
+
             if existing:
                 return jsonify({"error": "Supply is already assigned to this work order"}), 400
-            
+
             work_order_supply = WorkOrderBuildingSupply(
                 workOrderId=workorder_id,
                 buildingSupplyId=supply_id,
                 quantity=quantity
             )
-        
+
         db.session.add(work_order_supply)
-        
+
         # Update work order costs if supply is approved
         if supply.status == SupplyStatus.APPROVED:
             _update_work_order_costs_from_supplies([workorder_id])
-        
+
         db.session.commit()
         return jsonify({
             "message": "Supply added to work order successfully",
@@ -2586,7 +2653,7 @@ def remove_supply_from_workorder(project_id, workorder_id, supply_id):
     if not supply:
         supply = ElectricalSupply.query.filter_by(id=supply_id, projectId=project_id).first()
         supply_type = "electrical"
-    
+
     if not supply:
         return jsonify({"error": "Supply not found"}), 404
 
@@ -2603,15 +2670,15 @@ def remove_supply_from_workorder(project_id, workorder_id, supply_id):
             buildingSupplyId=supply_id,
             isActive=True
         ).first()
-    
+
     if not link:
         return jsonify({"error": "Supply is not assigned to this work order"}), 404
 
     link.isActive = False
-    
+
     # Update work order costs after removing supply
     _update_work_order_costs_from_supplies([workorder_id])
-    
+
     db.session.commit()
     return jsonify({"message": "Supply removed from work order successfully"}), 200
 
@@ -2623,7 +2690,7 @@ def get_schedule_metrics(project_id: int):
     try:
         user_id = int(get_jwt_identity())
         user = User.query.filter_by(id=user_id, isActive=True).first()
-        
+
         if not user:
             return jsonify({"error": "User not found"}), 404
 
@@ -2646,7 +2713,7 @@ def get_schedule_metrics(project_id: int):
         else:
             # Unknown role - deny access
             return jsonify({"error": "You do not have permission to view this project"}), 403
-        
+
         metrics = compute_schedule_variance(project)
         return jsonify(metrics), 200
     except Exception as e:
@@ -2660,7 +2727,7 @@ def get_cost_metrics(project_id: int):
     try:
         user_id = int(get_jwt_identity())
         user = User.query.filter_by(id=user_id, isActive=True).first()
-        
+
         if not user:
             return jsonify({"error": "User not found"}), 404
 
@@ -2683,7 +2750,7 @@ def get_cost_metrics(project_id: int):
         else:
             # Unknown role - deny access
             return jsonify({"error": "You do not have permission to view this project"}), 403
-        
+
         metrics = compute_cost_variance(project, project_id)
         return jsonify(metrics), 200
     except Exception as e:
@@ -2697,7 +2764,7 @@ def get_workforce_metrics(project_id: int):
     try:
         user_id = int(get_jwt_identity())
         user = User.query.filter_by(id=user_id, isActive=True).first()
-        
+
         if not user:
             return jsonify({"error": "User not found"}), 404
 
@@ -2720,7 +2787,7 @@ def get_workforce_metrics(project_id: int):
         else:
             # Unknown role - deny access
             return jsonify({"error": "You do not have permission to view this project"}), 403
-        
+
         metrics = compute_workforce_metrics(project_id)
         return jsonify(metrics), 200
     except Exception as e:
@@ -2734,7 +2801,7 @@ def get_quality_metrics(project_id: int):
     try:
         user_id = int(get_jwt_identity())
         user = User.query.filter_by(id=user_id, isActive=True).first()
-        
+
         if not user:
             return jsonify({"error": "User not found"}), 404
 
@@ -2757,7 +2824,7 @@ def get_quality_metrics(project_id: int):
         else:
             # Unknown role - deny access
             return jsonify({"error": "You do not have permission to view this project"}), 403
-        
+
         metrics = compute_quality_metrics(project_id)
         return jsonify(metrics), 200
     except Exception as e:
@@ -2771,7 +2838,7 @@ def get_health_score(project_id: int):
     try:
         user_id = int(get_jwt_identity())
         user = User.query.filter_by(id=user_id, isActive=True).first()
-        
+
         if not user:
             return jsonify({"error": "User not found"}), 404
 
@@ -2794,7 +2861,7 @@ def get_health_score(project_id: int):
         else:
             # Unknown role - deny access
             return jsonify({"error": "You do not have permission to view this project"}), 403
-        
+
         health = compute_project_health_score(project_id)
         return jsonify(health), 200
     except Exception as e:
@@ -2808,7 +2875,7 @@ def get_all_metrics(project_id: int):
     try:
         user_id = int(get_jwt_identity())
         user = User.query.filter_by(id=user_id, isActive=True).first()
-        
+
         if not user:
             return jsonify({"error": "User not found"}), 404
 
@@ -2831,7 +2898,7 @@ def get_all_metrics(project_id: int):
         else:
             # Unknown role - deny access
             return jsonify({"error": "You do not have permission to view this project"}), 403
-        
+
         # Try to get base progress first
         progress = compute_project_progress(project_id)
         
@@ -2854,6 +2921,99 @@ def get_all_metrics(project_id: int):
         print(traceback.format_exc())
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
 
+@projects_bp.get("/<int:project_id>/report-data")
+@jwt_required()
+def get_project_report_data(project_id: int):
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        # Get project
+        project = Project.query.filter_by(id=project_id, isActive=True).first()
+        if not project:
+            return jsonify({"error": "Project not found"}), 404
+
+        # Check access
+        has_access = False
+        if user.role == UserRole.ADMIN:
+            has_access = True
+        elif user.role == UserRole.PROJECT_MANAGER:
+            has_access = True
+        elif user.role == UserRole.WORKER:
+            crew_members = project.get_crew_members()
+            if int(user_id) in crew_members:
+                has_access = True
+
+        if not has_access:
+            return jsonify({"error": "Access denied"}), 403
+
+        # Get all work orders for this project
+        work_orders = WorkOrder.query.filter_by(projectId=project_id, isActive=True).all()
+
+        # Calculate work order statistics
+        wo_stats = {
+            'total': len(work_orders),
+            'pending': sum(1 for wo in work_orders if wo.status == WorkOrderStatus.PENDING),
+            'in_progress': sum(1 for wo in work_orders if wo.status == WorkOrderStatus.IN_PROGRESS),
+            'on_hold': sum(1 for wo in work_orders if wo.status == WorkOrderStatus.ON_HOLD),
+            'completed': sum(1 for wo in work_orders if wo.status == WorkOrderStatus.COMPLETED),
+            'cancelled': sum(1 for wo in work_orders if wo.status == WorkOrderStatus.CANCELLED),
+        }
+
+        # Calculate completion rate (excluding cancelled)
+        completable = wo_stats['total'] - wo_stats['cancelled']
+        wo_stats['completion_rate'] = (wo_stats['completed'] / completable * 100) if completable > 0 else 0
+
+        # Calculate cost totals
+        wo_estimated_total = sum(float(wo.estimatedBudget or 0) for wo in work_orders)
+        wo_actual_total = sum(float(wo.actualCost or 0) for wo in work_orders)
+
+        supplies_total = float(project.suppliesCost or 0) + float(project.equipmentCost or 0) + float(project.otherExpenses or 0)
+        total_actual = wo_actual_total + supplies_total
+
+        # Calculate timeline metrics
+        timeline_metrics = {}
+        if project.startDate and project.endDate:
+            scheduled_duration = (project.endDate - project.startDate).days
+            timeline_metrics['scheduled_duration_days'] = scheduled_duration
+
+            completion_date = project.completedAt or project.archivedAt
+            if completion_date:
+                actual_duration = (completion_date.date() - project.startDate).days
+                timeline_metrics['actual_duration_days'] = actual_duration
+                timeline_metrics['variance_days'] = actual_duration - scheduled_duration
+                timeline_metrics['status'] = 'on_time' if actual_duration <= scheduled_duration else 'delayed'
+            else:
+                timeline_metrics['status'] = 'in_progress'
+
+        # Build response
+        return jsonify({
+            'project': project.to_dict(),
+            'workOrders': [wo.to_dict() for wo in work_orders],
+            'metrics': {
+                'workOrders': wo_stats,
+                'costs': {
+                    'allocatedBudget': float(project.estimatedBudget) if project.estimatedBudget else 0,
+                    'workOrdersEstimated': wo_estimated_total,
+                    'workOrdersActual': wo_actual_total,
+                    'suppliesCost': float(project.suppliesCost or 0),
+                    'equipmentCost': float(project.equipmentCost or 0),
+                    'otherExpenses': float(project.otherExpenses or 0),
+                    'totalActual': total_actual,
+                    'variance': float(project.estimatedBudget or 0) - total_actual,
+                    'utilizationRate': (total_actual / float(project.estimatedBudget) * 100) if project.estimatedBudget else 0
+                },
+                'timeline': timeline_metrics
+            }
+        }), 200
+
+    except Exception as e:
+        print(f"Error in get_project_report_data: {str(e)}")
+        return jsonify({"error": f"Failed to generate report data: {str(e)}"}), 500
+
 
 @projects_bp.post("/recalculate-costs")
 @jwt_required()
@@ -2861,22 +3021,22 @@ def recalculate_all_project_costs():
     """Recalculate actual costs for all projects based on their work orders (admin only)"""
     user_id = int(get_jwt_identity())
     user = User.query.filter_by(id=user_id, isActive=True).first()
-    
+
     if not user or user.role != UserRole.ADMIN:
         return jsonify({"error": "Only admins can recalculate all project costs"}), 403
-    
+
     # Get all active projects
     projects = Project.query.filter_by(isActive=True).all()
-    
+
     updated_count = 0
     for project in projects:
         old_cost = project.actualCost
         _update_project_actual_cost_from_work_orders(project.id)
         if project.actualCost != old_cost:
             updated_count += 1
-    
+
     db.session.commit()
-    
+
     return jsonify({
         "message": f"Recalculated actual costs for {updated_count} projects",
         "total_projects": len(projects),

@@ -1,7 +1,8 @@
-import React, {useState, useEffect} from "react";
+import React, {useState, useEffect, useRef} from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import UserNavbar from "../components/UserNavbar";
 import { FaArrowLeft, FaEdit, FaSave, FaTimes } from "react-icons/fa";
+import html2pdf from 'html2pdf.js';
 import OverviewTab from '../components/ProjectTabs/OverviewTab'
 import { projectsAPI, authAPI } from "../services/api";
 import TeamTab from "../components/ProjectTabs/TeamTab";
@@ -12,6 +13,8 @@ import LogsTab from "../components/ProjectTabs/LogsTab";
 import SuppliesTab from "../components/ProjectTabs/SuppliesTab";
 import { useSnackbar } from "../contexts/SnackbarContext";
 import MetricsTab from "../components/ProjectTabs/MetricsTab";
+import ReportButton from '../components/Reports/ReportButton';
+import ProjectReport from '../components/Reports/ProjectReport';
 
 const styleSheet = document.styleSheets[0];
 if (!document.querySelector('#tabAnimation')) {
@@ -46,7 +49,8 @@ const SingleProjectPage = ({ projects }) => {
     const { projectId } = useParams();
     const navigate = useNavigate();
     const { showSnackbar } = useSnackbar();
-    
+    const reportRef = useRef();
+
     // Load active tab from localStorage or default to 'overview'
     const getInitialTab = () => {
         const savedTab = localStorage.getItem(`project_${projectId}_activeTab`);
@@ -59,7 +63,7 @@ const SingleProjectPage = ({ projects }) => {
         }
         return 'overview';
     };
-    
+
     const [activeTab, setActiveTab] = useState(getInitialTab);
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -69,7 +73,14 @@ const SingleProjectPage = ({ projects }) => {
     const [highlightedWorkOrderId, setHighlightedWorkOrderId] = useState(null);
     const [isEditingDescription, setIsEditingDescription] = useState(false);
     const [editedDescription, setEditedDescription] = useState('');
+    const [reportData, setReportData] = useState(null);
     const [selectedWorkOrderForSupplies, setSelectedWorkOrderForSupplies] = useState(null);
+
+    // Check if project is in a terminal/frozen status
+    const isProjectFrozen = () => {
+        const terminalStatuses = ['archived', 'cancelled'];
+        return terminalStatuses.includes(project?.status);
+    };
 
     useEffect(() => {
         fetchInitialData();
@@ -196,6 +207,64 @@ const SingleProjectPage = ({ projects }) => {
         }, 3000);
     };
 
+
+    const handleGenerateReport = async () => {
+        try {
+            showSnackbar('Fetching project data...', 'info');
+
+            // Fetch project and metrics data - same as MetricsTab uses
+            const [projectData, metricsData] = await Promise.all([
+                projectsAPI.getProject(projectId),
+                projectsAPI.getMetrics.all(projectId)
+            ]);
+
+            const data = {
+                project: projectData,
+                metrics: metricsData
+            };
+
+            console.log('Report Data:', data); // Debug log
+            setReportData(data);
+
+            // Wait for React to render the report
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Generate PDF
+            showSnackbar('Generating PDF...', 'info');
+
+            const opt = {
+                margin: [0.5, 0.5, 0.5, 0.5],
+                filename: `Project_${project.name.replace(/[^a-z0-9]/gi, '_')}_Report_${new Date().toISOString().split('T')[0]}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    letterRendering: true
+                },
+                jsPDF: {
+                    unit: 'in',
+                    format: 'letter',
+                    orientation: 'portrait'
+                },
+                pagebreak: {
+                    mode: ['avoid-all', 'css', 'legacy']
+                }
+            };
+
+            await html2pdf().set(opt).from(reportRef.current).save();
+
+            showSnackbar('Report downloaded successfully!', 'success');
+
+            // Clear report data after generation
+            setTimeout(() => setReportData(null), 500);
+
+        } catch (error) {
+            console.error('Error generating report:', error);
+            showSnackbar('Failed to generate report. Please try again.', 'error');
+        }
+    };
+
     if (loading) {
         return (
             <>
@@ -280,6 +349,14 @@ const SingleProjectPage = ({ projects }) => {
                         <h1 style={styles.projectTitle}>{project.name}</h1>
                         <p style={styles.location}>{project.location}</p>
                     </div>
+                    {/* Report Button - Only visible to PMs */}
+                    <div style={styles.headerRight}>
+                        <ReportButton
+                            project={project}
+                            userRole={userRole}
+                            onGenerateReport={handleGenerateReport}
+                        />
+                    </div>
                 </div>
             </div>
             <div style={styles.contentContainer}>
@@ -288,9 +365,10 @@ const SingleProjectPage = ({ projects }) => {
                         <h2 style={styles.sectionTitle}>Project Description</h2>
                         {userRole !== 'worker' && !isEditingDescription && (
                             <button 
-                                style={styles.editIconButton}
-                                onClick={handleEditDescription}
-                                title="Edit description"
+                                style={isProjectFrozen() ? styles.editIconButtonDisabled : styles.editIconButton}
+                                onClick={isProjectFrozen() ? null : handleEditDescription}
+                                title={isProjectFrozen() ? "Cannot edit archived/cancelled project" : "Edit description"}
+                                disabled={isProjectFrozen()}
                             >
                                 <FaEdit />
                             </button>
@@ -352,6 +430,13 @@ const SingleProjectPage = ({ projects }) => {
                     {renderTabContent()}
                 </div>
             </div>
+
+            {/* Hidden Report Component - Only rendered during PDF generation */}
+            {reportData && (
+                <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+                    <ProjectReport ref={reportRef} reportData={reportData} />
+                </div>
+            )}
         </>
     )
 };
@@ -368,6 +453,7 @@ const styles = {
         justifyContent: 'space-between',
         marginBottom: '0.2rem',
         minHeight: '80px',
+        position: 'relative',
     },
     backButton: {
         background: '#ffffff',
@@ -386,7 +472,7 @@ const styles = {
         whiteSpace: 'nonwrap',
         position: 'absolute',
         zIndex: 1,
-        left: '2.5rem',
+        left: 0,
     },
     titleSection: {
         width: '100%',
@@ -395,6 +481,11 @@ const styles = {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    headerRight: {
+        position: 'absolute',
+        right: 0,
+        zIndex: 1,
     },
     spacer: {
         width: '200px',
@@ -455,6 +546,19 @@ const styles = {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    editIconButtonDisabled: {
+        background: 'none',
+        border: '2px solid #d1d5db',
+        cursor: 'not-allowed',
+        padding: '0.5rem 0.5rem 0.5rem 0.6rem',
+        color: '#9ca3af',
+        fontSize: '1.1rem',
+        borderRadius: '6px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: 0.5,
     },
     saveIconButton: {
         background: '#77DD77',

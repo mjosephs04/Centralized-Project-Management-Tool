@@ -100,7 +100,10 @@ const NotificationSettings = () => {
 
             {notificationGroups.map((group, groupIndex) => (
                 <div key={groupIndex} style={styles.group}>
-                    <h3 style={styles.groupTitle}>{group.title}</h3>
+                    <h3 style={styles.groupTitle}>
+                        <span style={styles.groupIcon}>{group.icon}</span>
+                        {group.title}
+                    </h3>
                     <div style={styles.items}>
                         {group.items.map((item) => (
                             <div key={item.key} style={styles.item}>
@@ -121,7 +124,9 @@ const NotificationSettings = () => {
                                             }}
                                             onClick={() => handleToggle(item.key)}
                                         >
-                                            {preferences[item.key] ? "ON" : "OFF"}
+                                            <span style={styles.toggleButtonText}>
+                                                {preferences[item.key] ? "ON" : "OFF"}
+                                            </span>
                                         </button>
                                     </div>
                                     <div style={styles.toggleGroup}>
@@ -137,7 +142,9 @@ const NotificationSettings = () => {
                                             }}
                                             onClick={() => handleToggle(item.emailKey)}
                                         >
-                                            {preferences[item.emailKey] ? "ON" : "OFF"}
+                                            <span style={styles.toggleButtonText}>
+                                                {preferences[item.emailKey] ? "ON" : "OFF"}
+                                            </span>
                                         </button>
                                     </div>
                                 </div>
@@ -153,6 +160,16 @@ const NotificationSettings = () => {
                     style={styles.saveButton}
                     onClick={handleSave}
                     disabled={saving}
+                    onMouseEnter={(e) => {
+                        if (!saving) {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(119, 221, 119, 0.4)';
+                        }
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(119, 221, 119, 0.2)';
+                    }}
                 >
                     <FaSave style={styles.saveIcon} />
                     {saving ? "Saving..." : "Save Preferences"}
@@ -169,7 +186,7 @@ const styles = {
         padding: "2rem",
         background: "white",
         borderRadius: "12px",
-        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
     },
     header: {
         marginBottom: "2rem",
@@ -178,96 +195,117 @@ const styles = {
     },
     title: {
         margin: "0 0 0.5rem 0",
-        fontSize: "24px",
-        fontWeight: "600",
-        color: "#1a202c",
+        fontSize: "1.75rem",
+        fontWeight: "700",
+        color: "#2c3e50",
         display: "flex",
         alignItems: "center",
         gap: "0.75rem",
     },
     titleIcon: {
-        color: "#0052D4",
+        color: "#5692bc",
+        fontSize: "1.5rem",
     },
     subtitle: {
         margin: 0,
-        fontSize: "14px",
+        fontSize: "0.95rem",
         color: "#6b7280",
+        lineHeight: "1.5",
     },
     loading: {
         textAlign: "center",
         padding: "2rem",
-        color: "#6b7280",
+        color: "#5692bc",
+        fontSize: "1rem",
+        fontWeight: "500",
     },
     error: {
         textAlign: "center",
         padding: "2rem",
         color: "#ef4444",
+        fontSize: "1rem",
     },
     group: {
         marginBottom: "2rem",
+        paddingBottom: "1.5rem",
+        borderBottom: "1px solid #f3f4f6",
     },
     groupTitle: {
-        margin: "0 0 1rem 0",
-        fontSize: "18px",
+        margin: "0 0 1.25rem 0",
+        fontSize: "1.25rem",
         fontWeight: "600",
-        color: "#374151",
+        color: "#2c3e50",
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+    },
+    groupIcon: {
+        fontSize: "1.25rem",
     },
     items: {
         display: "flex",
         flexDirection: "column",
-        gap: "1rem",
+        gap: "0.75rem",
     },
     item: {
         padding: "1.25rem",
         background: "#f9fafb",
         borderRadius: "8px",
         border: "1px solid #e5e7eb",
+        transition: "all 0.2s ease",
     },
     itemHeader: {
         marginBottom: "0.75rem",
     },
     label: {
-        fontSize: "15px",
-        fontWeight: "500",
-        color: "#1a202c",
+        fontSize: "0.95rem",
+        fontWeight: "600",
+        color: "#2c3e50",
     },
     toggles: {
         display: "flex",
-        gap: "1.5rem",
+        gap: "2rem",
         flexWrap: "wrap",
     },
     toggleGroup: {
         display: "flex",
         alignItems: "center",
-        gap: "0.5rem",
+        gap: "0.75rem",
     },
     toggleLabel: {
-        fontSize: "14px",
+        fontSize: "0.85rem",
         color: "#6b7280",
         display: "flex",
         alignItems: "center",
-        gap: "0.5rem",
+        gap: "0.4rem",
         fontWeight: "500",
+        minWidth: "70px",
     },
     toggleIcon: {
-        fontSize: "14px",
+        fontSize: "0.85rem",
+        color: "#9ca3af",
     },
     toggleButton: {
         padding: "0.5rem 1rem",
         borderRadius: "6px",
-        border: "1px solid #d1d5db",
+        border: "2px solid #d1d5db",
         background: "white",
         color: "#6b7280",
-        fontSize: "13px",
-        fontWeight: "600",
+        fontSize: "0.8rem",
+        fontWeight: "700",
         cursor: "pointer",
         transition: "all 0.2s ease",
         minWidth: "60px",
+        letterSpacing: "0.5px",
     },
     toggleButtonActive: {
-        background: "linear-gradient(135deg, #0052D4 0%, #4facfe 100%)",
+        background: "#5692bc",
         color: "white",
-        borderColor: "#0052D4",
+        borderColor: "#5692bc",
+        boxShadow: "0 2px 4px rgba(86, 146, 188, 0.3)",
+    },
+    toggleButtonText: {
+        display: "inline-block",
     },
     footer: {
         marginTop: "2rem",
@@ -280,20 +318,20 @@ const styles = {
         display: "flex",
         alignItems: "center",
         gap: "0.5rem",
-        padding: "0.75rem 1.5rem",
-        background: "linear-gradient(135deg, #0052D4 0%, #4facfe 100%)",
+        padding: "0.85rem 1.75rem",
+        background: "#77DD77",
         color: "white",
         border: "none",
         borderRadius: "8px",
-        fontSize: "15px",
+        fontSize: "1rem",
         fontWeight: "600",
         cursor: "pointer",
         transition: "all 0.2s ease",
+        boxShadow: "0 2px 4px rgba(119, 221, 119, 0.2)",
     },
     saveIcon: {
-        fontSize: "16px",
+        fontSize: "0.95rem",
     },
 };
 
 export default NotificationSettings;
-

@@ -10,6 +10,12 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
 
+  // Check if project is in a terminal/frozen status
+  const isProjectFrozen = () => {
+    const terminalStatuses = ['archived', 'cancelled'];
+    return terminalStatuses.includes(project.status);
+  };
+
   // Normalize incoming crew members to objects { id?, name? } in local state
   // project.crewMembers might be an array of strings or IDs; we'll store objects internally.
   const [crew, setCrew] = useState([]);
@@ -127,7 +133,7 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
     };
     return typeMap[workerType.toLowerCase()] || workerType.charAt(0).toUpperCase() + workerType.slice(1).replace(/_/g, ' ');
   };
-  
+
   // Enhanced search function that searches across name, email, and phone
   const searchWorkers = (workers, searchTerm) => {
     if (!searchTerm.trim()) return workers;
@@ -273,7 +279,7 @@ const projectManagerInfo = useMemo(() => {
       await onUpdate?.({ crewMembers: payload });
       setIsEditing(false);
       showSnackbar("Team changes saved successfully!", "success");
-      
+
       // Refresh team members list to show updated crew immediately
       if (userRole && userRole !== "worker" && project?.id) {
         try {
@@ -309,6 +315,12 @@ const projectManagerInfo = useMemo(() => {
   const handleInviteUser = async () => {
     if (!inviteEmail.trim()) return;
     
+    // Check if project is frozen
+    if (isProjectFrozen()) {
+      showSnackbar('Cannot invite users to archived or cancelled projects', 'error');
+      return;
+    }
+
     // Validate contractor expiration date if needed
     if (inviteRole === "worker" && inviteWorkerType === "contractor" && !inviteContractorExpiration.trim()) {
       setInviteMessage("❌ Contractor expiration date is required for contractor invitations");
@@ -360,25 +372,26 @@ const projectManagerInfo = useMemo(() => {
     }
   };
 
-  const handleRemoveTeamMember = async (memberId, isManager = false) => {
-    if (!window.confirm("Are you sure you want to remove this person from the project?")) {
-      return;
-    }
-    
-    try {
-      if (isManager) {
-        await projectsAPI.removeProjectManager(project.id, memberId);
-      } else {
-        await projectsAPI.removeProjectMember(project.id, memberId);
-      }
-      // Refresh team list
-      const members = await projectsAPI.getProjectMembers(project.id);
-      setTeamMembers(members || []);
-    } catch (error) {
-      console.error("Failed to remove member:", error);
-      alert(error.response?.data?.error || "Failed to remove member");
-    }
-  };
+    const handleRemoveTeamMember = async (memberId, isManager = false) => {
+        if (!window.confirm("Are you sure you want to remove this person from the project?")) {
+            return;
+        }
+
+        try {
+            if (isManager) {
+                await projectsAPI.removeProjectManager(project.id, memberId);
+            } else {
+                await projectsAPI.removeProjectMember(project.id, memberId);
+            }
+            // Refresh team list
+            const members = await projectsAPI.getProjectMembers(project.id);
+            setTeamMembers(members || []);
+            showSnackbar("Team member removed successfully", "success");
+        } catch (error) {
+            console.error("Failed to remove member:", error);
+            showSnackbar(error.response?.data?.error || "Failed to remove member", "error");
+        }
+    };
 
   const handleStartConversation = async (targetUserId, displayName = "this user") => {
     if (!targetUserId) {
@@ -395,23 +408,37 @@ const projectManagerInfo = useMemo(() => {
       showSnackbar(errorMessage, "error");
     }
   };
-
-  const canEdit = userRole !== "worker"; // Only PM/Admin edit; adjust as needed
+    // Can edit only if: (1) user is PM/Admin AND (2) project is not frozen
+    const canEdit = userRole !== "worker" && !isProjectFrozen();
 
   return (
     <div style={styles.container}>
+      {/* Frozen Project Banner */}
+      {isProjectFrozen() && (
+        <div style={styles.frozenBanner}>
+          <span style={styles.frozenIcon}>🔒</span>
+          <div style={styles.frozenText}>
+            <strong>Project {project.status === 'archived' ? 'Archived' : 'Cancelled'}</strong>
+            <p style={styles.frozenSubtext}>
+              Team roster is view-only. No members can be added or removed.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div style={styles.header}>
         <h2 style={styles.title}>Team Members</h2>
 
         {!isEditing ? (
-          <button
-            style={{ ...styles.editButton, ...(canEdit ? {} : styles.btnDisabled) }}
-            onClick={() => canEdit && setIsEditing(true)}
-            disabled={!canEdit}
-            title={canEdit ? "Edit Team" : "Workers cannot edit team"}
-          >
-            <FaEdit /> Edit Team
-          </button>
+          canEdit && (
+            <button
+              style={styles.editButton}
+              onClick={() => setIsEditing(true)}
+              title="Edit Team"
+            >
+              <FaEdit /> Edit Team
+            </button>
+          )
         ) : (
           <div style={styles.editActions}>
             <button style={styles.saveButton} onClick={handleSave}>
@@ -424,7 +451,8 @@ const projectManagerInfo = useMemo(() => {
         )}
       </div>
 
-      {isEditing && (
+      {/* Add Member Section - Only shown when editing and not frozen */}
+      {isEditing && !isProjectFrozen() && (
         <div style={styles.addMemberSection}>
           <div style={styles.unifiedSearchContainer}>
             <div style={styles.searchInputContainer}>
@@ -522,10 +550,9 @@ const projectManagerInfo = useMemo(() => {
           </div>
         </div>
       )}
-      
 
-      {/* Invite User Section - Only for Project Managers/Admins when editing */}
-      {isEditing && canEdit && (
+      {/* Invite User Section - Only for Project Managers/Admins on active projects */}
+      {canEdit && !isProjectFrozen() && (
         <div style={styles.inviteSection}>
           <h3 style={styles.inviteTitle}>Invite New User</h3>
           <p style={styles.inviteDescription}>
@@ -907,6 +934,27 @@ const projectManagerInfo = useMemo(() => {
 
 const styles = {
     container: { maxWidth: "1400px", margin: "0 auto" },
+    frozenBanner: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+        padding: '0.875rem 1.25rem',
+        backgroundColor: '#fef3c7',
+        border: '2px solid #f59e0b',
+        borderRadius: '8px',
+        marginBottom: '1.5rem',
+    },
+    frozenIcon: {
+        fontSize: '1.5rem',
+    },
+    frozenText: {
+        flex: 1,
+    },
+    frozenSubtext: {
+        margin: '0.25rem 0 0 0',
+        fontSize: '0.875rem',
+        color: '#92400e',
+    },
     header: {
         display: "flex",
         justifyContent: "space-between",
