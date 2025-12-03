@@ -830,7 +830,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, highli
                 {onNavigateToSupplies && selectedWorkOrder && (
                   <button 
                     type="button" 
-                    style={{...styles.submitBtn, backgroundColor: "#10b981", marginRight: "0.5rem"}}
+                    style={{...styles.submitBtn, backgroundColor: "#5692bc", marginRight: "0.5rem"}}
                     onClick={() => {
                       onNavigateToSupplies(selectedWorkOrder.id);
                       setShowUpdate(false);
@@ -839,7 +839,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, highli
                     View Supplies
                   </button>
                 )}
-                <button type="submit" style={styles.submitBtn}>Update Work Order</button>
+                <button type="submit" style={{...styles.submitBtn, backgroundColor: "#10b981"}}>Update Work Order</button>
               </div>
             </form>
           </div>

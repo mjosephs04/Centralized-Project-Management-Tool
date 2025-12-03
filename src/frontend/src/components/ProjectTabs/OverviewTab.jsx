@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FaEdit, FaSave, FaTimes, FaMapMarkerAlt, FaCalendarAlt, FaDollarSign, FaFlag, FaChartLine, FaTrashAlt} from "react-icons/fa";
 import { projectsAPI } from "../../services/api";
 import { useSnackbar } from '../../contexts/SnackbarContext';
@@ -10,6 +10,64 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [password, setPassword] = useState('');
     const [deleteError, setDeleteError] = useState('');
+    const [estimatedCost, setEstimatedCost] = useState(null);
+    const [loadingMetrics, setLoadingMetrics] = useState(false);
+    const [forecastEndDate, setForecastEndDate] = useState(null);
+    const [loadingSchedule, setLoadingSchedule] = useState(false);
+
+    // Load metrics to get estimated cost and forecast end date
+    useEffect(() => {
+        const loadMetrics = async () => {
+            if (userRole !== 'worker' && project?.id) {
+                try {
+                    setLoadingMetrics(true);
+                    setLoadingSchedule(true);
+
+                    // Load cost metrics
+                    const costMetrics = await projectsAPI.getMetrics.cost(project.id);
+                    setEstimatedCost(costMetrics.estimateAtCompletion);
+
+                    // Load schedule metrics for forecast end date
+                    const scheduleMetrics = await projectsAPI.getMetrics.schedule(project.id);
+                    setForecastEndDate(scheduleMetrics.forecastEndDate);
+                } catch (err) {
+                    console.error('Error loading metrics:', err);
+                    // Don't show error to user, just leave values as null
+                } finally {
+                    setLoadingMetrics(false);
+                    setLoadingSchedule(false);
+                }
+            }
+        };
+        loadMetrics();
+    }, [project?.id, userRole]);
+
+    // Helper function to format currency
+    const formatCurrency = (value) => {
+        if (value === null || value === undefined || value === '') {
+            return 'Not specified';
+        }
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(parseFloat(value));
+    };
+
+    // Helper function to format date as YYYY-MM-DD
+    const formatDate = (dateString) => {
+        if (!dateString) return 'Not specified';
+        try {
+            const date = new Date(dateString);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        } catch {
+            return dateString;
+        }
+    };
 
     // Check if project is in a terminal/frozen status
     const isProjectFrozen = () => {
@@ -32,9 +90,9 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
     // Helper functions defined before use
     const parseLocation = (locationString) => {
         if (!locationString) return { address: '', address2: '', city: '', state: '', zipCode: '' };
-        
+
         const parts = locationString.split(',').map(part => part.trim());
-        
+
         // Expected format: "123 Main St, Unit 4B, City, State, 12345" or "123 Main St, City, State, 12345"
         // Check if we have 5 parts (with address2) or 4 parts (without address2)
         if (parts.length >= 5) {
@@ -101,7 +159,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                         editedData.state,
                         editedData.zipCode
                     );
-        
+
                     const processedData = {
                         location: location,
                         priority: editedData.priority.toLowerCase(),
@@ -119,7 +177,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
             showSnackbar('Failed to update project details', 'error');
         }
     };
-    
+
     const handleCancel = () => {
         setEditedData({
             ...parseLocation(project.location),
@@ -194,8 +252,8 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                         <div style={styles.frozenText}>
                             <strong>Project {project.status === 'archived' ? 'Archived' : 'Cancelled'}</strong>
                             <p style={styles.frozenSubtext}>
-                                {canEditStatus() 
-                                    ? 'Only status can be changed to reactivate this project' 
+                                {canEditStatus()
+                                    ? 'Only status can be changed to reactivate this project'
                                     : 'This project is locked and cannot be edited'}
                             </p>
                         </div>
@@ -228,19 +286,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                         <button style={styles.cancelButton} onClick={handleCancel}>
                             <FaTimes /> Cancel
                         </button>
-                    ) : (
-                        <div style={styles.editActions}>
-                            <button style={styles.deleteButton} onClick={handleDeleteClick}>
-                                <FaTrashAlt /> Delete Project
-                            </button>
-                            <button style={styles.editButton} onClick={handleSave}>
-                                <FaSave /> Save
-                            </button>
-                            <button style={styles.cancelButton} onClick={handleCancel}>
-                                <FaTimes /> Cancel
-                            </button>
-                        </div>
-                    )
+                    </div>
                 )}
             </div>
             {isEditing ? (
@@ -301,115 +347,115 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                                         style={styles.formInput}
                                         placeholder="123 Main Street"
                                     />
-                            </div>
-                            <div style={{ gridColumn: '1 / -1' }}>
-                                <label style={styles.inputLabel}>Unit/Suite/Apt (Optional)</label>
-                                <input
-                                    type='text'
-                                    value={editedData.address2}
-                                    onChange={(e) => setEditedData({...editedData, address2: e.target.value})}
-                                    style={styles.formInput}
-                                    placeholder="Unit 4B, Suite 200, Apt 5, etc."
-                                />
-                            </div>
-                            <div>
-                                <label style={styles.inputLabel}>City *</label>
-                                <input
-                                    type='text'
-                                    value={editedData.city}
-                                    onChange={(e) => setEditedData({...editedData, city: e.target.value})}
-                                    style={styles.formInput}
-                                    placeholder="Austin"
-                                />
-                            </div>
-                            <div>
-                                <label style={styles.inputLabel}>State *</label>
-                                <input
-                                    type='text'
-                                    value={editedData.state}
-                                    onChange={(e) => setEditedData({...editedData, state: e.target.value})}
-                                    style={styles.formInput}
-                                    placeholder="TX"
-                                />
-                            </div>
-                            <div>
-                                <label style={styles.inputLabel}>ZIP Code *</label>
-                                <input
-                                    type='text'
-                                    value={editedData.zipCode}
-                                    onChange={(e) => setEditedData({...editedData, zipCode: e.target.value})}
-                                    style={styles.formInput}
-                                    placeholder="78701"
-                                />
+                                </div>
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <label style={styles.inputLabel}>Unit/Suite/Apt (Optional)</label>
+                                    <input
+                                        type='text'
+                                        value={editedData.address2}
+                                        onChange={(e) => setEditedData({...editedData, address2: e.target.value})}
+                                        style={styles.formInput}
+                                        placeholder="Unit 4B, Suite 200, Apt 5, etc."
+                                    />
+                                </div>
+                                <div>
+                                    <label style={styles.inputLabel}>City *</label>
+                                    <input
+                                        type='text'
+                                        value={editedData.city}
+                                        onChange={(e) => setEditedData({...editedData, city: e.target.value})}
+                                        style={styles.formInput}
+                                        placeholder="Austin"
+                                    />
+                                </div>
+                                <div>
+                                    <label style={styles.inputLabel}>State *</label>
+                                    <input
+                                        type='text'
+                                        value={editedData.state}
+                                        onChange={(e) => setEditedData({...editedData, state: e.target.value})}
+                                        style={styles.formInput}
+                                        placeholder="TX"
+                                    />
+                                </div>
+                                <div>
+                                    <label style={styles.inputLabel}>ZIP Code *</label>
+                                    <input
+                                        type='text'
+                                        value={editedData.zipCode}
+                                        onChange={(e) => setEditedData({...editedData, zipCode: e.target.value})}
+                                        style={styles.formInput}
+                                        placeholder="78701"
+                                    />
+                                </div>
                             </div>
                         </div>
-                    </div>
                     )}
 
                     {/* Dates Section */}
                     {!isProjectFrozen() && (
-                    <div style={styles.formSection}>
-                        <h3 style={styles.sectionTitle}>
-                            <FaCalendarAlt style={styles.sectionIcon} />
-                            Dates
-                        </h3>
-                        <div style={styles.formGrid}>
-                            <div>
-                                <label style={styles.inputLabel}>Actual Start Date</label>
-                                <input
-                                    type='date'
-                                    value={editedData.actualStartDate}
-                                    onChange={(e) => setEditedData({...editedData, actualStartDate: e.target.value})}
-                                    style={styles.formInput}
-                                />
-                            </div>
-                            <div>
-                                <label style={styles.inputLabel}>Scheduled End Date</label>
-                                <input
-                                    type='date'
-                                    value={editedData.endDate}
-                                    onChange={(e) => setEditedData({...editedData, endDate: e.target.value})}
-                                    style={styles.formInput}
-                                />
+                        <div style={styles.formSection}>
+                            <h3 style={styles.sectionTitle}>
+                                <FaCalendarAlt style={styles.sectionIcon} />
+                                Dates
+                            </h3>
+                            <div style={styles.formGrid}>
+                                <div>
+                                    <label style={styles.inputLabel}>Actual Start Date</label>
+                                    <input
+                                        type='date'
+                                        value={editedData.actualStartDate}
+                                        onChange={(e) => setEditedData({...editedData, actualStartDate: e.target.value})}
+                                        style={styles.formInput}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={styles.inputLabel}>Scheduled End Date</label>
+                                    <input
+                                        type='date'
+                                        value={editedData.endDate}
+                                        onChange={(e) => setEditedData({...editedData, endDate: e.target.value})}
+                                        style={styles.formInput}
+                                    />
+                                </div>
                             </div>
                         </div>
-                    </div>
                     )}
 
                     {/* Budget & Priority Section */}
                     {!isProjectFrozen() && (
-                    <div style={styles.formSection}>
-                        <h3 style={styles.sectionTitle}>
-                            <FaDollarSign style={styles.sectionIcon} />
-                            Budget & Priority
-                        </h3>
-                        <div style={styles.formGrid}>
-                            {userRole !== 'worker' && (
+                        <div style={styles.formSection}>
+                            <h3 style={styles.sectionTitle}>
+                                <FaDollarSign style={styles.sectionIcon} />
+                                Budget & Priority
+                            </h3>
+                            <div style={styles.formGrid}>
+                                {userRole !== 'worker' && (
+                                    <div>
+                                        <label style={styles.inputLabel}>Allocated Budget</label>
+                                        <input
+                                            type='number'
+                                            value={editedData.estimatedBudget}
+                                            onChange={(e) => setEditedData({...editedData, estimatedBudget: e.target.value})}
+                                            style={styles.formInput}
+                                            placeholder="50000"
+                                        />
+                                    </div>
+                                )}
                                 <div>
-                                    <label style={styles.inputLabel}>Allocated Budget</label>
-                                    <input
-                                        type='number'
-                                        value={editedData.estimatedBudget}
-                                        onChange={(e) => setEditedData({...editedData, estimatedBudget: e.target.value})}
-                                        style={styles.formInput}
-                                        placeholder="50000"
-                                    />
+                                    <label style={styles.inputLabel}>Priority</label>
+                                    <select
+                                        value={editedData.priority}
+                                        onChange={(e) => setEditedData({...editedData, priority: e.target.value})}
+                                        style={styles.formSelect}
+                                    >
+                                        <option value="Low">Low</option>
+                                        <option value="Medium">Medium</option>
+                                        <option value="High">High</option>
+                                    </select>
                                 </div>
-                            )}
-                            <div>
-                                <label style={styles.inputLabel}>Priority</label>
-                                <select
-                                    value={editedData.priority}
-                                    onChange={(e) => setEditedData({...editedData, priority: e.target.value})}
-                                    style={styles.formSelect}
-                                >
-                                    <option value="Low">Low</option>
-                                    <option value="Medium">Medium</option>
-                                    <option value="High">High</option>
-                                </select>
                             </div>
                         </div>
-                    </div>
                     )}
                 </div>
             ) : (
@@ -443,15 +489,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                             <FaCalendarAlt style={styles.icon} />
                             <span style={styles.label}>Actual Start Date</span>
                         </div>
-                        <p style={styles.value}>{project.actualStartDate || 'Not specified'}</p>
-                    </div>
-
-                    <div style={styles.card}>
-                        <div style={styles.cardHeader}>
-                            <FaCalendarAlt style={styles.icon} />
-                            <span style={styles.label}>Estimated End Date</span>
-                        </div>
-                        <p style={styles.value}>Not Specified, will be added with algorithm introduction</p> 
+                        <p style={styles.value}>{project.startDate || 'Not specified'}</p>
                     </div>
 
                     <div style={styles.card}>
@@ -460,6 +498,16 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                             <span style={styles.label}>Scheduled End Date</span>
                         </div>
                         <p style={styles.value}>{project.endDate || 'Not specified'}</p>
+                    </div>
+
+                    <div style={styles.card}>
+                        <div style={styles.cardHeader}>
+                            <FaCalendarAlt style={styles.icon} />
+                            <span style={styles.label}>Estimated End Date</span>
+                        </div>
+                        <p style={styles.value}>
+                            {loadingSchedule ? 'Loading...' : formatDate(forecastEndDate)}
+                        </p>
                     </div>
 
                     {userRole !== 'worker' && (
@@ -480,7 +528,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                                 <FaDollarSign style={styles.icon} />
                                 <span style={styles.label}>Current Cost</span>
                             </div>
-                            <p style={styles.value}>Not specified will be introduced with database update and work orders.</p>
+                            <p style={styles.value}>{formatCurrency(project.actualCost)}</p>
                         </div>
                     )}
 
@@ -490,7 +538,9 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                                 <FaDollarSign style={styles.icon} />
                                 <span style={styles.label}>Estimated Cost</span>
                             </div>
-                            <p style={styles.value}>Not specified, will be added with algorithm introduction.</p>
+                            <p style={styles.value}>
+                                {loadingMetrics ? 'Loading...' : formatCurrency(estimatedCost)}
+                            </p>
                         </div>
                     )}
 
@@ -522,6 +572,9 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                         }}>
                             {currentStatusConfig.label}
                         </div>
+                        <p style={styles.statusDescriptionText}>
+                            {currentStatusConfig.description}
+                        </p>
                     </div>
                 </div>
             )}
@@ -568,6 +621,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
         </div>
     )
 }
+
 
 const styles = {
     container: {
@@ -717,6 +771,14 @@ const styles = {
         textTransform: 'uppercase',
         letterSpacing: '0.5px',
         display: 'inline-block',
+    },
+    statusDescriptionText: {
+        fontSize: '0.85rem',
+        color: '#6b7280',
+        marginTop: '0.75rem',
+        marginBottom: 0,
+        lineHeight: '1.5',
+        fontStyle: 'italic',
     },
     priorityBadge: {
         padding: '0.5rem 1rem',

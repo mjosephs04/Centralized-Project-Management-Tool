@@ -10,6 +10,7 @@ import ProjectsPage from "./pages/ProjectsPage";
 import CreateProjectPage from "./pages/CreateProjectsPage";
 import SingleProjectPage from "./pages/SingleProjectPage";
 import ProfilePage from "./pages/ProfilePage"
+import MessagesPage from "./pages/MessagesPage";
 import RouteProtector from "./components/RouteProtector";
 import LoginDistributionPage from "./pages/LoginDistribution";
 import RoleProtector from "./components/RoleProtector";
@@ -31,6 +32,7 @@ const App = () => {
 
           <Route path="/admin" element={<RouteProtector>{<AdminPage />}</RouteProtector>} />
           <Route path="/profile" element={<RouteProtector>{<ProfilePage />}</RouteProtector>} />
+          <Route path="/messages" element={<RouteProtector>{<MessagesPage />}</RouteProtector>} />
           <Route path="/projects" element={<RouteProtector>{<ProjectsPage />}</RouteProtector>} />
           <Route path="/projects/create" element={<RouteProtector>{<CreateProjectPage />}</RouteProtector>} />
           <Route path="/projects/:projectId" element={<RouteProtector>{<SingleProjectPage />}</RouteProtector>} />

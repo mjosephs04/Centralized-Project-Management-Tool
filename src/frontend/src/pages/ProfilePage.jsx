@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import UserNavbar from "../components/UserNavbar";
+import NotificationSettings from "../components/NotificationSettings";
 import { authAPI } from "../services/api";
 import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "../contexts/SnackbarContext";
@@ -99,12 +100,6 @@ const ProfilePage = () => {
         return workerTypeMap[workerType] || workerType;
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem("accessToken");
-        showSnackbar("Successfully logged out", "info");
-        navigate("/login");
-    };
-
     const handleUpload = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -136,9 +131,6 @@ const ProfilePage = () => {
             <div style={styles.pageContainer}>
                 <div style={styles.header}>
                     <h2 style={styles.pageTitle}>My Profile</h2>
-                    <button onClick={handleLogout} style={styles.logoutButton}>
-                        Logout
-                    </button>
                 </div>
 
                 {loading ? (
@@ -271,6 +263,13 @@ const ProfilePage = () => {
                                 </div>
                             </>
                         )}
+                    </div>
+                )}
+
+                {/* Notification Settings - Only for Project Managers */}
+                {!loading && !error && user && user.role === "project_manager" && (
+                    <div style={styles.settingsSection}>
+                        <NotificationSettings />
                     </div>
                 )}
             </div>
@@ -440,6 +439,9 @@ const styles = {
         fontSize: "1rem",
         boxSizing: "border-box",
         backgroundColor: "white",
+    },
+    settingsSection: {
+        marginTop: "2rem",
     },
 };
 

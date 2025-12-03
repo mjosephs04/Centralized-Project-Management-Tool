@@ -219,13 +219,13 @@ def accept_invitation_existing_user():
 @jwt_required()
 def get_all_workers():
     """
-    Return all users with role=worker.
+    Return all active users with role=worker.
     Example request: GET /api/auth/workers
     Requires Authorization header with Bearer token.
     """
     try:
-        # Query all users who are workers
-        workers = User.query.filter_by(role=UserRole.WORKER).all()
+        # Query all active users who are workers
+        workers = User.query.filter_by(role=UserRole.WORKER, isActive=True).all()
 
         # Serialize users (exclude password hash in to_dict)
         worker_data = [w.to_dict() for w in workers]
@@ -369,7 +369,7 @@ def upload_profile_picture():
     try:
         # Initialize Google Cloud Storage client
         client = storage.Client()
-        bucket_name = "profile_pics_capstone"
+        bucket_name = "profile_pics_capstone637485"
         bucket = client.bucket(bucket_name)
 
         # Unique filename
@@ -432,3 +432,136 @@ def update_profile():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Failed to update profile: {str(e)}"}), 500
+
+@auth_bp.post("/deleteUser/<int:user_id>")
+@jwt_required()
+def delete_user(user_id):
+    """
+    Soft delete a user by marking isActive = False.
+    Endpoint: POST /api/auth/deleteUser/<user_id>
+    """
+    # Only admins should be allowed to delete users
+    requesting_user_id = get_jwt_identity()
+    requesting_user = User.query.filter_by(id=requesting_user_id, isActive=True).first()
+
+    if not requesting_user:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    if requesting_user.role != UserRole.ADMIN:
+        return jsonify({"error": "Only admins can deactivate users"}), 403
+
+    # Fetch target user
+    user = User.query.filter_by(id=user_id, isActive=True).first()
+    if not user:
+        return jsonify({"error": "User not found or already inactive"}), 404
+
+    try:
+        user.isActive = False
+        db.session.commit()
+
+        return jsonify({
+            "message": "User successfully deactivated",
+            "user": user.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Failed to deactivate user: {str(e)}"}), 500
+
+@auth_bp.post("/activateUser/<int:user_id>")
+@jwt_required()
+def activate_user(user_id):
+    """
+    Reactivate a user by setting isActive = True.
+    Endpoint: POST /api/auth/activateUser/<user_id>
+    """
+    # Only admins should be allowed to activate users
+    requesting_user_id = get_jwt_identity()
+    requesting_user = User.query.filter_by(id=requesting_user_id, isActive=True).first()
+
+    if not requesting_user:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    if requesting_user.role != UserRole.ADMIN:
+        return jsonify({"error": "Only admins can activate users"}), 403
+
+    # Fetch the target user (including inactive ones)
+    user = User.query.filter_by(id=user_id).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    # If already active, just return success
+    if user.isActive:
+        return jsonify({
+            "message": "User is already active",
+            "user": user.to_dict()
+        }), 200
+
+    try:
+        user.isActive = True
+        db.session.commit()
+
+        return jsonify({
+            "message": "User successfully activated",
+            "user": user.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Failed to activate user: {str(e)}"}), 500
+
+@auth_bp.post("/updateUserRole/<int:user_id>")
+@jwt_required()
+def update_user_role(user_id):
+    """
+    Update a user's role (admin-only).
+    Endpoint: PUT /api/auth/updateUserRole/<user_id>
+    Body: { "role": "admin" | "worker" | "project_manager" }
+    """
+    # Verify requesting user is an admin
+    requesting_user_id = get_jwt_identity()
+    requesting_user = User.query.filter_by(id=requesting_user_id, isActive=True).first()
+    print(requesting_user)
+
+    if not requesting_user:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    if requesting_user.role != UserRole.ADMIN:
+        return jsonify({"error": "Only admins can update user roles"}), 403
+
+    # Parse role from body
+    payload = request.get_json(silent=True) or {}
+    new_role_raw = payload.get("role")
+
+    if not new_role_raw:
+        return jsonify({"error": "Field 'role' is required"}), 400
+
+    # Validate role
+    try:
+        new_role = UserRole(new_role_raw.lower())
+    except ValueError:
+        return jsonify({"error": "Invalid role. Must be admin, worker, or project_manager."}), 400
+
+    # Fetch user to update
+    user = User.query.filter_by(id=user_id).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    # Update DB
+    try:
+        user.role = new_role
+        db.session.commit()
+
+        return jsonify({
+            "message": "User role updated successfully",
+            "user": user.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Failed to update user role: {str(e)}"}), 500
+
+@auth_bp.get("/ip")
+def get_ip():
+    import requests
+    return requests.get("https://ipinfo.io/ip").text

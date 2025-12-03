@@ -1,8 +1,7 @@
 import axios from "axios";
 
 const LOCAL_API_URL = "http://localhost:8080/api";
-const PROD_API_URL =
-  "https://centralized-project-management-tool-backend-710408068302.us-south1.run.app/api";
+const PROD_API_URL = "https://centralized-project-management-tool-921739669102.us-central1.run.app/api"
 
 const getAuthToken = () => {
   return localStorage.getItem("accessToken");
@@ -68,6 +67,35 @@ export const projectsAPI = {
     return response.data;
   },
 
+  getNotifications: async (limit = 50, onlyUnread = false) => {
+    const params = new URLSearchParams();
+    if (limit) params.append("limit", limit);
+    if (onlyUnread) params.append("only_unread", "true");
+    const url = `/projects/notifications${params.toString() ? `?${params.toString()}` : ''}`;
+    const response = await apiClient.get(url);
+    return response.data;
+  },
+
+  getNotificationPreferences: async () => {
+    const response = await apiClient.get("/projects/notification-preferences");
+    return response.data.preferences;
+  },
+
+  updateNotificationPreferences: async (preferences) => {
+    const response = await apiClient.put("/projects/notification-preferences", preferences);
+    return response.data.preferences;
+  },
+
+  dismissNotification: async (notificationId) => {
+    const response = await apiClient.post(`/projects/notifications/${notificationId}/dismiss`);
+    return response.data;
+  },
+
+  dismissAllNotifications: async () => {
+    const response = await apiClient.post("/projects/notifications/dismiss-all");
+    return response.data;
+  },
+
   postSupplies: async (projectId, payload) => {
     const response = await apiClient.post(
       `/projects/${projectId}/supplies`,
@@ -116,9 +144,11 @@ export const projectsAPI = {
     return response.data;
   },
 
-  getSuppliesCatalog: async (search = "", category = "", supplyType = "building") => {
+  getSuppliesCatalog: async (search = "", category = "", supplyType = "building", page = 1, pageSize = 100) => {
     const params = new URLSearchParams();
     params.append("supplyType", supplyType);
+    params.append("page", page.toString());
+    params.append("pageSize", pageSize.toString());
     if (search) params.append("search", search);
     if (category) params.append("category", category);
     const url = `/projects/supplies/catalog?${params.toString()}`;
@@ -234,6 +264,50 @@ export const projectsAPI = {
   },
 };
 
+export const messagesAPI = {
+  getConversations: async () => {
+    const response = await apiClient.get("/messages/conversations");
+    return response.data.conversations;
+  },
+
+  getConversation: async (conversationId) => {
+    const response = await apiClient.get(`/messages/conversations/${conversationId}`);
+    return response.data.conversation;
+  },
+
+  createConversation: async (otherUserId) => {
+    const response = await apiClient.post("/messages/conversations", { otherUserId });
+    return response.data.conversation;
+  },
+
+  getMessages: async (conversationId, limit = 50, offset = 0) => {
+    const response = await apiClient.get(`/messages/conversations/${conversationId}/messages`, {
+      params: { limit, offset }
+    });
+    return response.data;
+  },
+
+  sendMessage: async (conversationId, content) => {
+    const response = await apiClient.post(`/messages/conversations/${conversationId}/messages`, { content });
+    return response.data.message;
+  },
+
+  markMessageRead: async (messageId) => {
+    const response = await apiClient.put(`/messages/messages/${messageId}/read`);
+    return response.data.message;
+  },
+
+  markConversationRead: async (conversationId) => {
+    const response = await apiClient.put(`/messages/conversations/${conversationId}/read`);
+    return response.data;
+  },
+
+  getUnreadCount: async () => {
+    const response = await apiClient.get("/messages/unread-count");
+    return response.data.unreadCount;
+  },
+};
+
 export const workOrdersAPI = {
   getWorkOrdersByProject: async (projectId) => {
     const response = await apiClient.get(`/workorders/project/${projectId}`);
@@ -296,8 +370,20 @@ export const usersAPI = {
   getAllUsers: async () => {
     const response = await apiClient.get("/auth/allUsers");
     return response.data.users;
-  }
-};
+  },
+  deleteUser: async(userKey) => {
+    const response = await apiClient.post(`/auth/deleteUser/${userKey}`)
+    return response
+  },
+  activateUser: async(userKey) => {
+    const response = await apiClient.post(`/auth/activateUser/${userKey}`)
+    return response
+  },
+  updateUserRole: async (userKey, role) => {
+    const response = await apiClient.post(`/auth/updateUserRole/${userKey}`, {role})
+    return response;
+  },
+}
 
 export const authAPI = {
   me: async () => {

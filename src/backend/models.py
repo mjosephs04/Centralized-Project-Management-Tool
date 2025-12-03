@@ -53,6 +53,7 @@ class WorkOrderStatus(enum.Enum):
 class AuditEntityType(enum.Enum):
     PROJECT = "project"
     WORK_ORDER = "work_order"
+    SUPPLY = "supply"
 
 
 class User(db.Model):
@@ -68,7 +69,7 @@ class User(db.Model):
     role = db.Column(db.Enum(UserRole), nullable=False)
     workerType = db.Column(db.Enum(WorkerType), nullable=True)
 
-    profileImageUrl = db.Column(db.String(500), nullable=False, default="https://storage.googleapis.com/profile_pics_capstone/defaults/profile-default.png")
+    profileImageUrl = db.Column(db.String(500), nullable=False, default="https://storage.googleapis.com/https://storage.googleapis.com/profile_pics_capstone637485/defaults/profile-default.png/defaults/profile-default.png")
 
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -288,6 +289,9 @@ class WorkOrderBuildingSupply(db.Model):
     workOrderId = db.Column(db.Integer, db.ForeignKey('work_orders.id'), nullable=False)
     buildingSupplyId = db.Column(db.Integer, db.ForeignKey('building_supplies.id'), nullable=False)
 
+    # Quantity for this supply in this work order
+    quantity = db.Column(db.Integer, default=1, nullable=False)
+
     # Metadata
     assignedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     isActive = db.Column(db.Boolean, default=True, nullable=False)
@@ -304,6 +308,7 @@ class WorkOrderBuildingSupply(db.Model):
             "id": self.id,
             "workOrderId": self.workOrderId,
             "buildingSupplyId": self.buildingSupplyId,
+            "quantity": self.quantity,
             "workOrder": self.workOrder.to_dict() if self.workOrder else None,
             "buildingSupply": self.buildingSupply.to_dict() if self.buildingSupply else None,
             "assignedAt": self.assignedAt.isoformat() if self.assignedAt else None,
@@ -317,6 +322,9 @@ class WorkOrderElectricalSupply(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     workOrderId = db.Column(db.Integer, db.ForeignKey('work_orders.id'), nullable=False)
     electricalSupplyId = db.Column(db.Integer, db.ForeignKey('electrical_supplies.id'), nullable=False)
+
+    # Quantity for this supply in this work order
+    quantity = db.Column(db.Integer, default=1, nullable=False)
 
     # Metadata
     assignedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -334,6 +342,7 @@ class WorkOrderElectricalSupply(db.Model):
             "id": self.id,
             "workOrderId": self.workOrderId,
             "electricalSupplyId": self.electricalSupplyId,
+            "quantity": self.quantity,
             "workOrder": self.workOrder.to_dict() if self.workOrder else None,
             "electricalSupply": self.electricalSupply.to_dict() if self.electricalSupply else None,
             "assignedAt": self.assignedAt.isoformat() if self.assignedAt else None,
@@ -462,7 +471,7 @@ class Audit(db.Model):
     __tablename__ = "audit_logs"
 
     id = db.Column(db.Integer, primary_key=True)
-    entityType = db.Column(db.Enum(AuditEntityType), nullable=False)
+    entityType = db.Column(db.Enum(AuditEntityType, native_enum=False, length=20), nullable=False)
     entityId = db.Column(db.Integer, nullable=False, index=True)
     userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
     field = db.Column(db.String(100), nullable=False)
@@ -475,26 +484,73 @@ class Audit(db.Model):
     user = db.relationship('User', backref=db.backref('audit_logs', lazy=True))
     project = db.relationship('Project', backref=db.backref('audit_logs', lazy=True))
 
-    def to_dict(self) -> dict:
-        result = {
-            "id": self.id,
-            "entityType": self.entityType.value if self.entityType else None,
-            "entityId": self.entityId,
-            "userId": self.userId,
-            "user": self.user.to_dict() if self.user else None,
-            "field": self.field,
-            "oldValue": self.oldValue,
-            "newValue": self.newValue,
-            "sessionId": self.sessionId,
-            "projectId": self.projectId,
-            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
-        }
-        # Include work order name if this is a work order audit log
-        if self.entityType == AuditEntityType.WORK_ORDER:
-            work_order = WorkOrder.query.filter_by(id=self.entityId, isActive=True).first()
-            if work_order:
-                result["workOrderName"] = work_order.name
-        return result
+    def to_dict(self, work_orders: dict = None, supplies: dict = None) -> dict:
+        """Convert audit log to dictionary.
+        
+        Args:
+            work_orders: Optional dict mapping work order ID to WorkOrder object (to avoid N+1 queries)
+            supplies: Optional dict mapping supply ID to Supply object (to avoid N+1 queries)
+        """
+        try:
+            result = {
+                "id": self.id,
+                "entityType": self.entityType.value if self.entityType else None,
+                "entityId": self.entityId,
+                "userId": self.userId,
+                "user": self.user.to_dict() if self.user else None,
+                "field": self.field,
+                "oldValue": self.oldValue,
+                "newValue": self.newValue,
+                "sessionId": self.sessionId,
+                "projectId": self.projectId,
+                "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+            }
+            
+            # Include work order name if this is a work order audit log
+            if self.entityType == AuditEntityType.WORK_ORDER:
+                if work_orders and self.entityId in work_orders:
+                    work_order = work_orders[self.entityId]
+                    if work_order:
+                        result["workOrderName"] = work_order.name
+                else:
+                    # Fallback to query if not provided (for backward compatibility)
+                    work_order = WorkOrder.query.filter_by(id=self.entityId, isActive=True).first()
+                    if work_order:
+                        result["workOrderName"] = work_order.name
+            
+            # Include supply name if this is a supply audit log
+            elif self.entityType == AuditEntityType.SUPPLY:
+                if supplies and self.entityId in supplies:
+                    supply = supplies[self.entityId]
+                    if supply:
+                        result["supplyName"] = supply.name
+                else:
+                    # Fallback to query if not provided (for backward compatibility)
+                    supply = BuildingSupply.query.filter_by(id=self.entityId).first()
+                    if not supply:
+                        supply = ElectricalSupply.query.filter_by(id=self.entityId).first()
+                    if supply:
+                        result["supplyName"] = supply.name
+            
+            return result
+        except Exception as e:
+            # Return minimal dict if serialization fails
+            import traceback
+            print(f"Error in Audit.to_dict for log {self.id}: {str(e)}")
+            print(traceback.format_exc())
+            return {
+                "id": self.id,
+                "entityType": self.entityType.value if self.entityType else None,
+                "entityId": self.entityId,
+                "userId": self.userId,
+                "field": self.field,
+                "oldValue": self.oldValue,
+                "newValue": self.newValue,
+                "sessionId": self.sessionId,
+                "projectId": self.projectId,
+                "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+                "error": "Failed to serialize audit log"
+            }
 
 class BuildingSupply(db.Model):
     __tablename__ = "building_supplies"
@@ -536,6 +592,21 @@ class BuildingSupply(db.Model):
         except Exception:
             return []
 
+    def get_work_order_assignments(self) -> list:
+        """Get work order assignments with quantities from junction table"""
+        try:
+            assignments = []
+            for assignment in self.work_order_assignments:
+                if assignment.isActive:
+                    assignments.append({
+                        "workOrderId": assignment.workOrderId,
+                        "quantity": assignment.quantity,
+                        "id": assignment.id
+                    })
+            return assignments
+        except Exception:
+            return []
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -551,10 +622,25 @@ class BuildingSupply(db.Model):
             "projectId": self.projectId,
             "workOrderId": self.workOrderId,
             "workOrderIds": self.get_work_orders(),
+            "workOrderAssignments": self.get_work_order_assignments(),
             "requestedBy": self.requestedBy.to_dict() if self.requestedBy else None,
             "approvedBy": self.approvedBy.to_dict() if self.approvedBy else None,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+        }
+    
+    def to_catalog_dict(self) -> dict:
+        """Lightweight dict for catalog dropdowns - only essential fields"""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "vendor": self.vendor,
+            "referenceCode": self.referenceCode,
+            "supplyCategory": self.supplyCategory,
+            "supplyType": self.supplyType,
+            "supplySubtype": self.supplySubtype,
+            "unitOfMeasure": self.unitOfMeasure,
+            "budget": float(self.budget) if self.budget else 0.0,
         }
 
 
@@ -598,6 +684,21 @@ class ElectricalSupply(db.Model):
         except Exception:
             return []
 
+    def get_work_order_assignments(self) -> list:
+        """Get work order assignments with quantities from junction table"""
+        try:
+            assignments = []
+            for assignment in self.work_order_assignments:
+                if assignment.isActive:
+                    assignments.append({
+                        "workOrderId": assignment.workOrderId,
+                        "quantity": assignment.quantity,
+                        "id": assignment.id
+                    })
+            return assignments
+        except Exception:
+            return []
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -613,10 +714,25 @@ class ElectricalSupply(db.Model):
             "projectId": self.projectId,
             "workOrderId": self.workOrderId,
             "workOrderIds": self.get_work_orders(),
+            "workOrderAssignments": self.get_work_order_assignments(),
             "requestedBy": self.requestedBy.to_dict() if self.requestedBy else None,
             "approvedBy": self.approvedBy.to_dict() if self.approvedBy else None,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+        }
+    
+    def to_catalog_dict(self) -> dict:
+        """Lightweight dict for catalog dropdowns - only essential fields"""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "vendor": self.vendor,
+            "referenceCode": self.referenceCode,
+            "supplyCategory": self.supplyCategory,
+            "supplyType": self.supplyType,
+            "supplySubtype": self.supplySubtype,
+            "unitOfMeasure": self.unitOfMeasure,
+            "budget": float(self.budget) if self.budget else 0.0,
         }
 
 
@@ -640,5 +756,173 @@ class PasswordReset(db.Model):
             "token": self.token,
             "expiresAt": self.expiresAt.isoformat() if self.expiresAt else None,
             "used": self.used,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+        }
+
+
+class NotificationPreference(db.Model):
+    __tablename__ = "notification_preferences"
+
+    id = db.Column(db.Integer, primary_key=True)
+    userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True, index=True)
+    
+    # Project notifications
+    projectStatusChange = db.Column(db.Boolean, default=True, nullable=False)
+    projectStatusChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    projectPriorityChange = db.Column(db.Boolean, default=True, nullable=False)
+    projectPriorityChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    projectBudgetChange = db.Column(db.Boolean, default=True, nullable=False)
+    projectBudgetChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    projectDateChange = db.Column(db.Boolean, default=True, nullable=False)
+    projectDateChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    projectTeamChange = db.Column(db.Boolean, default=True, nullable=False)
+    projectTeamChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    
+    # Work order notifications
+    workOrderCreated = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderCreatedEmail = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderStatusChange = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderStatusChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderCompleted = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderCompletedEmail = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderPriorityChange = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderPriorityChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderBudgetChange = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderBudgetChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderDateChange = db.Column(db.Boolean, default=True, nullable=False)
+    workOrderDateChangeEmail = db.Column(db.Boolean, default=True, nullable=False)
+    
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('notification_preferences', lazy=True))
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "userId": self.userId,
+            "projectStatusChange": self.projectStatusChange,
+            "projectStatusChangeEmail": self.projectStatusChangeEmail,
+            "projectPriorityChange": self.projectPriorityChange,
+            "projectPriorityChangeEmail": self.projectPriorityChangeEmail,
+            "projectBudgetChange": self.projectBudgetChange,
+            "projectBudgetChangeEmail": self.projectBudgetChangeEmail,
+            "projectDateChange": self.projectDateChange,
+            "projectDateChangeEmail": self.projectDateChangeEmail,
+            "projectTeamChange": self.projectTeamChange,
+            "projectTeamChangeEmail": self.projectTeamChangeEmail,
+            "workOrderCreated": self.workOrderCreated,
+            "workOrderCreatedEmail": self.workOrderCreatedEmail,
+            "workOrderStatusChange": self.workOrderStatusChange,
+            "workOrderStatusChangeEmail": self.workOrderStatusChangeEmail,
+            "workOrderCompleted": self.workOrderCompleted,
+            "workOrderCompletedEmail": self.workOrderCompletedEmail,
+            "workOrderPriorityChange": self.workOrderPriorityChange,
+            "workOrderPriorityChangeEmail": self.workOrderPriorityChangeEmail,
+            "workOrderBudgetChange": self.workOrderBudgetChange,
+            "workOrderBudgetChangeEmail": self.workOrderBudgetChangeEmail,
+            "workOrderDateChange": self.workOrderDateChange,
+            "workOrderDateChangeEmail": self.workOrderDateChangeEmail,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+            "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+        }
+
+
+class NotificationDismissal(db.Model):
+    __tablename__ = "notification_dismissals"
+
+    id = db.Column(db.Integer, primary_key=True)
+    userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    auditLogId = db.Column(db.Integer, db.ForeignKey('audit_logs.id'), nullable=False, index=True)
+    dismissedAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('notification_dismissals', lazy=True))
+    auditLog = db.relationship('Audit', backref=db.backref('dismissals', lazy=True))
+
+    # Ensure unique user-audit log combinations
+    __table_args__ = (db.UniqueConstraint('userId', 'auditLogId', name='unique_user_audit_dismissal'),)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "userId": self.userId,
+            "auditLogId": self.auditLogId,
+            "dismissedAt": self.dismissedAt.isoformat() if self.dismissedAt else None,
+        }
+
+
+class Conversation(db.Model):
+    __tablename__ = "conversations"
+
+    id = db.Column(db.Integer, primary_key=True)
+    participant1Id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    participant2Id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    lastMessageAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    participant1 = db.relationship('User', foreign_keys=[participant1Id], backref=db.backref('conversations_as_participant1', lazy=True))
+    participant2 = db.relationship('User', foreign_keys=[participant2Id], backref=db.backref('conversations_as_participant2', lazy=True))
+    messages = db.relationship('Message', backref='conversation', lazy=True, order_by='Message.createdAt')
+
+    # Ensure unique conversation between two users
+    __table_args__ = (db.UniqueConstraint('participant1Id', 'participant2Id', name='unique_conversation_pair'),)
+
+    def to_dict(self, current_user_id: int = None) -> dict:
+        # Determine the other participant
+        other_participant = self.participant2 if current_user_id == self.participant1Id else self.participant1
+        other_participant_dict = other_participant.to_dict() if other_participant else None
+        
+        # Get unread count for current user
+        unread_count = 0
+        if current_user_id:
+            unread_count = Message.query.filter_by(
+                conversationId=self.id,
+                recipientId=current_user_id,
+                isRead=False
+            ).count()
+        
+        return {
+            "id": self.id,
+            "participant1Id": self.participant1Id,
+            "participant2Id": self.participant2Id,
+            "otherParticipant": other_participant_dict,
+            "lastMessageAt": self.lastMessageAt.isoformat() if self.lastMessageAt else None,
+            "createdAt": self.createdAt.isoformat() if self.createdAt else None,
+            "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
+            "unreadCount": unread_count,
+        }
+
+
+class Message(db.Model):
+    __tablename__ = "messages"
+
+    id = db.Column(db.Integer, primary_key=True)
+    conversationId = db.Column(db.Integer, db.ForeignKey('conversations.id'), nullable=False, index=True)
+    senderId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    recipientId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    content = db.Column(db.Text, nullable=False)
+    isRead = db.Column(db.Boolean, default=False, nullable=False)
+    readAt = db.Column(db.DateTime, nullable=True)
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    sender = db.relationship('User', foreign_keys=[senderId], backref=db.backref('sent_messages', lazy=True))
+    recipient = db.relationship('User', foreign_keys=[recipientId], backref=db.backref('received_messages', lazy=True))
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "conversationId": self.conversationId,
+            "senderId": self.senderId,
+            "recipientId": self.recipientId,
+            "sender": self.sender.to_dict() if self.sender else None,
+            "recipient": self.recipient.to_dict() if self.recipient else None,
+            "content": self.content,
+            "isRead": self.isRead,
+            "readAt": self.readAt.isoformat() if self.readAt else None,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
         }

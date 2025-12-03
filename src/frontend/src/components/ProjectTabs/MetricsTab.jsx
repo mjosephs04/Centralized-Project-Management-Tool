@@ -47,14 +47,28 @@ const MetricsTab = ({ project }) => {
     return new Intl.NumberFormat("en-US", { 
       style: "currency", 
       currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(value);
   };
 
   const formatDays = (value) => {
     if (value === null || value === undefined) return "N/A";
-    return `${value} ${Math.abs(value) === 1 ? 'day' : 'days'}`;
+    const rounded = Math.round(value * 10) / 10; // Round to 1 decimal place
+    return `${rounded} ${Math.abs(rounded) === 1 ? 'day' : 'days'}`;
+  };
+
+  const formatScheduleVariance = (value) => {
+    if (value === null || value === undefined) return "N/A";
+    const rounded = Math.round(value * 10) / 10; // Round to 1 decimal place
+    const absValue = Math.abs(rounded);
+    if (rounded < 0) {
+      return `${absValue} ${absValue === 1 ? 'day' : 'days'} behind schedule`;
+    } else if (rounded > 0) {
+      return `${absValue} ${absValue === 1 ? 'day' : 'days'} ahead of schedule`;
+    } else {
+      return "On schedule";
+    }
   };
 
   const formatDate = (dateString) => {
@@ -151,31 +165,31 @@ const MetricsTab = ({ project }) => {
             label="Planned Duration"
             value={formatDays(metrics.schedule?.plannedDuration)}
             icon={<FaCalendarAlt />}
-            tooltip="The original planned number of days for the project from start to end date.Planned Duration = endDate - startDate"
+            tooltip="The original planned number of days for the project from start to end date. Duration = endDate - startDate"
           />
           <DetailCard
             label="Actual Duration"
             value={formatDays(metrics.schedule?.actualDuration)}
             icon={<FaClock />}
-            tooltip="The actual number of days the project has taken or is currently taking.Actual Duration = actualEndDate - actualStartDate (if completed) or today - actualStartDate (if in progress)"
+            tooltip="The actual number of days the project has taken or is currently taking. Duration = actualEndDate - actualStartDate (if completed) or today - actualStartDate (if in progress)"
           />
           <DetailCard
             label="Schedule Variance"
-            value={formatDays(metrics.schedule?.scheduleVariance)}
+            value={formatScheduleVariance(metrics.schedule?.scheduleVariance)}
             icon={metrics.schedule?.scheduleVariance < 0 ? <FaTimesCircle style={{ color: "#dc2626" }} /> : <FaCheckCircle style={{ color: "#059669" }} />}
-            tooltip="Schedule Variance shows the difference between planned and actual project duration.Schedule Variance = Planned Duration - Actual Duration"
+            tooltip="Schedule Variance shows the difference between planned and actual project duration. Variance = Planned Duration - Actual Duration"
           />
           <DetailCard
             label="Forecasted Completion"
             value={formatDate(metrics.schedule?.forecastEndDate)}
             icon={<FaCalendarAlt />}
-            tooltip="The projected completion date based on current schedule performance.Forecast Duration = Planned Duration / SPI"
+            tooltip="The projected completion date based on current schedule performance. Duration = Planned Duration / SPI"
           />
           <DetailCard
             label="Planned Value (PV)"
             value={formatCurrency(metrics.progress?.details?.budget?.plannedValuePV ? parseFloat(metrics.progress.details.budget.plannedValuePV) : null)}
             icon={<FaDollarSign />}
-            tooltip="The budgeted cost of work that should have been completed by now based on the planned schedule.PV = (Days Elapsed / Total Planned Days) × Total Estimated Budget"
+            tooltip="The budgeted cost of work that should have been completed by now based on the planned schedule. PV = (Days Elapsed / Total Planned Days) × Total Estimated Budget"
           />
         </div>
       </div>
@@ -188,42 +202,137 @@ const MetricsTab = ({ project }) => {
         </div>
         <div style={styles.detailGrid}>
           <DetailCard
+            label="Allocated Budget (AB)"
+            value={formatCurrency(metrics.cost?.allocatedBudget)}
+            icon={<FaDollarSign />}
+            tooltip="The total budget allocated to this project at the project level. This is the project's estimatedBudget field. AB = Allocated Budget"
+          />
+          <DetailCard
             label="Earned Value (EV)"
             value={formatCurrency(metrics.cost?.earnedValue)}
             icon={<FaCheckCircle style={{ color: "#059669" }} />}
-            tooltip="The value of work actually completed to date, expressed in dollar terms.EV = Sum of completed work orders' budgets + (50% × in-progress work orders' budgets)"
+            tooltip="The value of work actually completed to date, expressed in dollar terms.  EV = Sum of completed work orders' budgets + (50% × in-progress work orders' budgets)"
           />
           <DetailCard
             label="Actual Cost (AC)"
             value={formatCurrency(metrics.cost?.actualCost)}
             icon={<FaDollarSign />}
-            tooltip="The total cost actually incurred so far on the project.AC = Sum of all work order actual costs"
+            tooltip="The total cost actually incurred so far on the project.  AC = Sum of all work order actual costs"
           />
           <DetailCard
             label="Cost Variance (CV)"
             value={formatCurrency(metrics.cost?.costVariance)}
             icon={metrics.cost?.costVariance >= 0 ? <FaCheckCircle style={{ color: "#059669" }} /> : <FaTimesCircle style={{ color: "#dc2626" }} />}
-            tooltip="Cost Variance shows the difference between earned value and actual cost.CV = EV - AC"
+            tooltip="Cost Variance shows the difference between earned value and actual cost.  CV = EV - AC"
           />
           <DetailCard
             label="Estimate at Completion"
             value={formatCurrency(metrics.cost?.estimateAtCompletion)}
             icon={<FaChartLine />}
-            tooltip="The forecasted total cost of the project when complete, based on current cost performance.EAC = BAC / CPI"
+            tooltip="The forecasted total cost of the project when complete, based on current cost performance.  EAC = BAC / CPI"
           />
           <DetailCard
             label="Remaining Budget"
             value={formatCurrency(metrics.cost?.remainingBudget)}
             icon={<FaDollarSign />}
-            tooltip="The amount of budget remaining for the rest of the project.Remaining Budget = BAC - AC"
+            tooltip="The amount of allocated budget remaining for the rest of the project.  RB = AB - AC"
           />
           <DetailCard
             label="Budget at Completion"
             value={formatCurrency(metrics.cost?.budgetAtCompletion)}
             icon={<FaDollarSign />}
-            tooltip="The total planned budget for the entire project.BAC = Sum of all active work orders' estimated budgets"
+            tooltip="The total planned budget for the entire project.  BAC = Sum of all active work orders' estimated budgets"
+            tooltipAlignRight={true}
           />
         </div>
+      </div>
+
+      {/* Project Costs Section */}
+      <div style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <FaDollarSign style={styles.sectionIcon} />
+          <h3>Project Costs</h3>
+        </div>
+        <div style={styles.detailGrid}>
+          <DetailCard
+            label="Allocated Budget (AB)"
+            value={formatCurrency(metrics.cost?.allocatedBudget)}
+            icon={<FaDollarSign />}
+            tooltip="The total budget allocated to this project at the project level. AB = Allocated Budget"
+          />
+          <DetailCard
+            label="Current Cost"
+            value={formatCurrency(metrics.cost?.actualCost)}
+            icon={<FaDollarSign />}
+            tooltip="The total actual cost incurred so far on the project (sum of all work order actual costs)."
+          />
+          <DetailCard
+            label="Estimated Cost"
+            value={formatCurrency(metrics.cost?.estimateAtCompletion)}
+            icon={<FaChartLine />}
+            tooltip="The forecasted total cost when the project is complete, based on current performance."
+          />
+        </div>
+      </div>
+
+      {/* Work Order Costs Section */}
+      <div style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <FaDollarSign style={styles.sectionIcon} />
+          <h3>Work Order Costs</h3>
+        </div>
+        {metrics.cost?.workOrderCosts ? (
+          <div style={styles.workOrderCostsGrid}>
+            {['pending', 'in_progress', 'on_hold', 'completed', 'cancelled'].map((status) => {
+              const costs = metrics.cost.workOrderCosts[status];
+              if (!costs || costs.count === 0) return null;
+              
+              const statusLabel = status.split('_').map(word => 
+                word.charAt(0).toUpperCase() + word.slice(1)
+              ).join(' ');
+              const statusColor = {
+                pending: "#f59e0b",
+                in_progress: "#3b82f6",
+                completed: "#10b981",
+                on_hold: "#f97316",
+                cancelled: "#ef4444"
+              }[status] || "#6b7280";
+              
+              return (
+                <div key={status} style={styles.workOrderCostCard}>
+                  <div style={styles.workOrderCostHeader}>
+                    <div style={{ ...styles.workOrderStatusDot, backgroundColor: statusColor }}></div>
+                    <span style={styles.workOrderCostTitle}>{statusLabel}</span>
+                    <span style={styles.workOrderCostCount}>({costs.count})</span>
+                  </div>
+                  <div style={styles.workOrderCostDetails}>
+                    <div style={styles.workOrderCostRow}>
+                      <span style={styles.workOrderCostLabel}>Estimated:</span>
+                      <span style={styles.workOrderCostValue}>{formatCurrency(costs.estimated)}</span>
+                    </div>
+                    <div style={styles.workOrderCostRow}>
+                      <span style={styles.workOrderCostLabel}>Actual:</span>
+                      <span style={styles.workOrderCostValue}>{formatCurrency(costs.actual)}</span>
+                    </div>
+                    {costs.estimated > 0 && (
+                      <div style={styles.workOrderCostRow}>
+                        <span style={styles.workOrderCostLabel}>Variance:</span>
+                        <span style={{
+                          ...styles.workOrderCostValue,
+                          color: costs.actual > costs.estimated ? "#dc2626" : "#059669"
+                        }}>
+                          {formatCurrency(costs.actual - costs.estimated)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p style={styles.noDataText}>No work order cost data available</p>
+        )}
       </div>
 
       {/* Workforce Metrics */}
@@ -238,21 +347,21 @@ const MetricsTab = ({ project }) => {
             value={metrics.workforce?.teamSize || 0}
             icon={<FaUsers />}
             description="Active members"
-            tooltip="The number of active team members assigned to this project.Team Size = Count of active project members"
+            tooltip="The number of active team members assigned to this project.  Size = Count of active project members"
           />
           <MetricCard
             title="Work Orders per Worker"
             value={metrics.workforce?.activeWorkOrdersPerWorker?.toFixed(1) || "0"}
             icon={<FaUsers />}
             description="Current workload"
-            tooltip="The average number of active work orders assigned per team member.Work Orders per Worker = (Pending + In-Progress work orders) / Team Size"
+            tooltip="The average number of active work orders assigned per team member.  WOPW = (Pending + In-Progress work orders) / Team Size"
           />
           <MetricCard
             title="Avg Work Order Duration"
             value={formatDays(metrics.workforce?.averageWorkOrderDurationDays)}
             icon={<FaClock />}
             description="Time to complete"
-            tooltip="The average number of days it takes to complete a work order, calculated from completed work orders only.Avg Work Order Duration = Average of (actualEndDate - actualStartDate) for all completed work orders"
+            tooltip="The average number of days it takes to complete a work order, calculated from completed work orders only.  AWOD = Average of (updatedAt - createdAt) for all completed work orders"
           />
         </div>
         
@@ -281,27 +390,27 @@ const MetricsTab = ({ project }) => {
             value={`${(metrics.quality?.riskIndex || 0).toFixed(1)}%`}
             icon={<FaShieldAlt style={{ color: metrics.quality?.riskIndex > 50 ? "#dc2626" : "#059669" }} />}
             description={metrics.quality?.riskIndex > 50 ? "High risk" : "Low risk"}
-            tooltip="A composite risk score (0-100%) calculated from overdue orders and cost overruns.Risk Index = (Overdue Ratio × 50% + Cost Overrun Ratio × 50%) × 100"
+            tooltip="A composite risk score (0-100%) calculated from overdue orders and cost overruns.  RI = (Overdue Ratio × 50% + Cost Overrun Ratio × 50%) × 100"
             tooltipAlignLeft={true}
           />
           <DetailCard
             label="Overdue Orders"
             value={metrics.quality?.overdueOrders || 0}
             icon={<FaExclamationTriangle style={{ color: "#dc2626" }} />}
-            tooltip="The number of work orders that are past their end date and not yet completed or cancelled.Overdue Orders = Count of work orders where status ≠ Completed/Cancelled AND endDate < today"
+            tooltip="The number of work orders that are past their end date and not yet completed or cancelled.  Overdue = Count of work orders where status ≠ Completed/Cancelled AND endDate < today"
           />
           <DetailCard
             label="Cost Overruns"
             value={metrics.quality?.costOverruns || 0}
             icon={<FaTimesCircle style={{ color: "#dc2626" }} />}
-            tooltip="The number of work orders where the actual cost exceeded the estimated budget.Cost Overruns = Count of work orders where actualCost > estimatedBudget"
+            tooltip="The number of work orders where the actual cost exceeded the estimated budget.  Overruns = Count of work orders where actualCost > estimatedBudget"
             tooltipAlignRight={true}
           />
           <DetailCard
             label="Total Completed"
             value={metrics.quality?.totalCompleted || 0}
             icon={<FaCheckCircle style={{ color: "#059669" }} />}
-            tooltip="The total number of work orders that have been marked as completed.Total Completed = Count of work orders with status = Completed"
+            tooltip="The total number of work orders that have been marked as completed.  Completed = Count of work orders with status = Completed"
             tooltipAlignRight={true}
           />
         </div>
@@ -689,6 +798,73 @@ const styles = {
     fontSize: "14px",
     fontWeight: "bold",
     color: "#111827",
+  },
+  workOrderCostsGrid: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "14px",
+    justifyContent: "flex-start",
+  },
+  workOrderCostCard: {
+    backgroundColor: "#f9fafb",
+    borderRadius: "8px",
+    padding: "16px",
+    border: "1px solid #e5e7eb",
+    minWidth: "180px",
+    flex: "0 0 auto",
+  },
+  workOrderStatusDot: {
+    width: "8px",
+    height: "8px",
+    borderRadius: "50%",
+    flexShrink: 0,
+  },
+  workOrderCostHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    marginBottom: "12px",
+    paddingBottom: "10px",
+    borderBottom: "1px solid #e5e7eb",
+  },
+  workOrderCostTitle: {
+    fontSize: "14px",
+    fontWeight: "600",
+    color: "#111827",
+    flex: 1,
+  },
+  workOrderCostCount: {
+    fontSize: "12px",
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  workOrderCostDetails: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  workOrderCostRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "8px",
+  },
+  workOrderCostLabel: {
+    fontSize: "12px",
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  workOrderCostValue: {
+    fontSize: "13px",
+    fontWeight: "600",
+    color: "#111827",
+  },
+  noDataText: {
+    color: "#6b7280",
+    fontSize: "14px",
+    fontStyle: "italic",
+    textAlign: "center",
+    padding: "20px",
   },
 };
 

@@ -299,6 +299,9 @@ def compute_cost_variance(project: Project, project_id: int) -> Dict[str, Any]:
     # Use project.actualCost which is the sum of work order actual costs only
     ac = to_decimal(project.actualCost) if project.actualCost is not None else Decimal("0")
     
+    # Allocated budget (project-level budget)
+    allocated_budget = to_decimal(project.estimatedBudget) if project.estimatedBudget is not None else Decimal("0")
+    
     # Cost Variance
     cv = ev - ac
     
@@ -322,8 +325,34 @@ def compute_cost_variance(project: Project, project_id: int) -> Dict[str, Any]:
         except (ZeroDivisionError, Exception):
             tcpi = None
     
-    # Remaining Budget
-    remaining_budget = max(0, float(est_total - ac)) if est_total > ac else 0
+    # Remaining Budget (based on allocated budget, not work order budget totals)
+    # Allow negative values to show over-budget situations
+    remaining_budget = float(allocated_budget - ac)
+    
+    # Work order cost breakdown by status
+    wo_costs = {
+        "pending": {"estimated": Decimal("0"), "actual": Decimal("0"), "count": 0},
+        "in_progress": {"estimated": Decimal("0"), "actual": Decimal("0"), "count": 0},
+        "on_hold": {"estimated": Decimal("0"), "actual": Decimal("0"), "count": 0},
+        "completed": {"estimated": Decimal("0"), "actual": Decimal("0"), "count": 0},
+        "cancelled": {"estimated": Decimal("0"), "actual": Decimal("0"), "count": 0},
+    }
+    
+    for wo in work_orders:
+        status_key = wo.status.value if wo.status else "pending"
+        if status_key in wo_costs:
+            wo_costs[status_key]["estimated"] += to_decimal(wo.estimatedBudget) if wo.estimatedBudget else Decimal("0")
+            wo_costs[status_key]["actual"] += to_decimal(wo.actualCost) if wo.actualCost else Decimal("0")
+            wo_costs[status_key]["count"] += 1
+    
+    # Convert to float for JSON serialization
+    wo_costs_serialized = {}
+    for status, costs in wo_costs.items():
+        wo_costs_serialized[status] = {
+            "estimated": float(costs["estimated"]),
+            "actual": float(costs["actual"]),
+            "count": costs["count"]
+        }
     
     return {
         "costVariance": float(cv),
@@ -333,7 +362,9 @@ def compute_cost_variance(project: Project, project_id: int) -> Dict[str, Any]:
         "estimateAtCompletion": eac,
         "toCompletePerformanceIndex": tcpi,
         "remainingBudget": remaining_budget,
-        "budgetAtCompletion": float(bac) if bac is not None else 0
+        "budgetAtCompletion": float(bac) if bac is not None else 0,
+        "allocatedBudget": float(allocated_budget),
+        "workOrderCosts": wo_costs_serialized
     }
 
 
@@ -355,10 +386,12 @@ def compute_workforce_metrics(project_id: int) -> Dict[str, Any]:
         active_wo_per_worker = len(active_work_orders) / team_size if team_size > 0 else 0
         
         # Average work order duration
-        completed_orders = [wo for wo in work_orders if wo.status == WorkOrderStatus.COMPLETED and wo.actualStartDate and wo.actualEndDate]
+        # Calculate using createdAt and updatedAt for completed work orders
+        # This represents the total lifecycle from creation to completion
+        completed_orders = [wo for wo in work_orders if wo.status == WorkOrderStatus.COMPLETED and wo.createdAt and wo.updatedAt]
         avg_duration = None
         if completed_orders:
-            durations = [(wo.actualEndDate - wo.actualStartDate).days for wo in completed_orders]
+            durations = [(wo.updatedAt.date() - wo.createdAt.date()).days for wo in completed_orders]
             avg_duration = sum(durations) / len(durations)
         
         # Distribution by status

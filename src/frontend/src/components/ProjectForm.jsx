@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaPlusCircle, FaMinusCircle, FaArrowLeft } from 'react-icons/fa';
-import { projectsAPI } from '../services/api';
+import { FaPlusCircle, FaMinusCircle, FaArrowLeft, FaTimes, FaTrash, FaUser } from 'react-icons/fa';
+import { projectsAPI, usersAPI } from '../services/api';
 import { useSnackbar } from '../contexts/SnackbarContext';
 
 const ProjectCreationForm = ({ onCreate }) => {
@@ -22,27 +22,148 @@ const ProjectCreationForm = ({ onCreate }) => {
         estimatedBudget: '',
         status: 'planning',
         priority: 'medium',
-        crewMembers: [''],
     });
+
+    // Worker selection state (similar to TeamTab)
+    const [crew, setCrew] = useState([]); // Array of { id: number } objects
+    const [allWorkers, setAllWorkers] = useState([]);
+    const [filter, setFilter] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [loadingWorkers, setLoadingWorkers] = useState(true);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [focusedInput, setFocusedInput] = useState(null);
+    const [hoveredButton, setHoveredButton] = useState(null);
     
-    const handleChange = (e, index = null) => {
+    const handleChange = (e) => {
         const { name, value } = e.target;
-        if (name === 'crewMembers') {
-            const newMembers = [...formData.crewMembers];
-            newMembers[index] = value;
-            setFormData({ ...formData, crewMembers: newMembers });
-        } else {
             setFormData({ ...formData, [name]: value });
+    };
+
+    // Load workers on component mount
+    useEffect(() => {
+        const loadWorkers = async () => {
+            try {
+                setLoadingWorkers(true);
+                const users = await usersAPI.getWorkers();
+                setAllWorkers(users || []);
+            } catch (e) {
+                console.error("Failed to load workers", e);
+                showSnackbar("Failed to load workers list", "error");
+            } finally {
+                setLoadingWorkers(false);
+            }
+        };
+        loadWorkers();
+    }, []);
+
+    // Helper functions for worker data
+    const getName = (u) => [u?.firstName, u?.lastName].filter(Boolean).join(" ").trim();
+    const getEmail = (u) => u?.email ?? u?.emailAddress ?? "";
+    const getPhone = (u) => u?.phoneNumber ?? u?.phone ?? "";
+    const workerDisplayName = (u) => getName(u) || getEmail(u) || "Unnamed";
+
+    // Enhanced search function
+    const searchWorkers = (workers, searchTerm) => {
+        if (!searchTerm.trim()) return workers;
+        
+        const term = searchTerm.toLowerCase().trim();
+        return workers.filter((worker) => {
+            const name = getName(worker).toLowerCase();
+            const email = getEmail(worker).toLowerCase();
+            const phone = getPhone(worker).toLowerCase();
+            
+            return name.includes(term) || 
+                   email.includes(term) || 
+                   phone.includes(term) ||
+                   `${name} ${email} ${phone}`.includes(term);
+        });
+    };
+
+    // Resolve crew members with worker details
+    const crewResolved = useMemo(() => {
+        return crew.map((member) => {
+            if (member.id) {
+                const w = allWorkers.find((worker) => String(worker.id) === String(member.id));
+                if (w) {
+                    return {
+                        id: w.id,
+                        name: workerDisplayName(w),
+                        email: getEmail(w),
+                        phoneNumber: getPhone(w),
+                        profileImageUrl: w.profileImageUrl || ""
+                    };
+                }
+                return { id: member.id, name: `Worker #${member.id}`, email: "", phoneNumber: "" };
+            }
+            return { name: member.name, email: "", phoneNumber: "" };
+        });
+    }, [crew, allWorkers]);
+
+    // Debounced search effect
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setSearchTerm(filter);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [filter]);
+
+    const filteredWorkers = useMemo(() => {
+        return searchWorkers(allWorkers, searchTerm);
+    }, [searchTerm, allWorkers]);
+
+    // Show dropdown when there's a search term or when focused
+    useEffect(() => {
+        setShowDropdown(focusedInput === 'worker-search' && (searchTerm || filter));
+    }, [focusedInput, searchTerm, filter]);
+
+    const existingIds = new Set(crew.filter((m) => m.id != null).map((m) => String(m.id)));
+
+    // Worker selection handlers
+    const handleAddMember = (workerId) => {
+        if (!workerId) return;
+        if (existingIds.has(String(workerId))) return; // prevent duplicate
+        setCrew((prev) => [...prev, { id: workerId }]);
+        setFilter("");
+        setShowDropdown(false);
+        setHighlightedIndex(-1);
+    };
+
+    const handleWorkerSelect = (worker) => {
+        handleAddMember(worker.id);
+    };
+
+    const handleKeyDown = (e) => {
+        if (!showDropdown) return;
+
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                setHighlightedIndex(prev => 
+                    prev < filteredWorkers.length - 1 ? prev + 1 : 0
+                );
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                setHighlightedIndex(prev => 
+                    prev > 0 ? prev - 1 : filteredWorkers.length - 1
+                );
+                break;
+            case 'Enter':
+                e.preventDefault();
+                if (highlightedIndex >= 0 && filteredWorkers[highlightedIndex]) {
+                    handleWorkerSelect(filteredWorkers[highlightedIndex]);
+                }
+                break;
+            case 'Escape':
+                setShowDropdown(false);
+                setHighlightedIndex(-1);
+                break;
         }
     };
 
-    const addCrewMember = () => {
-        setFormData({ ...formData, crewMembers: [...formData.crewMembers, ''] });
-    };
-
-    const removeCrewMember = (index) => {
-        const newCrew = formData.crewMembers.filter((_, i) => i !== index);
-        setFormData({ ...formData, crewMembers: newCrew });
+    const handleRemoveMember = (index) => {
+        setCrew((prev) => prev.filter((_, i) => i !== index));
     };
 
     const handleSubmit = async (e) => {
@@ -72,7 +193,17 @@ const ProjectCreationForm = ({ onCreate }) => {
                 priority: formData.priority.toLowerCase(),
             };
             
+            // Create the project first
             const createdProject = await projectsAPI.createProject(projectData);
+            
+            // Update crew members if any are selected
+            if (crew.length > 0) {
+                const memberIds = crew.map((m) => m.id).filter(id => id != null);
+                if (memberIds.length > 0) {
+                    await projectsAPI.updateProject(createdProject.id, { crewMembers: memberIds });
+                }
+            }
+            
             showSnackbar('Project created successfully!', 'success');
             navigate(`/projects/${createdProject.id}`);
        } catch (err) {
@@ -93,6 +224,7 @@ const ProjectCreationForm = ({ onCreate }) => {
     const styles = {
         pageContainer: {
             padding: '1.5rem 1rem',
+            paddingBottom: '4rem',
             background: 'rgb(219, 219, 219)',
             minHeight: 'calc(100vh - 80px)',
             fontFamily: 'sans-serif',
@@ -215,6 +347,7 @@ const ProjectCreationForm = ({ onCreate }) => {
         crewMembersSection: {
             gridColumn: '1 / -1',
             marginTop: '1rem',
+            marginBottom: '2rem',
         },
         crewMembersContainer: {
             backgroundColor: '#f7fafc',
@@ -269,17 +402,198 @@ const ProjectCreationForm = ({ onCreate }) => {
             fontSize: '0.95rem',
             fontWeight: '600',
         },
+        // Worker selection styles (from TeamTab)
+        unifiedSearchContainer: {
+            position: "relative",
+            flex: 1,
+        },
+        searchInputContainer: {
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
+        },
+        unifiedSearchInput: {
+            width: "100%",
+            padding: "0.8rem 1rem",
+            paddingRight: "2.5rem",
+            fontSize: "1rem",
+            border: "2px solid #e5e7eb",
+            borderRadius: "8px",
+            outline: "none",
+            transition: "border-color 0.2s",
+            backgroundColor: "white",
+        },
+        clearButton: {
+            position: "absolute",
+            right: "0.5rem",
+            background: "none",
+            border: "none",
+            color: "#6b7280",
+            cursor: "pointer",
+            padding: "0.25rem",
+            borderRadius: "4px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "0.875rem",
+            transition: "color 0.2s",
+        },
+        dropdown: {
+            position: "absolute",
+            bottom: "100%",
+            left: 0,
+            right: 0,
+            marginBottom: "0.5rem",
+            backgroundColor: "white",
+            border: "1px solid #e5e7eb",
+            borderRadius: "8px 8px 0 0",
+            boxShadow: "0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -1px rgba(0, 0, 0, 0.06)",
+            maxHeight: "300px",
+            overflowY: "auto",
+            zIndex: 1000,
+        },
+        dropdownItem: {
+            padding: "0.75rem 1rem",
+            borderBottom: "1px solid #f3f4f6",
+            transition: "background-color 0.2s",
+        },
+        workerInfo: {
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.25rem",
+        },
+        workerName: {
+            fontSize: "0.95rem",
+            fontWeight: "600",
+            color: "#2c3e50",
+        },
+        workerDetails: {
+            display: "flex",
+            gap: "0.75rem",
+            fontSize: "0.85rem",
+            color: "#6b7280",
+        },
+        workerDetail: {
+            fontSize: "0.85rem",
+            color: "#6b7280",
+        },
+        alreadyAddedText: {
+            color: "#9ca3af",
+            fontStyle: "italic",
+        },
+        loadingText: {
+            textAlign: "center",
+            color: "#6b7280",
+            fontStyle: "italic",
+        },
+        noResultsText: {
+            textAlign: "center",
+            color: "#6b7280",
+            fontStyle: "italic",
+        },
+        searchResultsCount: {
+            padding: "0.5rem 1rem",
+            fontSize: "0.875rem",
+            color: "#6b7280",
+            backgroundColor: "#f8fafc",
+            borderTop: "1px solid #e5e7eb",
+            textAlign: "center",
+            fontStyle: "italic",
+        },
+        crewGrid: {
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+            gap: "1.5rem",
+            marginTop: "1rem",
+        },
+        crewCard: {
+            position: "relative",
+            backgroundColor: "white",
+            padding: "1rem",
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+            transition: "transform 0.2s, box-shadow 0.2s",
+        },
+        crewRemoveButton: {
+            position: "absolute",
+            top: "0.75rem",
+            right: "0.75rem",
+            backgroundColor: "#fee2e2",
+            color: "#dc2626",
+            border: "none",
+            borderRadius: "6px",
+            padding: "0.5rem",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+            transition: "background-color 0.2s",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+        },
+        avatarContainer: { 
+            display: "flex", 
+            justifyContent: "center", 
+            marginBottom: "0.75rem" 
+        },
+        avatar: {
+            width: "60px",
+            height: "60px",
+            borderRadius: "50%",
+            backgroundColor: "#e5e7eb",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "3px solid #f3f4f6",
+        },
+        avatarIcon: { 
+            fontSize: "2rem", 
+            color: "#9ca3af" 
+        },
+        crewCardContent: { 
+            textAlign: "center" 
+        },
+        memberName: {
+            fontSize: "1.1rem",
+            fontWeight: "700",
+            color: "#2c3e50",
+            marginBottom: "0.75rem",
+            margin: 0,
+        },
+        contactInfo: {
+            marginTop: "0.75rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.4rem",
+            textAlign: "left",
+            backgroundColor: "#f8fafc",
+            padding: "0.75rem",
+            borderRadius: "8px",
+        },
+        contactItem: { 
+            display: "flex", 
+            justifyContent: "space-between", 
+            alignItems: "center", 
+            fontSize: "0.85rem" 
+        },
+        label: { 
+            fontWeight: "600", 
+            color: "#6b7280" 
+        },
+        value: { 
+            color: "#2c3e50" 
+        },
+        avatarImage: {
+            width: "60px",
+            height: "60px",
+            borderRadius: "50%",
+            objectFit: "cover",
+            border: "3px solid #f3f4f6",
+            backgroundColor: "#f9fafb",
+        },
     };
-
-    const [focusedInput, setFocusedInput] = useState(null);
 
     const getInputStyle = (inputName) => ({
         ...styles.input,
-        ...(focusedInput === inputName ? styles.inputFocus : {}),
-    });
-
-    const getCrewInputStyle = (inputName) => ({
-        ...styles.crewMemberInput,
         ...(focusedInput === inputName ? styles.inputFocus : {}),
     });
 
@@ -458,37 +772,146 @@ const ProjectCreationForm = ({ onCreate }) => {
                     <div style={styles.crewMembersSection}>
                         <label style={styles.label}>Crew Members (Optional)</label>
                         <div style={styles.crewMembersContainer}>
-                            {formData.crewMembers.map((member, index) => (
-                                <div key={index} style={styles.crewMemberInputGroup}>
+                            {/* Worker Search Input */}
+                            <div style={styles.unifiedSearchContainer}>
+                                <div style={styles.searchInputContainer}>
                                     <input
-                                        style={getCrewInputStyle(`crewMember-${index}`)}
                                         type="text"
-                                        name="crewMembers"
-                                        placeholder={`Crew Member ${index + 1}`}
-                                        value={member}
-                                        onChange={(e) => handleChange(e, index)}
-                                        onFocus={() => setFocusedInput(`crewMember-${index}`)}
-                                        onBlur={() => setFocusedInput(null)}
+                                        placeholder="Search and select workers by name, email, or phone..."
+                                        value={filter}
+                                        onChange={(e) => setFilter(e.target.value)}
+                                        onFocus={() => setFocusedInput('worker-search')}
+                                        onBlur={() => {
+                                            setTimeout(() => setFocusedInput(null), 200);
+                                        }}
+                                        onKeyDown={handleKeyDown}
+                                        style={{
+                                            ...styles.unifiedSearchInput,
+                                            borderColor: focusedInput === 'worker-search' ? '#0052D4' : '#e5e7eb',
+                                            boxShadow: focusedInput === 'worker-search' ? '0 0 0 3px rgba(0, 82, 212, 0.1)' : 'none',
+                                        }}
                                     />
-                                    {formData.crewMembers.length > 1 && (
+                                    {filter && (
                                         <button
                                             type="button"
-                                            style={{ ...styles.iconButton, ...styles.removeButton }}
-                                            onClick={() => removeCrewMember(index)}
+                                            onClick={() => {
+                                                setFilter("");
+                                                setShowDropdown(false);
+                                                setHighlightedIndex(-1);
+                                            }}
+                                            onMouseEnter={() => setHoveredButton('clear')}
+                                            onMouseLeave={() => setHoveredButton(null)}
+                                            style={{
+                                                ...styles.clearButton,
+                                                color: hoveredButton === 'clear' ? '#374151' : '#6b7280',
+                                                backgroundColor: hoveredButton === 'clear' ? '#f3f4f6' : 'transparent',
+                                            }}
+                                            title="Clear search"
                                         >
-                                            <FaMinusCircle size={20} />
+                                            <FaTimes />
                                         </button>
                                     )}
                                 </div>
+
+                                {showDropdown && (
+                                    <div style={styles.dropdown}>
+                                        {loadingWorkers ? (
+                                            <div style={styles.dropdownItem}>
+                                                <div style={styles.loadingText}>Loading workers...</div>
+                                            </div>
+                                        ) : filteredWorkers.length === 0 ? (
+                                            <div style={styles.dropdownItem}>
+                                                <div style={styles.noResultsText}>
+                                                    {searchTerm ? "No workers found matching your search" : "Start typing to search workers..."}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                {filteredWorkers.map((worker, index) => (
+                                                    <div
+                                                        key={worker.id}
+                                                        onClick={() => handleWorkerSelect(worker)}
+                                                        onMouseEnter={() => setHighlightedIndex(index)}
+                                                        style={{
+                                                            ...styles.dropdownItem,
+                                                            backgroundColor: highlightedIndex === index ? '#f3f4f6' : 'white',
+                                                            opacity: existingIds.has(String(worker.id)) ? 0.5 : 1,
+                                                            cursor: existingIds.has(String(worker.id)) ? 'not-allowed' : 'pointer',
+                                                        }}
+                                                    >
+                                                        <div style={styles.workerInfo}>
+                                                            <div style={styles.workerName}>
+                                                                {getName(worker) || "Unnamed"}
+                                                                {existingIds.has(String(worker.id)) && (
+                                                                    <span style={styles.alreadyAddedText}> (Already added)</span>
+                                                                )}
+                                                            </div>
+                                                            <div style={styles.workerDetails}>
+                                                                {getEmail(worker) && (
+                                                                    <span style={styles.workerDetail}>{getEmail(worker)}</span>
+                                                                )}
+                                                                {getPhone(worker) && (
+                                                                    <span style={styles.workerDetail}>{getPhone(worker)}</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                </div>
                             ))}
+                                                {searchTerm && (
+                                                    <div style={styles.searchResultsCount}>
+                                                        {filteredWorkers.length} worker{filteredWorkers.length !== 1 ? 's' : ''} found
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Selected Crew Members Display */}
+                            {crewResolved.length > 0 && (
+                                <div style={styles.crewGrid}>
+                                    {crewResolved.map((member, index) => (
+                                        <div key={index} style={styles.crewCard}>
                             <button
                                 type="button"
-                                style={{ ...styles.iconButton, ...styles.addButton }}
-                                onClick={addCrewMember}
+                                                style={styles.crewRemoveButton}
+                                                onClick={() => handleRemoveMember(index)}
+                                                title="Remove member"
                             >
-                                <FaPlusCircle size={18} />
-                                Add Crew Member
+                                                <FaTrash />
                             </button>
+                                            <div style={styles.avatarContainer}>
+                                                {member.profileImageUrl ? (
+                                                    <img
+                                                        src={member.profileImageUrl}
+                                                        alt={`${member.name || "User"} profile`}
+                                                        style={styles.avatarImage}
+                                                        onError={(e) => (e.target.style.display = "none")}
+                                                    />
+                                                ) : (
+                                                    <div style={styles.avatar}>
+                                                        <FaUser style={styles.avatarIcon} />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div style={styles.crewCardContent}>
+                                                <h3 style={styles.memberName}>{member.name || "Member"}</h3>
+                                                <div style={styles.contactInfo}>
+                                                    <div style={styles.contactItem}>
+                                                        <span style={styles.label}>Email:</span>
+                                                        <span style={styles.value}>{member.email || "—"}</span>
+                                                    </div>
+                                                    <div style={styles.contactItem}>
+                                                        <span style={styles.label}>Phone:</span>
+                                                        <span style={styles.value}>{member.phoneNumber || "—"}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </form>

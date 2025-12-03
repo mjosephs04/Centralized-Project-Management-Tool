@@ -50,7 +50,21 @@ const SingleProjectPage = ({ projects }) => {
     const navigate = useNavigate();
     const { showSnackbar } = useSnackbar();
     const reportRef = useRef();
-    const [activeTab, setActiveTab] = useState('overview');
+
+    // Load active tab from localStorage or default to 'overview'
+    const getInitialTab = () => {
+        const savedTab = localStorage.getItem(`project_${projectId}_activeTab`);
+        if (savedTab) {
+            // Validate that the saved tab is a valid tab option
+            const validTabs = ['overview', 'calendar', 'metrics', 'team', 'workorders', 'logs', 'supplies'];
+            if (validTabs.includes(savedTab)) {
+                return savedTab;
+            }
+        }
+        return 'overview';
+    };
+
+    const [activeTab, setActiveTab] = useState(getInitialTab);
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -64,6 +78,16 @@ const SingleProjectPage = ({ projects }) => {
 
     useEffect(() => {
         fetchInitialData();
+        // Update active tab when projectId changes
+        const savedTab = localStorage.getItem(`project_${projectId}_activeTab`);
+        if (savedTab) {
+            const validTabs = ['overview', 'calendar', 'metrics', 'team', 'workorders', 'logs', 'supplies'];
+            if (validTabs.includes(savedTab)) {
+                setActiveTab(savedTab);
+            }
+        } else {
+            setActiveTab('overview');
+        }
     }, [projectId]);
 
     const fetchProject = async () => {
@@ -288,7 +312,7 @@ const SingleProjectPage = ({ projects }) => {
                     setActiveTab('supplies');
                 }} />
             case 'logs':
-                return <LogsTab project={project} refreshTrigger={refreshTrigger} />
+                return <LogsTab project={project} refreshTrigger={refreshTrigger} onNavigateToTab={setActiveTab} />
             case 'supplies':
                 return <SuppliesTab project={project} userRole={userRole} selectedWorkOrderId={selectedWorkOrderForSupplies} onWorkOrderChange={setSelectedWorkOrderForSupplies}/>
             default:
@@ -370,7 +394,11 @@ const SingleProjectPage = ({ projects }) => {
                     {tabs.map(tab =>(
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
+                            onClick={() => {
+                                setActiveTab(tab.id);
+                                // Save active tab to localStorage
+                                localStorage.setItem(`project_${projectId}_activeTab`, tab.id);
+                            }}
                             style={{
                                 ...styles.tabButton,
                                 ...(activeTab === tab.id ? styles.tabButtonActive : {})
