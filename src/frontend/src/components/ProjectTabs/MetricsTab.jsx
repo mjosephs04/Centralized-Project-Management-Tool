@@ -514,7 +514,7 @@ const StatusBadge = ({ label, count, color }) => (
 const styles = {
   container: {
     padding: "16px",
-    backgroundColor: "#f9fafb",
+    backgroundColor: "transparent",
     minHeight: "100vh",
   },
   loadingContainer: {
@@ -557,9 +557,9 @@ const styles = {
     marginBottom: "20px",
   },
   title: {
-    fontSize: "28px",
-    fontWeight: "bold",
-    color: "#111827",
+    fontSize: "1.8rem",
+    fontWeight: "600",
+    color: "#2c3e50",
     margin: 0,
   },
   healthBadge: {

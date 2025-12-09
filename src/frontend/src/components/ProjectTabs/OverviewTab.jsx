@@ -650,8 +650,9 @@ const styles = {
         marginBottom: '1.5rem',
     },
     title: {
-        fontSize: '1.75rem',
-        fontWeight: 'bold',
+        fontSize: '1.8rem',
+        fontWeight: '600',
+        color: '#2c3e50',
         margin: 0,
     },
     editButton: {

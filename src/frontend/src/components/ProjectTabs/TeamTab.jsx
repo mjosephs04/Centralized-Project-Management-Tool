@@ -20,7 +20,7 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
   // project.crewMembers might be an array of strings or IDs; we'll store objects internally.
   const [crew, setCrew] = useState([]);
 
-  const [allWorkers, setAllWorkers] = useState([]); // full list from API
+  const [allUsers, setAllUsers] = useState([]); // full list from API (workers and project managers)
   const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [filter, setFilter] = useState("");
   const [focusedInput, setFocusedInput] = useState(null);
@@ -55,20 +55,23 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
   }, [project]);
 
   useEffect(() => {
-    const loadWorkers = async () => {
+    const loadUsers = async () => {
       try {
         setLoadingWorkers(true);
-        const users = await usersAPI.getWorkers();
-        // Expect users: [{id, firstName, lastName, email, phoneNumber}, ...]
-        setAllWorkers(users || []);
+        const users = await usersAPI.getAllUsers();
+        // Filter to only show workers and project managers (exclude admins from team selection)
+        const filteredUsers = (users || []).filter(u => 
+          u.role === 'worker' || u.role === 'project_manager'
+        );
+        setAllUsers(filteredUsers);
       } catch (e) {
-        console.error("Failed to load workers", e);
-        showSnackbar("Failed to load workers list", "error");
+        console.error("Failed to load users", e);
+        showSnackbar("Failed to load users list", "error");
       } finally {
         setLoadingWorkers(false);
       }
     };
-    loadWorkers();
+    loadUsers();
   }, []);
 
   // Load full team list (project managers + members) for PM/Admin view
@@ -111,6 +114,15 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
   const getName = (u) => [u?.firstName, u?.lastName].filter(Boolean).join(" ").trim();
   const getEmail = (u) => u?.email ?? u?.emailAddress ?? "";
   const getPhone = (u) => u?.phoneNumber ?? u?.phone ?? "";
+  const hasValidProfileImage = (url) => {
+    // Return false for null, undefined, empty string, or non-string values
+    if (!url || typeof url !== 'string' || url.trim() === '') return false;
+    // Check if it's the malformed default URL (has duplicate storage.googleapis.com)
+    if (url.includes('https://storage.googleapis.com/https://storage.googleapis.com')) return false;
+    // Check if it's just whitespace or invalid URL pattern
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
+    return true;
+  };
 
   const workerDisplayName = (u) => getName(u) || getEmail(u) || "Unnamed";
 
@@ -135,14 +147,14 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
   };
 
   // Enhanced search function that searches across name, email, and phone
-  const searchWorkers = (workers, searchTerm) => {
-    if (!searchTerm.trim()) return workers;
+  const searchUsers = (users, searchTerm) => {
+    if (!searchTerm.trim()) return users;
     
     const term = searchTerm.toLowerCase().trim();
-    return workers.filter((worker) => {
-      const name = getName(worker).toLowerCase();
-      const email = getEmail(worker).toLowerCase();
-      const phone = getPhone(worker).toLowerCase();
+    return users.filter((user) => {
+      const name = getName(user).toLowerCase();
+      const email = getEmail(user).toLowerCase();
+      const phone = getPhone(user).toLowerCase();
       
       // Search in individual fields and also in combined text
       return name.includes(term) || 
@@ -152,29 +164,30 @@ const TeamTab = ({ project, onUpdate, userRole }) => {
     });
   };
 
-  const findWorkerById = (id) => allWorkers.find((w) => String(w.id) === String(id));
+  const findUserById = (id) => allUsers.find((u) => String(u.id) === String(id));
 
 const crewResolved = useMemo(() => {
-  // Resolve each crew entry with worker details if id matches
+  // Resolve each crew entry with user details if id matches
   return crew.map((member) => {
     if (member.id) {
-      const w = findWorkerById(member.id);
-      if (w) {
+      const u = findUserById(member.id);
+      if (u) {
         return {
-          id: w.id,
-          name: workerDisplayName(w),
-          email: getEmail(w),
-          phoneNumber: getPhone(w),
-          profileImageUrl: w.profileImageUrl || ""
+          id: u.id,
+          name: workerDisplayName(u),
+          email: getEmail(u),
+          phoneNumber: getPhone(u),
+          profileImageUrl: u.profileImageUrl || "",
+          role: u.role || "worker"
         };
       }
       // unresolved ID — show ID as name fallback
-      return { id: member.id, name: `Worker #${member.id}`, email: "", phoneNumber: "" };
+      return { id: member.id, name: `User #${member.id}`, email: "", phoneNumber: "", role: "worker" };
     }
     // name-only legacy entry
-    return { name: member.name, email: "", phoneNumber: "" };
+    return { name: member.name, email: "", phoneNumber: "", role: "worker" };
   });
-}, [crew, allWorkers]);
+}, [crew, allUsers]);
 
 const projectManagerInfo = useMemo(() => {
   const pm = project?.projectManager;
@@ -210,31 +223,62 @@ const projectManagerInfo = useMemo(() => {
     return () => clearTimeout(timer);
   }, [filter]);
 
-  const filteredWorkers = useMemo(() => {
-    return searchWorkers(allWorkers, searchTerm);
-  }, [searchTerm, allWorkers]);
+  const filteredUsers = useMemo(() => {
+    return searchUsers(allUsers, searchTerm);
+  }, [searchTerm, allUsers]);
 
   // Show dropdown when there's a search term or when focused
   useEffect(() => {
     setShowDropdown(focusedInput === 'search' && (searchTerm || filter));
   }, [focusedInput, searchTerm, filter]);
 
-  const existingIds = new Set(crew.filter((m) => m.id != null).map((m) => String(m.id)));
+  // Get existing IDs from both crew members and project managers
+  const existingIds = useMemo(() => {
+    const ids = new Set(crew.filter((m) => m.id != null).map((m) => String(m.id)));
+    // Also include project manager IDs
+    teamMembers.filter((m) => m.role === "project_manager").forEach((m) => {
+      ids.add(String(m.id));
+    });
+    return ids;
+  }, [crew, teamMembers]);
   const existingNames = new Set(crew.filter((m) => m.name).map((m) => m.name.toLowerCase()));
 
   // Actions
-  const handleAddMember = (workerId = selectedWorkerId) => {
-    if (!workerId) return;
-    if (existingIds.has(String(workerId))) return; // prevent duplicate by id
-    setCrew((prev) => [...prev, { id: workerId }]);
+  const handleAddMember = async (userId = selectedWorkerId, userRole = null) => {
+    if (!userId) return;
+    if (existingIds.has(String(userId))) return; // prevent duplicate by id
+    
+    // If adding a project manager, add them as a manager, not as a crew member
+    if (userRole === 'project_manager' || userRole === 'admin') {
+      try {
+        const user = findUserById(userId);
+        if (user) {
+          await projectsAPI.inviteUser(project.id, {
+            email: getEmail(user),
+            role: 'project_manager'
+          });
+          showSnackbar(`${getName(user) || 'User'} added as project manager`, 'success');
+          // Refresh team members list
+          const members = await projectsAPI.getProjectMembers(project.id);
+          setTeamMembers(members || []);
+        }
+      } catch (error) {
+        console.error('Failed to add project manager:', error);
+        showSnackbar(error.response?.data?.error || 'Failed to add project manager', 'error');
+      }
+    } else {
+      // Add as regular crew member
+      setCrew((prev) => [...prev, { id: userId }]);
+    }
+    
     setSelectedWorkerId("");
     setFilter("");
     setShowDropdown(false);
     setHighlightedIndex(-1);
   };
 
-  const handleWorkerSelect = (worker) => {
-    handleAddMember(worker.id);
+  const handleUserSelect = (user) => {
+    handleAddMember(user.id, user.role);
   };
 
   const handleKeyDown = (e) => {
@@ -244,19 +288,19 @@ const projectManagerInfo = useMemo(() => {
       case 'ArrowDown':
         e.preventDefault();
         setHighlightedIndex(prev => 
-          prev < filteredWorkers.length - 1 ? prev + 1 : 0
+          prev < filteredUsers.length - 1 ? prev + 1 : 0
         );
         break;
       case 'ArrowUp':
         e.preventDefault();
         setHighlightedIndex(prev => 
-          prev > 0 ? prev - 1 : filteredWorkers.length - 1
+          prev > 0 ? prev - 1 : filteredUsers.length - 1
         );
         break;
       case 'Enter':
         e.preventDefault();
-        if (highlightedIndex >= 0 && filteredWorkers[highlightedIndex]) {
-          handleWorkerSelect(filteredWorkers[highlightedIndex]);
+        if (highlightedIndex >= 0 && filteredUsers[highlightedIndex]) {
+          handleUserSelect(filteredUsers[highlightedIndex]);
         }
         break;
       case 'Escape':
@@ -458,7 +502,7 @@ const projectManagerInfo = useMemo(() => {
             <div style={styles.searchInputContainer}>
               <input
                 type="text"
-                placeholder="Search and select workers by name, email, or phone..."
+                placeholder="Search and select users by name, email, or phone..."
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 onFocus={() => setFocusedInput('search')}
@@ -500,47 +544,60 @@ const projectManagerInfo = useMemo(() => {
                   <div style={styles.dropdownItem}>
                     <div style={styles.loadingText}>Loading workers...</div>
                   </div>
-                ) : filteredWorkers.length === 0 ? (
+                ) : filteredUsers.length === 0 ? (
                   <div style={styles.dropdownItem}>
                     <div style={styles.noResultsText}>
-                      {searchTerm ? "No workers found matching your search" : "Start typing to search workers..."}
+                      {searchTerm ? "No users found matching your search" : "Start typing to search users..."}
                     </div>
                   </div>
                 ) : (
                   <>
-                    {filteredWorkers.map((worker, index) => (
-                      <div
-                        key={worker.id}
-                        onClick={() => handleWorkerSelect(worker)}
-                        onMouseEnter={() => setHighlightedIndex(index)}
-                        style={{
-                          ...styles.dropdownItem,
-                          backgroundColor: highlightedIndex === index ? '#f3f4f6' : 'white',
-                          opacity: existingIds.has(String(worker.id)) ? 0.5 : 1,
-                          cursor: existingIds.has(String(worker.id)) ? 'not-allowed' : 'pointer',
-                        }}
-                      >
-                        <div style={styles.workerInfo}>
-                          <div style={styles.workerName}>
-                            {getName(worker) || "Unnamed"}
-                            {existingIds.has(String(worker.id)) && (
-                              <span style={styles.alreadyAddedText}> (Already added)</span>
-                            )}
-                          </div>
-                          <div style={styles.workerDetails}>
-                            {getEmail(worker) && (
-                              <span style={styles.workerDetail}>{getEmail(worker)}</span>
-                            )}
-                            {getPhone(worker) && (
-                              <span style={styles.workerDetail}>{getPhone(worker)}</span>
-                            )}
+                    {filteredUsers.map((user, index) => {
+                      const isPM = user.role === 'project_manager' || user.role === 'admin';
+                      const roleBadge = isPM ? 'PM' : 'W';
+                      const roleColor = isPM ? '#9333ea' : '#bc8056';
+                      
+                      return (
+                        <div
+                          key={user.id}
+                          onClick={() => handleUserSelect(user)}
+                          onMouseEnter={() => setHighlightedIndex(index)}
+                          style={{
+                            ...styles.dropdownItem,
+                            backgroundColor: highlightedIndex === index ? '#f3f4f6' : 'white',
+                            opacity: existingIds.has(String(user.id)) ? 0.5 : 1,
+                            cursor: existingIds.has(String(user.id)) ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          <div style={styles.workerInfo}>
+                            <div style={styles.workerName}>
+                              {getName(user) || "Unnamed"}
+                              <span style={{
+                                ...styles.roleBadge,
+                                backgroundColor: roleColor,
+                                color: 'white'
+                              }}>
+                                {roleBadge}
+                              </span>
+                              {existingIds.has(String(user.id)) && (
+                                <span style={styles.alreadyAddedText}> (Already added)</span>
+                              )}
+                            </div>
+                            <div style={styles.workerDetails}>
+                              {getEmail(user) && (
+                                <span style={styles.workerDetail}>{getEmail(user)}</span>
+                              )}
+                              {getPhone(user) && (
+                                <span style={styles.workerDetail}>{getPhone(user)}</span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {searchTerm && (
                       <div style={styles.searchResultsCount}>
-                        {filteredWorkers.length} worker{filteredWorkers.length !== 1 ? 's' : ''} found
+                        {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} found
                       </div>
                     )}
                   </>
@@ -551,8 +608,8 @@ const projectManagerInfo = useMemo(() => {
         </div>
       )}
 
-      {/* Invite User Section - Only for Project Managers/Admins on active projects */}
-      {canEdit && !isProjectFrozen() && (
+      {/* Invite User Section - Only shown when editing team */}
+      {canEdit && !isProjectFrozen() && isEditing && (
         <div style={styles.inviteSection}>
           <h3 style={styles.inviteTitle}>Invite New User</h3>
           <p style={styles.inviteDescription}>
@@ -650,13 +707,21 @@ const projectManagerInfo = useMemo(() => {
                     </button>
                   )}
                   <div style={styles.avatarContainer}>
-                    {m.profileImageUrl ? (
-                      <img src={m.profileImageUrl} alt={(m.firstName||"User") + " profile"} style={styles.avatarImage} onError={(e) => (e.target.style.display = "none")} />
-                    ) : (
-                      <div style={styles.avatar}>
-                        <FaUser style={styles.avatarIcon} />
-                      </div>
-                    )}
+                    {hasValidProfileImage(m.profileImageUrl) ? (
+                      <img
+                        src={m.profileImageUrl}
+                        alt={(m.firstName||"User") + " profile"}
+                        style={styles.avatarImage}
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          const fallback = e.target.nextSibling;
+                          if (fallback) fallback.style.display = "flex";
+                        }}
+                      />
+                    ) : null}
+                    <div style={{ ...styles.avatar, display: hasValidProfileImage(m.profileImageUrl) ? "none" : "flex" }}>
+                      <FaUser style={styles.avatarIcon} />
+                    </div>
                   </div>
                   <div style={styles.cardContent}>
                     <h3 style={styles.memberName}>{[m.firstName, m.lastName].filter(Boolean).join(" ") || m.emailAddress || "Project Manager"}</h3>
@@ -711,13 +776,21 @@ const projectManagerInfo = useMemo(() => {
                     </button>
                   )}
                   <div style={styles.avatarContainer}>
-                    {m.profileImageUrl ? (
-                      <img src={m.profileImageUrl} alt={(m.firstName||"User") + " profile"} style={styles.avatarImage} onError={(e) => (e.target.style.display = "none")} />
-                    ) : (
-                      <div style={styles.avatar}>
-                        <FaUser style={styles.avatarIcon} />
-                      </div>
-                    )}
+                    {hasValidProfileImage(m.profileImageUrl) ? (
+                      <img
+                        src={m.profileImageUrl}
+                        alt={(m.firstName||"User") + " profile"}
+                        style={styles.avatarImage}
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          const fallback = e.target.nextSibling;
+                          if (fallback) fallback.style.display = "flex";
+                        }}
+                      />
+                    ) : null}
+                    <div style={{ ...styles.avatar, display: hasValidProfileImage(m.profileImageUrl) ? "none" : "flex" }}>
+                      <FaUser style={styles.avatarIcon} />
+                    </div>
                   </div>
                   <div style={styles.cardContent}>
                     <h3 style={styles.memberName}>{[m.firstName, m.lastName].filter(Boolean).join(" ") || m.emailAddress || "Member"}</h3>
@@ -777,18 +850,21 @@ const projectManagerInfo = useMemo(() => {
                   )}
 
                   <div style={styles.avatarContainer}>
-                    {projectManagerInfo.profileImageUrl ? (
+                    {hasValidProfileImage(projectManagerInfo.profileImageUrl) ? (
                       <img
                         src={projectManagerInfo.profileImageUrl}
                         alt={`${projectManagerInfo.name} profile`}
                         style={styles.avatarImage}
-                        onError={(e) => (e.target.style.display = "none")}
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          const fallback = e.target.nextSibling;
+                          if (fallback) fallback.style.display = "flex";
+                        }}
                       />
-                    ) : (
-                      <div style={styles.avatar}>
-                        <FaUser style={styles.avatarIcon} />
-                      </div>
-                    )}
+                    ) : null}
+                    <div style={{ ...styles.avatar, display: hasValidProfileImage(projectManagerInfo.profileImageUrl) ? "none" : "flex" }}>
+                      <FaUser style={styles.avatarIcon} />
+                    </div>
                   </div>
 
                   <div style={styles.cardContent}>
@@ -840,22 +916,36 @@ const projectManagerInfo = useMemo(() => {
                 )}
 
                 <div style={styles.avatarContainer}>
-                  {member.profileImageUrl ? (
+                  {hasValidProfileImage(member.profileImageUrl) ? (
                     <img
                       src={member.profileImageUrl}
                       alt={`${member.name || "User"} profile`}
                       style={styles.avatarImage}
-                      onError={(e) => (e.target.style.display = "none")}
+                      onError={(e) => {
+                        e.target.style.display = "none";
+                        const fallback = e.target.nextSibling;
+                        if (fallback) fallback.style.display = "flex";
+                      }}
                     />
-                  ) : (
-                    <div style={styles.avatar}>
-                      <FaUser style={styles.avatarIcon} />
-                    </div>
-                  )}
+                  ) : null}
+                  <div style={{ ...styles.avatar, display: hasValidProfileImage(member.profileImageUrl) ? "none" : "flex" }}>
+                    <FaUser style={styles.avatarIcon} />
+                  </div>
                 </div>
 
                 <div style={styles.cardContent}>
-                  <h3 style={styles.memberName}>{member.name || "Member"}</h3>
+                  <h3 style={styles.memberName}>
+                    {member.name || "Member"}
+                    {member.role && (
+                      <span style={{
+                        ...styles.roleBadge,
+                        backgroundColor: (member.role === 'project_manager' || member.role === 'admin') ? '#9333ea' : '#bc8056',
+                        color: 'white'
+                      }}>
+                        {(member.role === 'project_manager' || member.role === 'admin') ? 'PM' : 'W'}
+                      </span>
+                    )}
+                  </h3>
 
                   <div style={styles.contactInfo}>
                     <div style={styles.contactItem}>
@@ -1075,6 +1165,17 @@ const styles = {
         fontSize: "0.95rem",
         fontWeight: "600",
         color: "#2c3e50",
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+    },
+    roleBadge: {
+        fontSize: "0.7rem",
+        fontWeight: "700",
+        padding: "0.2rem 0.5rem",
+        borderRadius: "4px",
+        textTransform: "uppercase",
+        letterSpacing: "0.5px",
     },
     workerDetails: {
         display: "flex",
@@ -1172,6 +1273,10 @@ const styles = {
         color: "#2c3e50",
         marginBottom: "0.75rem",
         margin: 0,
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+        justifyContent: "center",
     },
     contactInfo: {
         marginTop: "0.75rem",
