@@ -380,7 +380,3 @@ For issues or questions:
 2. Review the documentation in `docs/`
 3. Check application logs: `docker-compose logs`
 
----
-
-**Happy coding! 🚀**
-
