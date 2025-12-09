@@ -36,7 +36,7 @@ const App = () => {
           <Route path="/projects" element={<RouteProtector>{<ProjectsPage />}</RouteProtector>} />
           <Route path="/projects/create" element={<RouteProtector>{<CreateProjectPage />}</RouteProtector>} />
           <Route path="/projects/:projectId" element={<RouteProtector>{<SingleProjectPage />}</RouteProtector>} />
-          <Route path="login-distribution" element={<RouteProtector><RoleProtector allowedRoles={['project_manager']}>{<LoginDistributionPage />}</RoleProtector></RouteProtector>} />
+          <Route path="/login-distribution" element={<RouteProtector><RoleProtector allowedRoles={['admin']}>{<LoginDistributionPage />}</RoleProtector></RouteProtector>} />
         </Routes>
       </SnackbarProvider>
     </Router>

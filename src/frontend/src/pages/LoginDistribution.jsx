@@ -58,7 +58,7 @@ const LoginDistributionPage = () => {
                 <div style={styles.header}>
                     <div>
                         <h1 style={styles.pageTitle}>Login Distribution</h1>
-                        <p style={styles.subtitle}>Manage user access requests and revocations</p>
+                        <p style={styles.subtitle}>Invite admins and project managers to the system</p>
                     </div>
                 </div>
 
@@ -70,7 +70,7 @@ const LoginDistributionPage = () => {
                             </div>
                             <div>
                                 <h2 style={styles.cardTitle}>Grant Access</h2>
-                                <p style={styles.cardSubtitle}>Request access for a new user</p>
+                                <p style={styles.cardSubtitle}>Invite a new admin or project manager</p>
                             </div>
                         </div>
 
@@ -151,10 +151,10 @@ const LoginDistributionPage = () => {
                 <div style={styles.infoBox}>
                     <h3 style={styles.infoTitle}>📋 Important Notes</h3>
                     <ul style={styles.infoList}>
-                        <li>All access requests require administrator approval before taking effect</li>
-                        <li>Users will receive a registration link via email once their access is approved</li>
+                        <li>This page is for inviting admins and project managers only</li>
+                        <li>Invited users will receive a registration link via email</li>
                         <li>Temporary access will automatically expire on the specified date</li>
-                        <li>Revocation requests will be reviewed by an administrator</li>
+                        <li>You can revoke access for any user at any time</li>
                     </ul>
                 </div>
             </div>

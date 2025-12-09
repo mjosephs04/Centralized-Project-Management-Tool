@@ -287,35 +287,6 @@ const UserNavbar = () => {
             </div>
 
             <div style={styles.navbarIcons}>
-            {userRole === 'project_manager' && (
-                    <Link to="/login-distribution">
-                        <button
-                            style={{
-                                ...styles.iconButton,
-                                ...(isHovered.distribution ? styles.iconButtonHover : {})
-                            }}
-                            onMouseEnter={() => setIsHovered({ ...isHovered, distribution: true })}
-                            onMouseLeave={() => setIsHovered({ ...isHovered, distribution: false })}
-                        >
-                            <FaShareFromSquare
-                                size={20}
-                                style={{
-                                    ...styles.icon,
-                                    ...(isHovered.distribution ? styles.iconHover : {})
-                                }}
-                            />
-                            
-                            <div style={{
-                                ...styles.tooltip,
-                                ...(isHovered.distribution ? styles.tooltipVisible : {})
-                            }}>
-                                <div style={styles.tooltipArrow}></div>
-                                Login Distribution
-                            </div>
-                        </button>
-                    </Link>
-                )}
-
                 <Notifications userRole={userRole} />
 
                 <Link to="/messages">

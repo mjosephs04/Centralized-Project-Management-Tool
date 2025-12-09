@@ -1,9 +1,12 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { FaPlus, FaSave, FaTimes, FaTrash, FaUser } from "react-icons/fa";
+import { FaShareFromSquare } from "react-icons/fa6";
+import { useNavigate } from "react-router-dom";
 import UserNavbar from "../components/UserNavbar";
 import { authAPI, usersAPI } from "../services/api";
 
 const AdminPage = () => {
+    const navigate = useNavigate();
     const [users, setUsers] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
@@ -121,9 +124,14 @@ const AdminPage = () => {
             <div style={styles.container}>
                 <div style={styles.header}>
                     <h2 style={styles.title}>Users</h2>
-                    <button style={styles.addButton} onClick={() => setShowModal(true)}>
-                        <FaPlus /> Add Project Manager
-                    </button>
+                    <div style={styles.headerButtons}>
+                        <button style={styles.inviteButton} onClick={() => navigate('/login-distribution')}>
+                            <FaShareFromSquare /> Invite Users
+                        </button>
+                        <button style={styles.addButton} onClick={() => setShowModal(true)}>
+                            <FaPlus /> Add Project Manager
+                        </button>
+                    </div>
                 </div>
 
                 {/* 🔍 SEARCH BAR */}
@@ -297,6 +305,25 @@ const styles = {
         marginBottom: "2rem",
     },
     title: { fontSize: "1.8rem", fontWeight: "600", color: "#2c3e50", margin: 0 },
+    headerButtons: {
+        display: "flex",
+        gap: "1rem",
+        alignItems: "center",
+    },
+    inviteButton: {
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+        padding: "0.7rem 1.5rem",
+        background: "linear-gradient(135deg, #5692bc 0%, #6ba8d4 100%)",
+        color: "white",
+        border: "none",
+        borderRadius: "8px",
+        fontSize: "0.95rem",
+        fontWeight: "600",
+        cursor: "pointer",
+        transition: "all 0.2s ease",
+    },
     addButton: {
         display: "flex",
         alignItems: "center",
