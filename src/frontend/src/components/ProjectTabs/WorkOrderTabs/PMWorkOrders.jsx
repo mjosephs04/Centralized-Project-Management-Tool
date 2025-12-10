@@ -621,7 +621,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, highli
                       value={formData.city} 
                       onChange={(e) => setFormData({ ...formData, city: e.target.value })} 
                       style={styles.input}
-                      placeholder="Austin"
+                      placeholder="City"
                     />
                   </div>
                   <div style={styles.formGroup}>
@@ -631,7 +631,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, highli
                       value={formData.state} 
                       onChange={(e) => setFormData({ ...formData, state: e.target.value })} 
                       style={styles.input}
-                      placeholder="TX"
+                      placeholder="State"
                     />
                   </div>
                   <div style={styles.formGroup}>
@@ -641,7 +641,7 @@ const PMWorkOrders = ({ project, onWorkOrderUpdate, onNavigateToSupplies, highli
                       value={formData.zipCode} 
                       onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })} 
                       style={styles.input}
-                      placeholder="78701"
+                      placeholder="12345"
                     />
                   </div>
                 </div>

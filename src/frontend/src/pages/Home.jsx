@@ -1,13 +1,11 @@
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
 import Footer from "../components/Footer";
-import backgroundImg from '../imgs/OnePager.png';
 import powerLinesImg from '../imgs/high-voltage-power-lines-blue-sky.jpg';
 
 /* ----------------- colors ----------------- */
 const COLORS = {
   white: "#ffffff",
-  lightBg: "#F8FAFC",            // page background
+  lightBg: "rgba(86, 146, 188, 0.6)",            // page background - light blue-gray
   heroTint: "#E3EDF9",           // soft hero gradient base
   textDark: "#111827",
   textMedium: "#4B5563",
@@ -20,23 +18,9 @@ const COLORS = {
 
 export default function Home() {
   const nav = useNavigate();
-  const [imageLoaded, setImageLoaded] = useState(false);
-
-  useEffect(() => {
-    const img = new Image();
-    img.src = backgroundImg;
-    img.onload = () => setImageLoaded(true);
-  }, []);
 
   return (
-    <div style={{
-      ...styles.page,
-      backgroundImage: imageLoaded ? `url(${backgroundImg})` : COLORS.lightBg,
-      backgroundSize: "100% 100%",
-      backgroundPosition: "center",
-      backgroundRepeat: "no-repeat",
-      backgroundAttachment: "fixed",
-    }}>
+    <div style={styles.page}>
 
       {/* hover + bullet styles */}
       <style>{`
@@ -81,25 +65,6 @@ export default function Home() {
           background: linear-gradient(135deg, ${COLORS.accentCopper}, ${COLORS.accentMagenta});
         }
       `}</style>
-
-      <div style={styles.topRightButtons}>
-        <button
-          type="button"
-          onClick={() => nav("/login")}
-          style={styles.primaryCtaBtn}
-          className="primary-cta-btn"
-        >
-          Login
-        </button>
-        <button
-          type="button"
-          onClick={() => nav("/create-account")}
-          style={styles.secondaryCtaBtn}
-          className="secondary-cta-btn"
-        >
-          Create Account
-        </button>
-      </div>
 
       <main style={styles.main}>
         {/* HERO */}
@@ -147,70 +112,77 @@ export default function Home() {
         </section>
 
         {/* WHY TODD */}
-        <section id="todd-features" style={styles.section}>
-          <div style={styles.twoCol}>
-            <div>
-              <h2 style={styles.sectionTitle}>Why LSGS built TODD</h2>
-              <p style={styles.sectionIntro}>
-                Legacy systems split project and field information across multiple platforms,
-                making it difficult to see progress, manage deadlines, or understand financial
-                impact in real time. TODD consolidates that work into one modern dashboard.
-              </p>
+<section id="todd-features" style={styles.section}>
+  {/* Why TODD Card */}
+  <div style={styles.whyToddCard}>
+    <h2 style={styles.sectionTitle}>Why LSGS built TODD</h2>
+    <p style={styles.sectionIntro}>
+      Legacy systems split project and field information across multiple platforms,
+      making it difficult to see progress, manage deadlines, or understand financial
+      impact in real time. TODD consolidates that work into one modern dashboard.
+    </p>
 
-              <ul style={styles.bulletList}>
-                <li style={styles.bulletItem} className="bullet">
-                  Replace disconnected legacy tools with an integrated platform that speaks the
-                  language of grid operations.
-                </li>
-                <li style={styles.bulletItem} className="bullet">
-                  Give control center staff a live view of work orders, dependencies, and risk
-                  areas across the state.
-                </li>
-                <li style={styles.bulletItem} className="bullet">
-                  Improve accountability for schedules, crews, contractors, and budget performance.
-                </li>
-                <li style={styles.bulletItem} className="bullet">
-                  Provide leadership with reliable, unified data to guide regulatory and strategic
-                  decisions.
-                </li>
-              </ul>
-            </div>
+    <ul style={styles.bulletList}>
+      <li style={styles.bulletItem} className="bullet">
+        Replace disconnected legacy tools with an integrated platform that speaks the
+        language of grid operations.
+      </li>
+      <li style={styles.bulletItem} className="bullet">
+        Give control center staff a live view of work orders, dependencies, and risk
+        areas across the state.
+      </li>
+      <li style={styles.bulletItem} className="bullet">
+        Improve accountability for schedules, crews, contractors, and budget performance.
+      </li>
+      <li style={styles.bulletItem} className="bullet">
+        Provide leadership with reliable, unified data to guide regulatory and strategic
+        decisions.
+      </li>
+    </ul>
+  </div>
 
-            <div>
-              <h3 style={styles.subheading}>What TODD centralizes</h3>
-              <div style={styles.featureGrid}>
-                <div style={{ ...styles.featureCard, borderTopColor: COLORS.accentBlue }} className="feature-card">
-                  <h4 style={styles.cardTitle}>Project Portfolio</h4>
-                  <p style={styles.cardBody}>
-                    Track every project—from line rebuilds to substation upgrades—in one portfolio
-                    view, filtered by region, voltage class, or priority.
-                  </p>
-                </div>
-                <div style={{ ...styles.featureCard, borderTopColor: COLORS.accentBlue }} className="feature-card">
-                  <h4 style={styles.cardTitle}>Work Orders & Field Execution</h4>
-                  <p style={styles.cardBody}>
-                    Create, assign, and monitor work orders in real time, keeping plans aligned with
-                    what is actually happening in the field.
-                  </p>
-                </div>
-                <div style={{ ...styles.featureCard, borderTopColor: COLORS.accentBlue }} className="feature-card">
-                  <h4 style={styles.cardTitle}>Supplies & Logistics</h4>
-                  <p style={styles.cardBody}>
-                    Connect supply requests, vendor deliveries, and material constraints to the
-                    projects and work orders that depend on them.
-                  </p>
-                </div>
-                <div style={{ ...styles.featureCard, borderTopColor: COLORS.accentBlue }} className="feature-card">
-                  <h4 style={styles.cardTitle}>Financials & Performance</h4>
-                  <p style={styles.cardBody}>
-                    Tie cost and progress together so managers can see budget, commitments, and
-                    earned value across the entire grid program.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+  {/* What TODD Centralizes */}
+  <div style={styles.centralizesSection}>
+    <h3 style={styles.subheading}>What TODD centralizes</h3>
+    <div style={styles.featureGrid}>
+      <div style={{ ...styles.featureCard, borderTopColor: COLORS.accentBlue }} className="feature-card">
+        <h4 style={styles.cardTitle}>Project Portfolio</h4>
+        <p style={styles.cardBody}>
+          Track every project—from line rebuilds to substation upgrades—in one portfolio
+          view, filtered by region, voltage class, or priority.
+        </p>
+      </div>
+      <div style={{ ...styles.featureCard, borderTopColor: COLORS.accentBlue }} className="feature-card">
+        <h4 style={styles.cardTitle}>Work Orders & Field Execution</h4>
+        <p style={styles.cardBody}>
+          Create, assign, and monitor work orders in real time, keeping plans aligned with
+          what is actually happening in the field.
+        </p>
+      </div>
+      <div style={{ ...styles.featureCard, borderTopColor: COLORS.accentBlue }} className="feature-card">
+        <h4 style={styles.cardTitle}>Supplies & Logistics</h4>
+        <p style={styles.cardBody}>
+          Connect supply requests, vendor deliveries, and material constraints to the
+          projects and work orders that depend on them.
+        </p>
+      </div>
+      <div style={{ ...styles.featureCard, borderTopColor: COLORS.accentBlue }} className="feature-card">
+        <h4 style={styles.cardTitle}>Financials & Performance</h4>
+        <p style={styles.cardBody}>
+          Tie cost and progress together so managers can see budget, commitments, and
+          earned value across the entire grid program.
+        </p>
+      </div>
+      <div style={{ ...styles.featureCard, borderTopColor: COLORS.accentBlue }} className="feature-card">
+        <h4 style={styles.cardTitle}>Team Collaboration</h4>
+        <p style={styles.cardBody}>
+          Streamline communication across project teams with integrated messaging, role-based
+          permissions, and real-time updates on project activities.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
 
         {/* ROLES */}
         <section style={styles.section}>
@@ -278,21 +250,12 @@ export default function Home() {
 const styles = {
   page: {
     minHeight: "100vh",
-    backgroundColor: "#f0f4f8",
+    backgroundColor: COLORS.lightBg, // Clean light blue-gray background
     color: COLORS.textDark,
     fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif",
     position: "relative",
     display: "flex",
     flexDirection: "column",
-  },
-
-  topRightButtons: {
-    position: "absolute",
-    top: 20,
-    right: 30,
-    display: "flex",
-    gap: 12,
-    zIndex: 10,
   },
 
   main: {
@@ -308,6 +271,7 @@ const styles = {
   /* HERO */
   hero: {
     marginBottom: 72,
+    marginTop: 20,
     position: "relative",
     backgroundSize: "cover",
     backgroundPosition: "center",
@@ -628,5 +592,17 @@ supportBtn: {
   padding: "0 20px",
   alignSelf: "flex-end",
   marginTop: 2,
+},
+whyToddCard: {
+  background: COLORS.white,
+  borderRadius: 14,
+  padding: "24px 28px",
+  border: `1px solid ${COLORS.borderSoft}`,
+  boxShadow: COLORS.cardShadow,
+  marginBottom: 32,
+},
+
+centralizesSection: {
+  marginTop: 0,
 }
 };

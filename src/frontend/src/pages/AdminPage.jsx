@@ -329,7 +329,7 @@ const styles = {
         alignItems: "center",
         gap: "0.5rem",
         padding: "0.7rem 1.5rem",
-        background: "linear-gradient(135deg, #2373f3 0%, #4facfe 100%)",
+        background: "#5692bc",
         color: "white",
         border: "none",
         borderRadius: "8px",

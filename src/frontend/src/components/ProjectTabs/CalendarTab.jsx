@@ -32,7 +32,7 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
         estimatedBudget: '',
         status: 'pending',
     });
-    const events =[];
+    const events = [];
 
     // Helper function to format location from address components
     const formatLocation = (address, address2, city, state, zipCode) => {
@@ -253,9 +253,14 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
             
             if (clicked >= woStart && clicked <= woEnd) {
                 const getPriorityColor = (priority) => {
-                    if (priority >= 4) return '#dc2626';
-                    if (priority === 3) return '#f59e0b';
-                    return '#8b5cf6';
+                    switch(priority) {
+                        case 5: return '#dc2626'; // Critical - Bright Red
+                        case 4: return '#f97316'; // High - Orange
+                        case 3: return '#eab308'; // Medium - Yellow/Gold
+                        case 2: return '#22c55e'; // Low - Green
+                        case 1: return '#3b82f6'; // Very Low - Blue
+                        default: return '#6b7280'; // Default - Gray
+                    }
                 };
                 
                 eventsOnDate.push({
@@ -326,9 +331,14 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
 
     workOrders.forEach(wo => {
         const getPriorityColor = (priority) => {
-            if (priority >= 4) return '#dc2626';
-            if (priority === 3) return '#f59e0b';
-            return '#8b5cf6'; 
+            switch(priority) {
+                case 5: return '#dc2626'; // Critical - Bright Red
+                case 4: return '#f97316'; // High - Orange
+                case 3: return '#eab308'; // Medium - Yellow/Gold
+                case 2: return '#22c55e'; // Low - Green
+                case 1: return '#3b82f6'; // Very Low - Blue
+                default: return '#6b7280'; // Default - Gray
+            }
         };
 
         events.push({
@@ -384,16 +394,24 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                     <span>Scheduled Project End</span>
                 </div>
                 <div style={styles.legendItem}>
-                    <div style={{...styles.legendDot, background: '#8b5cf6'}}></div>
-                    <span>Work Orders (Low Priority)</span>
+                    <div style={{...styles.legendDot, background: '#3b82f6'}}></div>
+                    <span>Very Low Priority</span>
                 </div>
                 <div style={styles.legendItem}>
-                    <div style={{...styles.legendDot, background: '#f59e0b'}}></div>
-                    <span>Work Orders (Medium Priority)</span>
+                    <div style={{...styles.legendDot, background: '#22c55e'}}></div>
+                    <span>Low Priority</span>
+                </div>
+                <div style={styles.legendItem}>
+                    <div style={{...styles.legendDot, background: '#eab308'}}></div>
+                    <span>Medium Priority</span>
+                </div>
+                <div style={styles.legendItem}>
+                    <div style={{...styles.legendDot, background: '#f97316'}}></div>
+                    <span>High Priority</span>
                 </div>
                 <div style={styles.legendItem}>
                     <div style={{...styles.legendDot, background: '#dc2626'}}></div>
-                    <span>Work Orders (High Priority)</span>
+                    <span>Critical Priority</span>
                 </div>
             </div>
 
@@ -451,31 +469,44 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                         {workOrders.length > 0 && (
                             <>
                                 <h4 style={styles.sectionSubtitle}>Work Orders ({workOrders.length})</h4>
-                                {workOrders.map(wo => (
-                                    <div key={wo.id} style={styles.milestoneItem}>
-                                        <div style={{
-                                            ...styles.milestoneMarker,
-                                            backgroundColor: wo.priority >= 4 ? '#dc2626' : wo.priority === 3 ? '#f59e0b' : '#8b5cf6'
-                                        }}></div>
-                                        <div style={styles.milestoneContent}>
-                                            <div style={styles.milestoneName}>{wo.name}</div>
-                                            <div style={styles.milestoneDate}>
-                                                {wo.startDate} ➟ {wo.endDate}
+                                {workOrders.map(wo => {
+                                    const getPriorityColor = (priority) => {
+                                        switch(priority) {
+                                            case 5: return '#dc2626'; // Critical - Bright Red
+                                            case 4: return '#f97316'; // High - Orange
+                                            case 3: return '#eab308'; // Medium - Yellow/Gold
+                                            case 2: return '#22c55e'; // Low - Green
+                                            case 1: return '#3b82f6'; // Very Low - Blue
+                                            default: return '#6b7280'; // Default - Gray
+                                        }
+                                    };
+                                    
+                                    return (
+                                        <div key={wo.id} style={styles.milestoneItem}>
+                                            <div style={{
+                                                ...styles.milestoneMarker,
+                                                backgroundColor: getPriorityColor(wo.priority)
+                                            }}></div>
+                                            <div style={styles.milestoneContent}>
+                                                <div style={styles.milestoneName}>{wo.name}</div>
+                                                <div style={styles.milestoneDate}>
+                                                    {wo.startDate} ➟ {wo.endDate}
+                                                </div>
                                             </div>
+                                            <button
+                                                style={styles.navigateButton}
+                                                onClick={() => {
+                                                    if (onNavigateToWorkOrder) {
+                                                        onNavigateToWorkOrder(wo.id);
+                                                    }
+                                                }}
+                                                title="Go to Work Order"
+                                            >
+                                                <FaArrowRight />
+                                            </button>
                                         </div>
-                                        <button
-                                            style={styles.navigateButton}
-                                            onClick={() => {
-                                                if (onNavigateToWorkOrder) {
-                                                    onNavigateToWorkOrder(wo.id);
-                                                }
-                                            }}
-                                            title="Go to Work Order"
-                                        >
-                                            <FaArrowRight />
-                                        </button>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </>
                         )}
                         {events.length === 0 && (
@@ -560,7 +591,7 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                                             value={formData.city}
                                             onChange={(e) => setFormData({...formData, city: e.target.value})}
                                             style={styles.input}
-                                            placeholder="Austin"
+                                            placeholder="City"
                                         />
                                     </div>
                                     <div style={styles.formGroup}>
@@ -570,7 +601,7 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                                             value={formData.state}
                                             onChange={(e) => setFormData({...formData, state: e.target.value})}
                                             style={styles.input}
-                                            placeholder="TX"
+                                            placeholder="State"
                                         />
                                     </div>
                                     <div style={styles.formGroup}>
@@ -580,7 +611,7 @@ const CalendarTab = ({ project, onNavigateToWorkOrder, userRole }) => {
                                             value={formData.zipCode}
                                             onChange={(e) => setFormData({...formData, zipCode: e.target.value})}
                                             style={styles.input}
-                                            placeholder="78701"
+                                            placeholder="12345"
                                         />
                                     </div>
                                 </div>
