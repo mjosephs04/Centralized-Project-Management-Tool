@@ -15,94 +15,6 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
     const [forecastEndDate, setForecastEndDate] = useState(null);
     const [loadingSchedule, setLoadingSchedule] = useState(false);
 
-    // Load metrics to get estimated cost and forecast end date
-    useEffect(() => {
-        const loadMetrics = async () => {
-            if (userRole !== 'worker' && project?.id) {
-                try {
-                    setLoadingMetrics(true);
-                    setLoadingSchedule(true);
-
-                    // Load cost metrics
-                    const costMetrics = await projectsAPI.getMetrics.cost(project.id);
-                    setEstimatedCost(costMetrics.estimateAtCompletion);
-
-                    // Load schedule metrics for forecast end date
-                    const scheduleMetrics = await projectsAPI.getMetrics.schedule(project.id);
-                    setForecastEndDate(scheduleMetrics.forecastEndDate);
-                } catch (err) {
-                    console.error('Error loading metrics:', err);
-                    // Don't show error to user, just leave values as null
-                } finally {
-                    setLoadingMetrics(false);
-                    setLoadingSchedule(false);
-                }
-            }
-        };
-        loadMetrics();
-    }, [project?.id, userRole]);
-
-    // Helper function to format currency
-    const formatCurrency = (value) => {
-        if (value === null || value === undefined || value === '') {
-            return 'Not specified';
-        }
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        }).format(parseFloat(value));
-    };
-
-    // Helper function to format date as "Month DDth, YYYY"
-    const formatDate = (dateString) => {
-        if (!dateString) return 'Not specified';
-        try {
-            const date = new Date(dateString);
-
-            // Check if date is valid
-            if (isNaN(date.getTime())) return 'Not specified';
-
-            const month = date.toLocaleString('en-US', { month: 'long' });
-            const day = date.getDate();
-            const year = date.getFullYear();
-
-            // Add ordinal suffix (st, nd, rd, th)
-            const getOrdinalSuffix = (day) => {
-                if (day > 3 && day < 21) return 'th'; // 11th-20th
-                switch (day % 10) {
-                    case 1: return 'st';
-                    case 2: return 'nd';
-                    case 3: return 'rd';
-                    default: return 'th';
-                }
-            };
-
-            return `${month} ${day}${getOrdinalSuffix(day)}, ${year}`;
-        } catch {
-            return 'Not specified';
-        }
-    };
-
-    // Check if project is in a terminal/frozen status
-    const isProjectFrozen = () => {
-        const terminalStatuses = ['archived', 'cancelled'];
-        return terminalStatuses.includes(project.status);
-    };
-
-    // Check if user can edit status (only PMs can change status of frozen projects)
-    const canEditStatus = () => {
-        const isManager = userRole === 'project_manager' || userRole === 'manager';
-        return isManager; // PMs can always edit status, even on frozen projects
-    };
-
-    // Check if user can edit other fields (frozen projects can't be edited except status)
-    const canEditFields = () => {
-        if (isProjectFrozen()) return false; // No one can edit frozen project fields
-        return true; // Normal projects are editable
-    };
-
     // Helper functions defined before use
     const parseLocation = (locationString) => {
         if (!locationString) return { address: '', address2: '', city: '', state: '', zipCode: '' };
@@ -130,21 +42,10 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
         }
     };
 
-    const formatLocation = (address, address2, city, state, zipCode) => {
-        const parts = [address, address2, city, state, zipCode].filter(part => part && part.trim());
-        return parts.join(', ');
-    };
-
     // Helper function to capitalize priority for display
     const capitalizePriority = (priority) => {
         if (!priority) return 'Medium';
         return priority.charAt(0).toUpperCase() + priority.slice(1);
-    };
-
-    // Get status display config
-    const getStatusDisplayConfig = (statusValue) => {
-        const config = Object.values(PROJECT_STATUS_CONFIG).find(s => s.value === statusValue);
-        return config || PROJECT_STATUS_CONFIG.PLANNING;
     };
 
     const [editedData, setEditedData] = useState({
@@ -155,6 +56,126 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
         status: project.status || 'planning',
         estimatedBudget: project.estimatedBudget || ''
     });
+
+    // CRITICAL FIX: Sync editedData with project prop changes
+    useEffect(() => {
+        setEditedData({
+            ...parseLocation(project.location),
+            actualStartDate: project.actualStartDate || '',
+            endDate: project.endDate || '',
+            priority: capitalizePriority(project.priority),
+            status: project.status || 'planning',
+            estimatedBudget: project.estimatedBudget || ''
+        });
+    }, [project.location, project.actualStartDate, project.endDate, project.priority, project.status, project.estimatedBudget]);
+
+    // Load metrics to get estimated cost and forecast end date
+    useEffect(() => {
+        const loadMetrics = async () => {
+            if (userRole !== 'worker' && project?.id) {
+                try {
+                    setLoadingMetrics(true);
+                    setLoadingSchedule(true);
+
+                    // Load cost metrics
+                    const costMetrics = await projectsAPI.getMetrics.cost(project.id);
+                    setEstimatedCost(costMetrics.estimateAtCompletion);
+
+                    // Load schedule metrics for forecast end date
+                    const scheduleMetrics = await projectsAPI.getMetrics.schedule(project.id);
+                    setForecastEndDate(scheduleMetrics.forecastEndDate);
+                } catch (err) {
+                    console.error('Error loading metrics:', err);
+                    // Don't show error to user, just leave values as null
+                } finally {
+                    setLoadingMetrics(false);
+                    setLoadingSchedule(false);
+                }
+            }
+        };
+        loadMetrics();
+    }, [project?.id, userRole]);
+
+    // Helper function to format currency with thousand separators
+    const formatCurrency = (value) => {
+        if (value === null || value === undefined || value === '') {
+            return 'Not specified';
+        }
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(parseFloat(value));
+    };
+
+    // Helper function to format date as "Month DDth, YYYY" - FIXED timezone issue
+    const formatDate = (dateString) => {
+        if (!dateString) return 'Not specified';
+        try {
+            // Parse the date string as local date to avoid timezone shift
+            const parts = dateString.split('-');
+            if (parts.length !== 3) return 'Not specified';
+            
+            const year = parseInt(parts[0]);
+            const month = parseInt(parts[1]) - 1; // Month is 0-indexed
+            const day = parseInt(parts[2]);
+            
+            // Create date in local timezone
+            const date = new Date(year, month, day);
+
+            // Check if date is valid
+            if (isNaN(date.getTime())) return 'Not specified';
+
+            const monthName = date.toLocaleString('en-US', { month: 'long' });
+            const dayNum = date.getDate();
+            const yearNum = date.getFullYear();
+
+            // Add ordinal suffix (st, nd, rd, th)
+            const getOrdinalSuffix = (day) => {
+                if (day > 3 && day < 21) return 'th'; // 11th-20th
+                switch (day % 10) {
+                    case 1: return 'st';
+                    case 2: return 'nd';
+                    case 3: return 'rd';
+                    default: return 'th';
+                }
+            };
+
+            return `${monthName} ${dayNum}${getOrdinalSuffix(dayNum)}, ${yearNum}`;
+        } catch {
+            return 'Not specified';
+        }
+    };
+
+    // Check if project is in a terminal/frozen status
+    const isProjectFrozen = () => {
+        const terminalStatuses = ['archived', 'cancelled'];
+        return terminalStatuses.includes(project.status);
+    };
+
+    // Check if user can edit status (only PMs can change status of frozen projects)
+    const canEditStatus = () => {
+        const isManager = userRole === 'project_manager' || userRole === 'manager';
+        return isManager; // PMs can always edit status, even on frozen projects
+    };
+
+    // Check if user can edit other fields (frozen projects can't be edited except status)
+    const canEditFields = () => {
+        if (isProjectFrozen()) return false; // No one can edit frozen project fields
+        return true; // Normal projects are editable
+    };
+
+    const formatLocation = (address, address2, city, state, zipCode) => {
+        const parts = [address, address2, city, state, zipCode].filter(part => part && part.trim());
+        return parts.join(', ');
+    };
+
+    // Get status display config
+    const getStatusDisplayConfig = (statusValue) => {
+        const config = Object.values(PROJECT_STATUS_CONFIG).find(s => s.value === statusValue);
+        return config || PROJECT_STATUS_CONFIG.PLANNING;
+    };
 
     const handleSave = async () => {
         try {
@@ -505,7 +526,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                             <FaCalendarAlt style={styles.icon} />
                             <span style={styles.label}>Actual Start Date</span>
                         </div>
-                        <p style={styles.value}>{formatDate(project.startDate)}</p>
+                        <p style={styles.value}>{formatDate(project.actualStartDate)}</p>
                     </div>
 
                     <div style={styles.card}>
@@ -533,7 +554,7 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
                                 <span style={styles.label}>Allocated Budget</span>
                             </div>
                             <p style={styles.value}>
-                                {project.estimatedBudget ? `$${parseFloat(project.estimatedBudget).toFixed(2)}` : 'Not specified'}
+                                {formatCurrency(project.estimatedBudget)}
                             </p>
                         </div>
                     )}
@@ -637,7 +658,6 @@ const OverviewTab = ({ project, onUpdate, onDelete, userRole }) => {
         </div>
     )
 }
-
 
 const styles = {
     container: {

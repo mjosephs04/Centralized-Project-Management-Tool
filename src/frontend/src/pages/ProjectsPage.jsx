@@ -471,7 +471,7 @@ const ProjectsPage = () => {
                                             />
                                         </div>
                                         <div style={styles.filterGroup}>
-                                            <label style={styles.filterLabel}>Project Ends On or After</label>
+                                            <label style={styles.filterLabel}>Project Ends On or Before</label>
                                             <input
                                                 type="date"
                                                 value={filters.endDate}

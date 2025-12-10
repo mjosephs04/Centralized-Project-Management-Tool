@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaBell, FaTimes, FaCheck } from "react-icons/fa";
+import { FaBell, FaTimes, FaCheck, FaInfoCircle } from "react-icons/fa";
 import { projectsAPI } from "../services/api";
 import { useSnackbar } from "../contexts/SnackbarContext";
 
@@ -117,14 +117,8 @@ const Notifications = ({ userRole }) => {
         return date.toLocaleDateString();
     };
 
-    const getNotificationIcon = (field) => {
-        // You can customize icons based on notification type
-        return "🔔";
-    };
-
     // Only show for project managers
     // Don't render anything if userRole is not yet loaded or not a project manager
-    // Temporarily comment out to debug - remove this check to always show
     if (!userRole || userRole !== "project_manager") {
         console.log('Notifications: Not rendering - userRole is:', userRole);
         return null;
@@ -207,7 +201,7 @@ const Notifications = ({ userRole }) => {
                                     onClick={() => handleNotificationClick(notification)}
                                 >
                                     <div style={styles.notificationIcon}>
-                                        {getNotificationIcon(notification.field)}
+                                        <FaInfoCircle size={18} color="#5692bc" />
                                     </div>
                                     <div style={styles.notificationContent}>
                                         <div style={styles.notificationHeader}>
@@ -285,7 +279,7 @@ const styles = {
         position: "relative",
     },
     bellButtonActive: {
-        background: "rgba(0, 82, 212, 0.08)",
+        background: "rgba(86, 146, 188, 0.1)",
         transform: "translateY(-2px)",
     },
     bellIcon: {
@@ -293,7 +287,7 @@ const styles = {
         transition: "color 0.2s ease-in-out",
     },
     bellIconHover: {
-        color: "#0052D4",
+        color: "#5692bc",
     },
     badge: {
         position: "absolute",
@@ -322,7 +316,7 @@ const styles = {
         background: "white",
         borderRadius: "12px",
         boxShadow: "0 8px 32px rgba(0, 0, 0, 0.15)",
-        border: "1px solid rgba(0, 0, 0, 0.1)",
+        border: "1px solid rgba(0, 0, 0, 0.08)",
         zIndex: 1000,
         display: "flex",
         flexDirection: "column",
@@ -333,8 +327,8 @@ const styles = {
         justifyContent: "space-between",
         alignItems: "center",
         padding: "16px 20px",
-        borderBottom: "1px solid rgba(0, 0, 0, 0.1)",
-        background: "linear-gradient(135deg, #0052D4 0%, #4facfe 100%)",
+        borderBottom: "1px solid rgba(0, 0, 0, 0.08)",
+        background: "#5692bc",
     },
     title: {
         margin: 0,
@@ -359,7 +353,7 @@ const styles = {
         borderRadius: "6px",
         fontSize: "12px",
         fontWeight: "500",
-        transition: "background 0.2s ease",
+        transition: "all 0.2s ease",
     },
     closeButton: {
         background: "transparent",
@@ -400,11 +394,13 @@ const styles = {
         position: "relative",
     },
     unreadItem: {
-        background: "rgba(0, 82, 212, 0.03)",
-        borderLeft: "3px solid #0052D4",
+        background: "rgba(86, 146, 188, 0.05)",
+        borderLeft: "3px solid #5692bc",
     },
     notificationIcon: {
-        fontSize: "20px",
+        display: "flex",
+        alignItems: "flex-start",
+        paddingTop: "2px",
         marginRight: "12px",
         flexShrink: 0,
     },
@@ -465,28 +461,23 @@ const styles = {
         width: "24px",
         height: "24px",
     },
-    dismissButtonHover: {
-        background: "rgba(239, 68, 68, 0.1)",
-        color: "#ef4444",
-    },
     footer: {
         padding: "12px 20px",
-        borderTop: "1px solid rgba(0, 0, 0, 0.1)",
+        borderTop: "1px solid rgba(0, 0, 0, 0.08)",
         background: "#f9fafb",
     },
     viewAllButton: {
         width: "100%",
         padding: "10px",
-        background: "linear-gradient(135deg, #0052D4 0%, #4facfe 100%)",
+        background: "#5692bc",
         color: "white",
         border: "none",
         borderRadius: "8px",
         fontSize: "14px",
         fontWeight: "600",
         cursor: "pointer",
-        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+        transition: "all 0.2s ease",
     },
 };
 
 export default Notifications;
-
